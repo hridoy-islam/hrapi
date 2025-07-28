@@ -1,0 +1,4 @@
+
+  
+  export const EmployeeRateSearchableFields = ["name"];
+  
