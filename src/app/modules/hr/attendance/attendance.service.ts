@@ -33,17 +33,20 @@ const getAttendanceFromDB = async (query: Record<string, unknown>) => {
 
   // If both month and year are provided, apply the date range filter
   if (month && year) {
-    const { startOfMonth, endOfMonth } = getMonthStartAndEnd(month, year);
+    const { startOfMonth, endOfMonth } = getMonthStartAndEnd(month as string, year as string);
 
     // Filter records based on the date range
-    userQuery.modelQuery.where('createdAt').gte(startOfMonth).lte(endOfMonth);
+    userQuery.modelQuery.where('createdAt')
+  .gte(startOfMonth.getTime())
+  .lte(endOfMonth.getTime());
+
   }
 
 
   if (fromDate && toDate) {
     const startDate = moment(fromDate, 'YYYY-MM').startOf('month').toDate();
     const endDate = moment(toDate, 'YYYY-MM').endOf('month').toDate();
-    userQuery.modelQuery.where('createdAt').gte(startDate).lte(endDate);
+    userQuery.modelQuery.where('createdAt').gte(startDate.getTime()).lte(endDate.getTime());
   }
 
   

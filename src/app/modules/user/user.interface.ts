@@ -39,6 +39,7 @@ export interface BeneficiaryDetails {
 
 export interface TUser {
   _id: Types.ObjectId;
+  name:string,
   email: string;
   password: string;
   role: "user" | "admin" | "company" | "creator" | "director";
@@ -103,7 +104,9 @@ export interface TUser {
   detailedBeneficiary?: BeneficiaryDetails;
   departmentId:Types.ObjectId;
   trainingId: Types.ObjectId[];
-  designationId: Types.ObjectId
+  designationId: Types.ObjectId;
+    vacancyId?: Types.ObjectId;
+
 }
 
 export interface UserModel extends Model<TUser> {

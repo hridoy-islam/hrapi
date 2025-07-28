@@ -53,19 +53,19 @@ const BeneficiarySchema = new Schema({
   email: { type: String },
   mobile: { type: String },
   sameAddress: { type: Boolean, default: false },
-  address: {
-    type: AddressSchema,
-    validate: {
-      validator: function (value: any) {
-        // If sameAddress is false, address must be a non-empty object
-        if (!this.sameAddress) {
-          return value && Object.keys(value).length > 0;
-        }
-        return true;
-      },
-      message: 'Address is required when sameAddress is false.'
-    }
-  }
+  // address: {
+  //   type: AddressSchema,
+  //   validate: {
+  //     validator: function (value: any) {
+  //       // If sameAddress is false, address must be a non-empty object
+  //       if (!this.sameAddress) {
+  //         return value && Object.keys(value).length > 0;
+  //       }
+  //       return true;
+  //     },
+  //     message: 'Address is required when sameAddress is false.'
+  //   }
+  // }
 });
 
 

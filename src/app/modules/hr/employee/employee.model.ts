@@ -1,7 +1,8 @@
 import bcrypt from "bcrypt";
 import { Schema, model } from "mongoose";
 import { TUser, UserModel } from "../../user/user.interface";
-
+import {TEmployee} from "../employee/employee.interface"
+import config from "../../../config";
 const RightToWorkSchema = new Schema({
   hasExpiry: {
     type: Boolean,
@@ -81,7 +82,8 @@ const BeneficiarySchema = new Schema({
   },
 });
 
-const userSchema = new Schema<TUser, UserModel>(
+
+const userSchema = new Schema<TUser, UserModel, TEmployee>(
   {
     // Existing User fields
     name: {
@@ -108,7 +110,7 @@ const userSchema = new Schema<TUser, UserModel>(
     },
     status: {
       type: String,
-      enum: UserStatus,
+      enum: ["active","block"],
       default: "active",
     },
     company: {
@@ -150,7 +152,6 @@ const userSchema = new Schema<TUser, UserModel>(
     beneficiary: { type: String },
     otpExpires: { type: Date, required: false },
 
-    // Fields from Employee model
     vacancyId: {
       type: Schema.Types.ObjectId,
       ref: "Vacancy",
@@ -290,7 +291,7 @@ const userSchema = new Schema<TUser, UserModel>(
 
 // Middleware to hash the password before saving
 userSchema.pre("save", async function (next) {
-  const user = this; // doc
+  const user = this;// doc
   if (user.isModified("password")) {
     user.password = await bcrypt.hash(
       user.password,
@@ -325,5 +326,7 @@ userSchema.statics.isJWTIssuedBeforePasswordChanged = function (
     new Date(passwordChangedTimestamp).getTime() / 1000;
   return passwordChangedTime > jwtIssuedTimestamp;
 };
+
+
 
 export const User = model<TUser, UserModel>("User", userSchema);

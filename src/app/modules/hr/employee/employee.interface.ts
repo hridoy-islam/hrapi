@@ -1,7 +1,7 @@
 import { Types } from "mongoose";
 
 export interface TEmployee {
-  vacancyId: Types.ObjectId;
+  vacancyId?: Types.ObjectId;
   profilePictureUrl?: string;
   title: string; 
   firstName: string;
