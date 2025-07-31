@@ -33,6 +33,7 @@ const checkLogin = async (payload: TLogin) => {
       );
     }
 
+
     if (!(await User.isPasswordMatched(payload?.password, foundUser?.password)))
       throw new AppError(httpStatus.FORBIDDEN, "Password do not matched");
 

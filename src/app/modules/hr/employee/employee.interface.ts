@@ -32,6 +32,8 @@ export interface TEmployee {
   disabilityDetails?: string;
   needsReasonableAdjustment: boolean;
   reasonableAdjustmentDetails?: string;
+  passportNo:string;
+passportExpiry:Date;
   status:
     | "applied"
     | "shortlisted"

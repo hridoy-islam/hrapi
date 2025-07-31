@@ -19,7 +19,6 @@ const PayrollSchema = new Schema({
   },
   paymentMethod: {
     type: String,
-    
   },
 });
 
@@ -44,7 +43,7 @@ const AddressSchema = new Schema({
   city: { type: String },
   state: { type: String },
   postCode: { type: String },
-  country: { type: String }
+  country: { type: String },
 });
 
 const BeneficiarySchema = new Schema({
@@ -68,6 +67,29 @@ const BeneficiarySchema = new Schema({
   // }
 });
 
+
+const trainingSchema = new Schema(
+  {
+    trainingId: {
+      type: Schema.Types.ObjectId,
+      ref: "Training",
+      required: true,
+    },
+    status: {
+      type: String,
+      enum: ["pending", "completed"],
+      default: "pending",
+    },
+    startDate: {
+      type: Date,
+    },
+    endDate: {
+      type: Date,
+     
+    },
+  }
+ 
+);
 
 const userSchema = new Schema<TUser, UserModel>(
   {
@@ -262,16 +284,18 @@ const userSchema = new Schema<TUser, UserModel>(
     detailedBeneficiary: {
       type: BeneficiarySchema,
     },
-
+    passportNo: {
+      type: String,
+    },
+    passportExpiry: {
+      type: Date,
+    },
     departmentId: {
       type: Schema.Types.ObjectId,
       ref: "Department",
     },
-    trainingId: [
-      {
-        type: Schema.Types.ObjectId,
-        ref: "Training",
-      },
+    training: [
+     { type: trainingSchema}
     ],
     designationId: {
       type: Schema.Types.ObjectId,

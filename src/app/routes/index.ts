@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { UserRoutes } from "../modules/user/user.route";
 import { AuthRoutes } from "../modules/auth/auth.router";
-import { NoticeRoutes } from "../modules/hr/notice/notice.router";
+import {  NoticeRoutes } from "../modules/hr/notice/notice.router";
 import { DepartmentRoutes } from "../modules/hr/department/department.router";
 import { EmailRoutes } from "../modules/hr/email-setup/email-setup.router";
 import { AttendanceRoutes } from "../modules/hr/attendance/attendance.router";
@@ -12,6 +12,8 @@ import { TrainingRoutes } from "../modules/hr/training/training.router";
 import { DesignationRoutes } from "../modules/hr/designation/designation.router";
 import { ShiftRoutes } from "../modules/hr/shift/shift.router";
 import { EmployeeRateRoutes } from "../modules/hr/employeeRate/employeeRate.router";
+import { HolidayRoutes } from "../modules/hr/holidays/holiday.router";
+import { LeaveRoutes } from "../modules/hr/leave/leave.router";
 
 const router = Router();
 
@@ -68,6 +70,14 @@ const moduleRoutes = [
   {
     path: "/hr/employeeRate",
     route: EmployeeRateRoutes,
+  },
+  {
+    path: "/hr/holidays",
+    route: HolidayRoutes,
+  },
+  {
+    path: "/hr/leave",
+    route: LeaveRoutes,
   },
 ];
 

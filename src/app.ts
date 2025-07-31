@@ -8,7 +8,9 @@ import express, { Application, Request, Response } from "express";
 import globalErrorHandler from "./app/middlewares/globalErrorhandler";
 import notFound from "./app/middlewares/notFound";
 import router from "./app/routes";
+import cron from "node-cron";
 
+import { generateAnnualHolidayForAllUsers } from "./app/modules/hr/holidays/holiday.service";
 const app: Application = express();
 const Pusher = require("pusher");
 
@@ -56,8 +58,15 @@ app.use(
   cors({
     origin: ["http://localhost:5173","https://opshr.netlify.app"],
     credentials: true,
+    
   })
 );
+
+cron.schedule("0 0 1 1 *", async () => {
+  console.log("🎉 Starting to generate holiday records for all users...");
+  await generateAnnualHolidayForAllUsers();
+});
+
 
 // application routes
 app.use("/api", router);

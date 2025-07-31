@@ -10,7 +10,7 @@ import { TEmail } from "./email-setup.interface";
 const getEmailFromDB = async (query: Record<string, unknown>) => {
   const userQuery = new QueryBuilder(Email.find(), query)
     .search(EmailSearchableFields)
-    .filter()
+    .filter(query)
     .sort()
     .paginate()
     .fields();

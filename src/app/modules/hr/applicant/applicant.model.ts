@@ -7,7 +7,7 @@ const applicantSchema = new Schema<TApplicant>(
     vacancyId: {
       type: mongoose.Schema.Types.ObjectId,
       required: true,
-      ref: "Vacancy"
+      ref: "Vacancy",
     },
     profilePictureUrl: {
       type: String,
@@ -34,6 +34,12 @@ const applicantSchema = new Schema<TApplicant>(
     },
     nationalInsuranceNumber: {
       type: String,
+    },
+    passportNo: {
+      type: String,
+    },
+    passportExpiry: {
+      type: Date,
     },
     nhsNumber: {
       type: String,

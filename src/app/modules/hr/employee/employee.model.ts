@@ -217,6 +217,12 @@ const userSchema = new Schema<TUser, UserModel, TEmployee>(
     country: {
       type: String,
     },
+     passportNo: {
+      type: String,
+    },
+    passportExpiry: {
+      type: Date,
+    },
     gender: {
       type: String,
     },

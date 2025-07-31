@@ -9,7 +9,7 @@ import { TDepartment } from "./department.interface";
 const getDepartmentFromDB = async (query: Record<string, unknown>) => {
   const userQuery = new QueryBuilder(Department.find(), query)
     .search(DepartmentSearchableFields)
-    .filter()
+    .filter(query)
     .sort()
     .paginate()
     .fields();

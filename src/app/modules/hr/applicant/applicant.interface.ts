@@ -16,7 +16,8 @@ export interface TApplicant {
   // Official Numbers
   nationalInsuranceNumber?: string;
   nhsNumber?: string;
-
+passportNo:string;
+passportExpiry:Date;
   // Application Details
   applicationDate: Date;
   availableFromDate: Date;

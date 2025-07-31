@@ -9,7 +9,7 @@ import { TApplicant } from "./applicant.interface";
 const getAllApplicantFromDB = async (query: Record<string, unknown>) => {
   const userQuery = new QueryBuilder(Applicant.find(), query)
     .search(ApplicantSearchableFields)
-    .filter()
+    .filter(query)
     .sort()
     .paginate()
     .fields();

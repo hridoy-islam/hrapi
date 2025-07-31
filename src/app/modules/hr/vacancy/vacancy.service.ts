@@ -9,7 +9,7 @@ import { TVacancy } from "./vacancy.interface";
 const getAllVacancyFromDB = async (query: Record<string, unknown>) => {
   const userQuery = new QueryBuilder(Vacancy.find().populate('postedBy'), query)
     .search(VacancySearchableFields)
-    .filter()
+    .filter(query)
     .sort()
     .paginate()
     .fields();

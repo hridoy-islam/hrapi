@@ -9,7 +9,7 @@ import QueryBuilder from "../../../builder/QueryBuilder";
 const getAllNoticeFromDB = async (query: Record<string, unknown>) => {
   const userQuery = new QueryBuilder(Notice.find(), query)
     .search(NoticeSearchableFields)
-    .filter()
+    .filter(query)
     .sort()
     .paginate()
     .fields();

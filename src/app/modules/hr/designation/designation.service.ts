@@ -10,7 +10,7 @@ import { DesignationSearchableFields } from "./designation.constant";
 const getAllDesignationFromDB = async (query: Record<string, unknown>) => {
   const userQuery = new QueryBuilder(Designation.find(), query)
     .search(DesignationSearchableFields)
-    .filter()
+    .filter(query)
     .sort()
     .paginate()
     .fields();

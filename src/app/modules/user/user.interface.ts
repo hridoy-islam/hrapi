@@ -103,9 +103,11 @@ export interface TUser {
   equalityInformation?: EqualityInformation;
   detailedBeneficiary?: BeneficiaryDetails;
   departmentId:Types.ObjectId;
-  trainingId: Types.ObjectId[];
+  training: Types.ObjectId[];
   designationId: Types.ObjectId;
     vacancyId?: Types.ObjectId;
+      passportNo:string;
+passportExpiry:Date;
 
 }
 

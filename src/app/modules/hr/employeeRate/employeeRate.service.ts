@@ -13,7 +13,7 @@ const getAllEmployeeRateFromDB = async (query: Record<string, unknown>) => {
     query
   )
     .search(EmployeeRateSearchableFields)
-    .filter()
+    .filter(query)
     .sort()
     .paginate()
     .fields();

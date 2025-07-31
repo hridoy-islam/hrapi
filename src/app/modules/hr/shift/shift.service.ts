@@ -10,7 +10,7 @@ import { ShiftSearchableFields } from "./shift.constant";
 const getAllShiftFromDB = async (query: Record<string, unknown>) => {
   const userQuery = new QueryBuilder(Shift.find(), query)
     .search(ShiftSearchableFields)
-    .filter()
+    .filter(query)
     .sort()
     .paginate()
     .fields();

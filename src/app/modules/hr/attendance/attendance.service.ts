@@ -26,7 +26,7 @@ const getAttendanceFromDB = async (query: Record<string, unknown>) => {
     }
   }), otherQueryParams)
     .search(AttendanceSearchableFields)
-    .filter()
+    .filter(query)
     .sort()
     .paginate()
     .fields();

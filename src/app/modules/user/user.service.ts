@@ -9,12 +9,12 @@ const getAllUserFromDB = async (query: Record<string, unknown>) => {
   const userQuery = new QueryBuilder(
     User.find()
       .populate({ path: 'departmentId', select: 'departmentName' })
-      .populate({ path: 'trainingId', select: 'name' })
+      .populate({ path: 'training.trainingId' })
       .populate({ path: 'designationId', select: 'title' }),
     query
   )
     .search(UserSearchableFields)
-    .filter()
+    .filter(query)
     .sort()
     .paginate()
     .fields();

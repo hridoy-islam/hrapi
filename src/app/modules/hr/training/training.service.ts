@@ -2,7 +2,7 @@ import httpStatus from "http-status";
 
 import AppError from "../../../errors/AppError";
 import QueryBuilder from "../../../builder/QueryBuilder";
-import { Training } from "./training.mode";
+import { Training } from "./training.model";
 import { TrainingSearchableFields } from "./training.constant";
 import { TrainingModule } from "./training.interface";
 
@@ -10,7 +10,7 @@ import { TrainingModule } from "./training.interface";
 const getAllTrainingFromDB = async (query: Record<string, unknown>) => {
   const userQuery = new QueryBuilder(Training.find(), query)
     .search(TrainingSearchableFields)
-    .filter()
+    .filter(query)
     .sort()
     .paginate()
     .fields();

@@ -21,7 +21,7 @@ const getAllRecruitmentFromDB = async (query: Record<string, unknown>) => {
   
   
     .search(RecruitmentSearchableFields)
-    .filter()
+    .filter(query)
     .sort()
     .paginate()
     .fields();
