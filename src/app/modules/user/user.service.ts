@@ -30,7 +30,8 @@ const getAllUserFromDB = async (query: Record<string, unknown>) => {
 
 
 const getSingleUserFromDB = async (id: string) => {
-  const result = await User.findById(id).populate("colleagues company");
+  const result = await User.findById(id).populate("colleagues company").populate({ path: 'departmentId', select: 'departmentName' })
+      .populate({ path: 'designationId', select: 'title' });
   return result;
 };
 

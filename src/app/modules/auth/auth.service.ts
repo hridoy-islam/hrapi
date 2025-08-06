@@ -13,6 +13,7 @@ import config from "../../config";
 import catchAsync from "../../utils/catchAsync";
 import sendResponse from "../../utils/sendResponse";
 import moment from "moment";
+import { RightToWork } from "../hr/rightToWork/rightToWork.model";
 
 
 function generateOTP() {
@@ -203,6 +204,11 @@ const createUserIntoDB = async (payload: TCreateUser) => {
   const result = await User.create(newUserPayload);
 
   try {
+
+    await RightToWork.create({
+      employeeId: result._id, 
+     
+    });
     // await sendEmail(
     //   payload.email,
     //   'welcome_template',

@@ -7,13 +7,13 @@ import AppError from "../../../errors/AppError";
 import QueryBuilder from "../../../builder/QueryBuilder";
 import { User } from "../../user/user.model";
 import { Holiday } from "../holidays/holiday.model";
-
-
-
-
+import moment from "moment";
 
 const getAllLeaveFromDB = async (query: Record<string, unknown>) => {
-  const userQuery = new QueryBuilder(Leave.find().populate("userId", "name title firstName initial lastName"), query)
+  const userQuery = new QueryBuilder(
+    Leave.find().populate("userId", "name title firstName initial lastName"),
+    query
+  )
     .search(LeaveSearchableFields)
     .filter(query)
     .sort()
@@ -34,23 +34,34 @@ const getSingleLeaveFromDB = async (id: string) => {
   return result;
 };
 
-
 const createLeaveIntoDB = async (payload: TLeave) => {
-    try {
-      
-      const result = await Leave.create(payload);
-      return result;
-    } catch (error: any) {
-      console.error("Error in createLeaveIntoDB:", error);
-  
-      // Throw the original error or wrap it with additional context
-      if (error instanceof AppError) {
-        throw error;
-      }
-  
-      throw new AppError(httpStatus.INTERNAL_SERVER_ERROR, error.message || "Failed to create Leave");
+  try {
+    const result = await Leave.create(payload);
+
+    // Calculate leave duration using moment
+    const start = moment(payload.startDate);
+    const end = moment(payload.endDate);
+    const leaveDuration = end.diff(start, "days") + 1; // Include both start & end days
+
+    const totalHours = leaveDuration * 8; // You can also make this dynamic using userHoliday.hoursPerDay later
+
+    // Update requestedHours in Holiday model (correct year)
+    const userHoliday = await Holiday.findOne({
+      userId: payload.userId,
+      year: payload.holidayYear, // ensure year matches
+    });
+
+    if (userHoliday) {
+      userHoliday.requestedHours += totalHours;
+      await userHoliday.save();
     }
-  };
+
+    return result;
+  } catch (error: any) {
+    console.error("Error in createLeaveIntoDB:", error);
+    throw new AppError(httpStatus.INTERNAL_SERVER_ERROR, error.message || "Failed to create Leave");
+  }
+};
 
 
 const updateLeaveIntoDB = async (id: string, payload: Partial<TLeave>) => {
@@ -60,40 +71,36 @@ const updateLeaveIntoDB = async (id: string, payload: Partial<TLeave>) => {
     throw new AppError(httpStatus.NOT_FOUND, "Leave not found");
   }
 
-  // Update the leave record
   const updatedLeave = await Leave.findByIdAndUpdate(id, payload, {
     new: true,
     runValidators: true,
   });
+
   if (!updatedLeave) {
     throw new AppError(httpStatus.NOT_FOUND, "Leave not found after update");
   }
-  // If the leave is approved, update the Holiday record
-  if (updatedLeave.status === 'approved') {
-    const userHoliday = await Holiday.findOne({ userId: updatedLeave.userId, year: updatedLeave.holidayYear });
 
-    if (!userHoliday) {
-      throw new AppError(httpStatus.NOT_FOUND, "Holiday record not found");
-    }
-
-    // Calculate total days and hours for the leave
-    const leaveDuration = (new Date(updatedLeave.endDate).getTime() - new Date(updatedLeave.startDate).getTime()) / (1000 * 3600 * 24);
-    const totalHours = leaveDuration * 8; // Assuming 8 hours per day
-
-    // Update the user's holiday record
-    userHoliday.holidaysTaken.push({
-      startDate: updatedLeave.startDate,
-      endDate: updatedLeave.endDate,
-      totalDays: leaveDuration,
-      totalHours: totalHours,
-    reason: updatedLeave.reason ?? undefined,
-      status: updatedLeave.status,
+  // Only update holiday record if leave status changes to 'approved' from 'pending'
+  if (leave.status === 'pending' && updatedLeave.status === 'approved') {
+    const userHoliday = await Holiday.findOne({
+      userId: updatedLeave.userId,
+      year: updatedLeave.holidayYear, // must match same year
     });
 
-    userHoliday.usedHours += totalHours;
-    userHoliday.remainingHours -= totalHours;
+    if (!userHoliday) {
+      throw new AppError(httpStatus.NOT_FOUND, "Holiday record not found for the year");
+    }
 
-    // Save the updated Holiday record
+     const start = moment(updatedLeave.startDate);
+    const end = moment(updatedLeave.endDate);
+    const leaveDuration = end.diff(start, 'days') + 1;
+    const totalHours = leaveDuration * userHoliday.hoursPerDay;
+    
+    // Transfer from requested to used
+    userHoliday.requestedHours -= totalHours;
+    userHoliday.usedHours += totalHours;
+    userHoliday.remainingHours = userHoliday.totalHours - userHoliday.usedHours;
+
     await userHoliday.save();
   }
 
@@ -101,14 +108,10 @@ const updateLeaveIntoDB = async (id: string, payload: Partial<TLeave>) => {
 };
 
 
+
 export const LeaveServices = {
-    getAllLeaveFromDB,
-    getSingleLeaveFromDB,
-    updateLeaveIntoDB,
-    createLeaveIntoDB
-  
+  getAllLeaveFromDB,
+  getSingleLeaveFromDB,
+  updateLeaveIntoDB,
+  createLeaveIntoDB,
 };
-
-
-
-  

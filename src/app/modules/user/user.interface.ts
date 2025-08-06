@@ -95,7 +95,7 @@ export interface TUser {
   startDate?: Date;
   wtrDocumentUrl?: string;
   area?: string;
-  isFullTime?: boolean;
+  contractHours?: Number;
   carTravelAllowance?: boolean;
   recruitmentEmploymentType?: "full-time" | "part-time" | "contractor" | "temporary" | "intern";
   rightToWork?: RightToWork;

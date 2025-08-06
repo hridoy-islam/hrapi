@@ -5,11 +5,10 @@ import { Types } from "mongoose";
 
 const LeaveSchema = new Schema(
   {
-    holidayYear: { type: String, required: true }, // e.g., "2023"
+    holidayYear: { type: String, required: true }, // e.g., "2023-2024"
     userId: { type: Types.ObjectId, ref: "User", required: true },
     startDate: { type: Date, required: true },
     endDate: { type: Date, required: true },
-    title: { type: String, required: true },
     reason: { type: String,  },
     status: {
       type: String,

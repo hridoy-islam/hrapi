@@ -5,24 +5,13 @@ const HolidaySchema: Schema = new Schema(
   {
     userId: { type: Schema.Types.ObjectId, ref: "User", required: true },
     year: { type: String, required: true },
-    totalHours: { type: Number, default: 224 }, // 28 days × 8 hrs
+    holidayAllowance: { type: Number, default: 0 }, 
+    totalHours: { type: Number, default: 0 }, 
     usedHours: { type: Number, default: 0 },
-    remainingHours: { type: Number, default: 224 },
+    requestedHours: { type: Number, default: 0 },
+    remainingHours: { type: Number, default: 0 },
     hoursPerDay: { type: Number, default: 8 },
-    holidaysTaken: [
-      {
-        startDate: { type: Date },
-        endDate: { type: Date },
-        totalDays: { type: Number }, // Used for display
-        totalHours: { type: Number }, // Used for calculations
-        reason: { type: String, required: false, default: null },
-        status: {
-          type: String,
-          enum: ["pending", "approved", "rejected"],
-          default: "pending",
-        },
-      },
-    ],
+
   },
   { timestamps: true }
 );

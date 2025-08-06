@@ -262,8 +262,8 @@ const userSchema = new Schema<TUser, UserModel>(
     area: {
       type: String,
     },
-    isFullTime: {
-      type: Boolean,
+    contractHours: {
+      type: Number,
     },
     carTravelAllowance: {
       type: Boolean,
