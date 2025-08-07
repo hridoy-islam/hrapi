@@ -97,32 +97,56 @@ const getAllHolidayFromDB = async (query: Record<string, unknown>) => {
   const meta = await userQuery.countTotal();
   let result = await userQuery.modelQuery;
 
-  // Only proceed if userId is provided
-  if (query.userId) {
+  const userId = query.userId as string | undefined;
+  const year = (query.year as string) || getHolidayYearRange();
+
+  if (userId) {
     try {
-      const userId = query.userId as string;
-      const year = (query.year as string) || getHolidayYearRange(); // Fallback to current holiday year
+      // Step 1: Find the user
+      const user = await User.findById(userId);
+      if (!user) {
+        throw new Error(`User with ID ${userId} not found`);
+      }
 
-      // Step 1: Calculate dynamic holiday entitlement based on attendance
-      const holidayHours = await calculateHolidayHours(userId); // Returns calculated hours
+      // Step 2: Check if holiday record exists for this user and year
+      let holidayRecord = await Holiday.findOne({ userId, year });
 
-      // Step 2: Find and update the specific Holiday document
+      if (!holidayRecord) {
+        // Create holiday record since it doesn't exist
+        const contractHours = Number(user.contractHours) || 0;
+        const totalHours = contractHours * 5.6;
+
+        holidayRecord = await Holiday.create({
+          userId: user._id,
+          year,
+          holidayAllowance: totalHours,
+          usedHours: 0,
+          hoursPerDay: 8,
+         
+        });
+
+      }
+
+      // Step 3: Recalculate dynamic holiday entitlement based on attendance
+      const calculatedHours = await calculateHolidayHours(userId);
+        const contractHours = Number(user.contractHours) || 0;
+       const holidayAllowance = contractHours * 5.6;
+      // Update totalHours in the existing record
       const updatedHoliday = await Holiday.findOneAndUpdate(
         { userId, year },
-        { $set: { totalHours: holidayHours } },
-        { new: true, upsert: false } // Don't create if doesn't exist
+        { $set: { holidayAccured: calculatedHours ,holidayAllowance:holidayAllowance  } },
+        { new: true, upsert: false }
       );
 
       if (updatedHoliday) {
-        console.log(`✅ Updated totalHours for user ${userId} in year ${year}: ${holidayHours}h`);
-      } else {
-        console.warn(`⚠️ No Holiday record found for userId: ${userId}, year: ${year}`);
+        console.log(`✅ Updated totalHours for user ${userId} in year ${year}: ${calculatedHours}h`);
       }
 
-      // Optional: Refresh result to include updated data
-      result = await Holiday.find({ userId, year }); // Re-fetch if needed
+      // Step 4: Refetch result scoped to userId/year if needed
+      result = await Holiday.find({ userId, year });
     } catch (error) {
-      console.error('Error calculating or updating holiday hours:', error);
+      console.error('Error ensuring holiday record:', error);
+      // Optionally: throw error or continue with partial data
     }
   }
 
@@ -131,6 +155,8 @@ const getAllHolidayFromDB = async (query: Record<string, unknown>) => {
     result,
   };
 };
+
+
 const getSingleHolidayFromDB = async (id: string) => {
   const result = await Holiday.findById(id);
   return result;
@@ -162,13 +188,7 @@ const updateHolidayIntoDB = async (id: string, payload: Partial<THoliday>) => {
     throw new AppError(httpStatus.NOT_FOUND, "Holiday not found");
   }
 
-  // Toggle `isDeleted` status for the selected user only
-  // const newStatus = !user.isDeleted;
 
-  // // Check if the user is a company, but only update the selected user
-  // if (user.role === "company") {
-  //   payload.isDeleted = newStatus;
-  // }
 
   // Update only the selected user
   const result = await Holiday.findByIdAndUpdate(id, payload, {

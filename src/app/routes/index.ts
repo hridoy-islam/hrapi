@@ -15,6 +15,7 @@ import { EmployeeRateRoutes } from "../modules/hr/employeeRate/employeeRate.rout
 import { HolidayRoutes } from "../modules/hr/holidays/holiday.router";
 import { LeaveRoutes } from "../modules/hr/leave/leave.router";
 import { RightToWorkRoutes } from "../modules/hr/rightToWork/rightToWork.router";
+import { BankHolidayRoutes } from "../modules/hr/bank-holiday/bank-holiday.router";
 
 const router = Router();
 
@@ -83,6 +84,10 @@ const moduleRoutes = [
   {
     path: "/hr/right-to-work",
     route: RightToWorkRoutes,
+  },
+  {
+    path: "/hr/bank-holiday",
+    route: BankHolidayRoutes,
   },
 ];
 

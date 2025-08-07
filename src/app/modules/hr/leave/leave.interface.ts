@@ -12,6 +12,7 @@ export interface TLeave {
   holidayYear: string;
   totalDays?: number;
   totalHours?: number;
+  leaveType:string;
   createdAt?: Date;
   updatedAt?: Date;
 }

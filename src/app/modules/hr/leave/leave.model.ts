@@ -18,6 +18,7 @@ const LeaveSchema = new Schema(
     holidayType: { type: String },
     totalDays: { type: Number }, // calculated
     totalHours: { type: Number }, // calculated
+    leaveType:{type: String, enum: ["paid", "unpaid"]},
   },
   { timestamps: true }
 );

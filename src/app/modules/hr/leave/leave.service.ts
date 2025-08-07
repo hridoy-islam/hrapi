@@ -99,7 +99,7 @@ const updateLeaveIntoDB = async (id: string, payload: Partial<TLeave>) => {
     // Transfer from requested to used
     userHoliday.requestedHours -= totalHours;
     userHoliday.usedHours += totalHours;
-    userHoliday.remainingHours = userHoliday.totalHours - userHoliday.usedHours;
+    userHoliday.remainingHours = userHoliday.holidayAccured - userHoliday.usedHours;
 
     await userHoliday.save();
   }

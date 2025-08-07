@@ -77,9 +77,17 @@ const updateRightToWorkIntoDB = async (
   }
 
   // Check and log status change
-  if (payload.status) {
+ if (
+    payload.nextCheckDate &&
+    payload.nextCheckDate !== rightToWork.nextCheckDate
+  ) {
+    const oldDate = rightToWork.nextCheckDate
+      ? moment(rightToWork.nextCheckDate).format('DD MMM YYYY')
+      : 'N/A';
+    const newDate = moment(payload.nextCheckDate).format('DD MMM YYYY');
+
     logsToAdd.push({
-      title: "RTW Status Checked & Updated",
+      title: `RTW Status Checked & Updated from ${oldDate} to ${newDate}`,
       date: new Date(),
       updatedBy: payload.updatedBy,
     });
