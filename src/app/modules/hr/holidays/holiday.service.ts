@@ -138,9 +138,9 @@ const getAllHolidayFromDB = async (query: Record<string, unknown>) => {
         { new: true, upsert: false }
       );
 
-      if (updatedHoliday) {
-        console.log(`✅ Updated totalHours for user ${userId} in year ${year}: ${calculatedHours}h`);
-      }
+      // if (updatedHoliday) {
+      //   console.log(`✅ Updated totalHours for user ${userId} in year ${year}: ${calculatedHours}h`);
+      // }
 
       // Step 4: Refetch result scoped to userId/year if needed
       result = await Holiday.find({ userId, year });

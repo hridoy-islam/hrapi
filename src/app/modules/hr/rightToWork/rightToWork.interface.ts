@@ -15,6 +15,7 @@ export interface TRightToWork {
   status?:string;
   documents:string[];
   nextCheckDate?: Date;
+  
  logs?: TLogEntry[];
    
 }

@@ -65,43 +65,76 @@ const updateRightToWorkIntoDB = async (
 
   const logsToAdd = [];
 
-  // Check and log expiryDate update
-  if (payload.expiryDate) {
+  // Helper function to compare dates properly
+  const areDatesEqual = (date1: Date | null | undefined, date2: Date | null | undefined) => {
+    if (!date1 && !date2) return true;
+    if (!date1 || !date2) return false;
+    return moment(date1).isSame(moment(date2), 'day');
+  };
+
+  // Check and log startDate update
+  if (payload.startDate && !areDatesEqual(payload.startDate, rightToWork.startDate)) {
     logsToAdd.push({
-      title: `RTW Expiry Date Updated to ${moment(payload.expiryDate).format(
-        "DD MMM YYYY"
-      )}`,
+      title: `RTW Start Date Updated to ${moment(payload.startDate).format("DD MMM YYYY")}`,
       date: new Date(),
       updatedBy: payload.updatedBy,
     });
   }
 
-  // Check and log status change
- if (
-    payload.nextCheckDate &&
-    payload.nextCheckDate !== rightToWork.nextCheckDate
-  ) {
+  // Check and log expiryDate update
+  if (payload.expiryDate && !areDatesEqual(payload.expiryDate, rightToWork.expiryDate)) {
+    logsToAdd.push({
+      title: `RTW Expiry Date Updated to ${moment(payload.expiryDate).format("DD MMM YYYY")}`,
+      date: new Date(),
+      updatedBy: payload.updatedBy,
+    });
+  }
+
+  // Check and log nextCheckDate change
+  if (payload.nextCheckDate && !areDatesEqual(payload.nextCheckDate, rightToWork.nextCheckDate)) {
     const oldDate = rightToWork.nextCheckDate
       ? moment(rightToWork.nextCheckDate).format('DD MMM YYYY')
       : 'N/A';
     const newDate = moment(payload.nextCheckDate).format('DD MMM YYYY');
 
     logsToAdd.push({
-      title: `RTW Status Checked & Updated from ${oldDate} to ${newDate}`,
+      title: `RTW Next Check Date Updated from ${oldDate} to ${newDate}`,
       date: new Date(),
       updatedBy: payload.updatedBy,
     });
   }
 
+ 
   // Push logs to existing logs
   if (logsToAdd.length > 0) {
     rightToWork.logs?.push(...logsToAdd);
   }
 
-  // Apply the rest of the payload
-  Object.assign(rightToWork, payload);
+  // Apply the rest of the payload - explicitly update date fields
+  if (payload.startDate !== undefined) {
+    rightToWork.startDate = payload.startDate;
+  }
+  if (payload.expiryDate !== undefined) {
+    rightToWork.expiryDate = payload.expiryDate;
+  }
+  if (payload.nextCheckDate !== undefined) {
+    rightToWork.nextCheckDate = payload.nextCheckDate;
+  }
+
+  // Apply other payload properties
+  Object.keys(payload).forEach(key => {
+    if (key !== 'startDate' && key !== 'expiryDate' && key !== 'nextCheckDate') {
+      rightToWork[key] = payload[key];
+    }
+  });
 
   const result = await rightToWork.save();
+  
+  console.log('Updated result:', {
+    startDate: result.startDate,
+    expiryDate: result.expiryDate,
+    nextCheckDate: result.nextCheckDate
+  });
 
   return result;
 };

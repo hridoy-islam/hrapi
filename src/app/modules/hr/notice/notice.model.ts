@@ -1,7 +1,4 @@
-/* eslint-disable @typescript-eslint/no-this-alias */
-
 import { Schema, model } from "mongoose";
-
 import { TNotice } from "./notice.interface";
 
 const noticeSchema = new Schema<TNotice>(
@@ -13,28 +10,39 @@ const noticeSchema = new Schema<TNotice>(
     noticeDescription: {
       type: String,
       required: true,
-     
     },
-    noticeDate: {
-      type: Date,
+    noticeSetting: {
+      type: String,
+      enum: ["department", "designation", "individual", "all"],
       required: true,
-      
-    },   
+    },
+    department: {
+      type: [ { type: Schema.Types.ObjectId, ref: "Department" }],
+      default: [],
+    },
+    designation: {
+      type: [{type: Schema.Types.ObjectId, ref: "Designation"}],
+      default: [],
+    },
+    users: {
+      type: [{type: Schema.Types.ObjectId, ref: "User"}],
+      default: [],
+    },
     noticeBy: {
       type: String,
     },
     status: {
-      type: String,      
+      type: String,
       default: "active",
-    },  
-   
-   
+    },
+    noticeDate: {
+      type: Date,
+      default: Date.now,
+    },
   },
   {
     timestamps: true,
   }
 );
-
-
 
 export const Notice = model<TNotice>("Notice", noticeSchema);
