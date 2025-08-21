@@ -16,44 +16,52 @@ const getMonthStartAndEnd = (month: string, year: string) => {
 };
 
 const getAttendanceFromDB = async (query: Record<string, unknown>) => {
-  const { month, year,fromDate, toDate, ...otherQueryParams } = query;
+  const { month, year, fromDate, toDate, ...otherQueryParams } = query;
 
-  // Create a basic query without date filtering
-  const userQuery = new QueryBuilder(Attendance.find().populate('userId').populate({
-    path: 'userId',
-    populate: {
-      path: 'departmentId'
-    }
-  }), otherQueryParams)
+  // Base query with population
+  const userQuery = new QueryBuilder(
+    Attendance.find()
+      .populate("userId", "name firstName initial lastName email phone")
+      .populate({
+        path: "userId",
+        populate: {
+          path: "departmentId",
+        },
+      }),
+    otherQueryParams
+  )
     .search(AttendanceSearchableFields)
     .filter(query)
     .sort()
     .paginate()
     .fields();
 
-  // If both month and year are provided, apply the date range filter
+  // --- Case 1: Filter by Month & Year ---
   if (month && year) {
-    const { startOfMonth, endOfMonth } = getMonthStartAndEnd(month as string, year as string);
+    const { startOfMonth, endOfMonth } = getMonthStartAndEnd(
+      month as string,
+      year as string
+    );
 
-    // Filter records based on the date range
-    userQuery.modelQuery.where('createdAt')
-  .gte(startOfMonth.getTime())
-  .lte(endOfMonth.getTime());
-
+    userQuery.modelQuery
+      .where("clockIn")
+      .gte(startOfMonth)  // whole month start
+      .lte(endOfMonth);   // whole month end
   }
 
-
+  // --- Case 2: Filter by Custom Date Range (day-to-day) ---
   if (fromDate && toDate) {
-    const startDate = moment(fromDate, 'YYYY-MM').startOf('month').toDate();
-    const endDate = moment(toDate, 'YYYY-MM').endOf('month').toDate();
-    userQuery.modelQuery.where('createdAt').gte(startDate.getTime()).lte(endDate.getTime());
+    const startDate = moment(fromDate, "YYYY-MM-DD").startOf("day").toDate();
+    const endDate = moment(toDate, "YYYY-MM-DD").endOf("day").toDate();
+
+    userQuery.modelQuery
+      .where("clockIn")
+      .gte(startDate)
+      .lte(endDate);
   }
 
-  
-  // Fetch the count of total results
+  // --- Fetch meta and results ---
   const meta = await userQuery.countTotal();
-
-  // Fetch the actual results
   const result = await userQuery.modelQuery;
 
   return {

@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import express from "express";
-import { PayrollControllers } from "./payroll.controller";
+import { RequestDocumentControllers } from "./requestDocument.controller";
 
 
 
@@ -9,28 +9,28 @@ const router = express.Router();
 router.get(
   "/",
 //   auth("admin", "company", "creator", "user", "director"),
-PayrollControllers.getAllPayroll
+RequestDocumentControllers.getAllRequestDocument
 );
 
 router.get(
   "/:id",
 //   auth("admin", "user", "director", "company", "creator"),
-PayrollControllers.getSinglePayroll
+RequestDocumentControllers.getSingleRequestDocument
 );
 router.post(
   "/",
 //   auth("admin", "user", "director", "company", "creator"),
-PayrollControllers.createPayroll
+RequestDocumentControllers.createRequestDocument
 );
 
 router.patch(
   "/:id",
 //   auth("admin", "user", "creator", "company", "director"),
-PayrollControllers.updatePayroll
+RequestDocumentControllers.updateRequestDocument
 );
 
 
 
 
 
-export const PayrollRoutes = router;
+export const RequestDocumentRoutes = router;

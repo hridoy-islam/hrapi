@@ -4,9 +4,9 @@ import AppError from "../../../errors/AppError";
 import QueryBuilder from "../../../builder/QueryBuilder";
 
 import moment from "moment";
-import { PayrollSearchableFields } from "./payroll.constant";
-import { Payroll } from "./payroll.model";
-import { TPayroll } from "./payroll.interface";
+import { RequestDocumentSearchableFields } from "./requestDocument.constant";
+import { RequestDocument } from "./requestDocument.model";
+import { TRequestDocument } from "./requestDocument.interface";
 
 const getMonthStartAndEnd = (month: string, year: string) => {
   const startOfMonth = moment(`${year}-${month}-01`, "YYYY-MM-DD")
@@ -18,12 +18,12 @@ const getMonthStartAndEnd = (month: string, year: string) => {
   return { startOfMonth, endOfMonth };
 };
 
-const getPayrollFromDB = async (query: Record<string, unknown>) => {
+const getRequestDocumentFromDB = async (query: Record<string, unknown>) => {
   const { fromDate, toDate, ...otherQueryParams } = query;
 
   // Base query with population
   const userQuery = new QueryBuilder(
-    Payroll.find()
+    RequestDocument.find()
       .populate("userId", "name firstName initial lastName email phone")
       .populate({
         path: "userId",
@@ -40,7 +40,7 @@ const getPayrollFromDB = async (query: Record<string, unknown>) => {
       }),
     otherQueryParams
   )
-    .search(PayrollSearchableFields)
+    .search(RequestDocumentSearchableFields)
     .filter(query)
     .sort()
     .paginate()
@@ -56,17 +56,17 @@ const getPayrollFromDB = async (query: Record<string, unknown>) => {
   };
 };
 
-const getSinglePayrollFromDB = async (id: string) => {
-  const result = await Payroll.findById(id);
+const getSingleRequestDocumentFromDB = async (id: string) => {
+  const result = await RequestDocument.findById(id);
   return result;
 };
 
-const createPayrollIntoDB = async (payload: TPayroll) => {
+const createRequestDocumentIntoDB = async (payload: TRequestDocument) => {
   try {
-    const result = await Payroll.create(payload);
+    const result = await RequestDocument.create(payload);
     return result;
   } catch (error: any) {
-    console.error("Error in create PayrollIntoDB:", error);
+    console.error("Error in create RequestDocumentIntoDB:", error);
 
     // Throw the original error or wrap it with additional context
     if (error instanceof AppError) {
@@ -75,19 +75,19 @@ const createPayrollIntoDB = async (payload: TPayroll) => {
 
     throw new AppError(
       httpStatus.INTERNAL_SERVER_ERROR,
-      error.message || "Failed to create Payroll"
+      error.message || "Failed to create RequestDocument"
     );
   }
 };
 
-const updatePayrollIntoDB = async (id: string, payload: Partial<TPayroll>) => {
-  const payroll = await Payroll.findById(id);
+const updateRequestDocumentIntoDB = async (id: string, payload: Partial<TRequestDocument>) => {
+  const requestDocument = await RequestDocument.findById(id);
 
-  if (!payroll) {
-    throw new AppError(httpStatus.NOT_FOUND, "Payroll not found");
+  if (!requestDocument) {
+    throw new AppError(httpStatus.NOT_FOUND, "RequestDocument not found");
   }
 
-  const result = await Payroll.findByIdAndUpdate(id, payload, {
+  const result = await RequestDocument.findByIdAndUpdate(id, payload, {
     new: true,
     runValidators: true,
   });
@@ -95,9 +95,9 @@ const updatePayrollIntoDB = async (id: string, payload: Partial<TPayroll>) => {
   return result;
 };
 
-export const PayrollServices = {
-  getPayrollFromDB,
-  getSinglePayrollFromDB,
-  createPayrollIntoDB,
-  updatePayrollIntoDB,
+export const RequestDocumentServices = {
+  getRequestDocumentFromDB,
+  getSingleRequestDocumentFromDB,
+  createRequestDocumentIntoDB,
+  updateRequestDocumentIntoDB,
 };

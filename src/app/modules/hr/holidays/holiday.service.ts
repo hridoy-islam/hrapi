@@ -9,6 +9,7 @@ import { User } from "../../user/user.model";
 import moment from "moment";
 import { Attendance } from "../attendance/attendance.model";
 import { Types } from "mongoose";
+import { Leave } from "../leave/leave.model";
 
 const HOURS_PER_DAY = 8;
 
@@ -108,55 +109,85 @@ const getAllHolidayFromDB = async (query: Record<string, unknown>) => {
         throw new Error(`User with ID ${userId} not found`);
       }
 
-      // Step 2: Check if holiday record exists for this user and year
+      // Step 2: Get or create holiday record
       let holidayRecord = await Holiday.findOne({ userId, year });
 
       if (!holidayRecord) {
-        // Create holiday record since it doesn't exist
         const contractHours = Number(user.contractHours) || 0;
-        const totalHours = contractHours * 5.6;
+        const holidayAllowance = contractHours * 5.6;
 
         holidayRecord = await Holiday.create({
           userId: user._id,
           year,
-          holidayAllowance: totalHours,
+          holidayAllowance,
+          holidayAccured: 0,
           usedHours: 0,
+          requestedHours: 0,
+          remainingHours: holidayAllowance,
+          unpaidLeaveTaken: 0,
+          unpaidLeaveRequest: 0,
           hoursPerDay: 8,
-         
         });
 
       }
 
-      // Step 3: Recalculate dynamic holiday entitlement based on attendance
-      const calculatedHours = await calculateHolidayHours(userId);
-        const contractHours = Number(user.contractHours) || 0;
-       const holidayAllowance = contractHours * 5.6;
-      // Update totalHours in the existing record
+      // Step 3: Recalculate holidayAccured (your custom logic)
+      const calculatedAccruedHours = await calculateHolidayHours(userId);
+      const contractHours = Number(user.contractHours) || 0;
+      const holidayAllowance = contractHours * 5.6;
+
+      // ✅ Step 4: Calculate usedHours from approved paid leaves
+
+      const approvedLeaves = await Leave.find({
+        userId: new Types.ObjectId(userId),
+        holidayYear: { $regex: new RegExp(year.split('-').join('|'), 'i') }, // Flexible year match
+        status: { $in: ['approved', 'Approved', 'APPROVED'] }, // Case-tolerant
+        leaveType: { $in: ['paid', null, ''] }, // Include if not set or paid
+      });
+
+
+      let usedHours = 0;
+      approvedLeaves.forEach((leave, idx) => {
+        const hours = leave.totalHours || 0;
+        usedHours += hours;
+      });
+
+      // ✅ Step 5: Calculate requestedHours from pending paid leaves
+      const pendingLeaves = await Leave.find({
+        userId: new Types.ObjectId(userId),
+        holidayYear: { $regex: new RegExp(year.split('-').join('|'), 'i') },
+        status: 'pending',
+        leaveType: { $in: ['paid', null, ''] },
+      });
+
+      const requestedHours = pendingLeaves.reduce((sum, l) => sum + (l.totalHours || 0), 0);
+
+
+      // ✅ Step 6: Update Holiday record
       const updatedHoliday = await Holiday.findOneAndUpdate(
         { userId, year },
-        { $set: { holidayAccured: calculatedHours ,holidayAllowance:holidayAllowance  } },
+        {
+          $set: {
+            holidayAllowance,
+            holidayAccured: calculatedAccruedHours,
+            usedHours,
+            requestedHours,
+            remainingHours: holidayAllowance - usedHours,
+          },
+        },
         { new: true, upsert: false }
       );
 
-      // if (updatedHoliday) {
-      //   console.log(`✅ Updated totalHours for user ${userId} in year ${year}: ${calculatedHours}h`);
-      // }
 
-      // Step 4: Refetch result scoped to userId/year if needed
+      // Step 7: Refetch result
       result = await Holiday.find({ userId, year });
     } catch (error) {
-      console.error('Error ensuring holiday record:', error);
-      // Optionally: throw error or continue with partial data
+      console.error('❌ Error in getAllHolidayFromDB:', error);
     }
   }
 
-  return {
-    meta,
-    result,
-  };
+  return { meta, result };
 };
-
-
 const getSingleHolidayFromDB = async (id: string) => {
   const result = await Holiday.findById(id);
   return result;
