@@ -130,12 +130,7 @@ const updateRightToWorkIntoDB = async (
 
   const result = await rightToWork.save();
   
-  console.log('Updated result:', {
-    startDate: result.startDate,
-    expiryDate: result.expiryDate,
-    nextCheckDate: result.nextCheckDate
-  });
-
+  
   return result;
 };
 

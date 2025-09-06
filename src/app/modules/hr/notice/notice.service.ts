@@ -7,7 +7,7 @@ import AppError from "../../../errors/AppError";
 import QueryBuilder from "../../../builder/QueryBuilder";
 
 const getAllNoticeFromDB = async (query: Record<string, unknown>) => {
-  const userQuery = new QueryBuilder(Notice.find().populate("designation" ,"title").populate("department" ,"departmentName").populate("users" ,"title firstName lastName"), query)
+  const userQuery = new QueryBuilder(Notice.find().populate("designation" ,"title").populate("department" ,"departmentName").populate("users" ,"title firstName lastName").populate("noticeBy" ,"title firstName lastName"), query)
     .search(NoticeSearchableFields)
     .filter(query)
     .sort()

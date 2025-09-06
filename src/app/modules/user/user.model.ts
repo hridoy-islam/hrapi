@@ -20,6 +20,18 @@ const PayrollSchema = new Schema({
   paymentMethod: {
     type: String,
   },
+  bankName: {
+    type: String,
+  },
+  accountNumber: {
+    type: String,
+  },
+  sortCode: {
+    type: String,
+  },
+  beneficiary: {
+    type: String,
+  },
 });
 
 const EqualityInformationSchema = new Schema({
@@ -77,16 +89,20 @@ const trainingSchema = new Schema(
     },
     status: {
       type: String,
-      enum: ["pending", "completed"],
-      default: "pending",
     },
-    startDate: {
+    assignedDate: {
       type: Date,
     },
-    endDate: {
+    expireDate: {
       type: Date,
      
     },
+    completedAt:{
+      type: Date,
+    },
+    certificate:{
+      type: String,
+    }
   }
  
 );

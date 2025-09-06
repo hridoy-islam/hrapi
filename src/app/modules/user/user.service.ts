@@ -9,7 +9,10 @@ const getAllUserFromDB = async (query: Record<string, unknown>) => {
   const userQuery = new QueryBuilder(
     User.find()
       .populate({ path: 'departmentId', select: 'departmentName' })
-      .populate({ path: 'training.trainingId' })
+      .populate({ path: 'training.trainingId' })  .populate({
+        path: 'training.trainingId',
+        select: 'name status', 
+      })
       .populate({ path: 'designationId', select: 'title' }),
     query
   )
@@ -31,7 +34,10 @@ const getAllUserFromDB = async (query: Record<string, unknown>) => {
 
 const getSingleUserFromDB = async (id: string) => {
   const result = await User.findById(id).populate("colleagues company").populate({ path: 'departmentId', select: 'departmentName' })
-      .populate({ path: 'designationId', select: 'title' });
+      .populate({ path: 'designationId', select: 'title' }).populate({ path: 'training', select: 'trainingId' }).populate({ path: 'training.trainingId' })  .populate({
+        path: 'training.trainingId',
+        select: 'name status', 
+      });
   return result;
 };
 
