@@ -11,7 +11,7 @@ const getAllUserFromDB = async (query: Record<string, unknown>) => {
       .populate({ path: 'departmentId', select: 'departmentName' })
       .populate({ path: 'training.trainingId' })  .populate({
         path: 'training.trainingId',
-        select: 'name status', 
+        select: 'name status isRecurring', 
       })
       .populate({ path: 'designationId', select: 'title' }),
     query
@@ -36,7 +36,7 @@ const getSingleUserFromDB = async (id: string) => {
   const result = await User.findById(id).populate("colleagues company").populate({ path: 'departmentId', select: 'departmentName' })
       .populate({ path: 'designationId', select: 'title' }).populate({ path: 'training', select: 'trainingId' }).populate({ path: 'training.trainingId' })  .populate({
         path: 'training.trainingId',
-        select: 'name status', 
+        select: 'name status isRecurring', 
       });
   return result;
 };

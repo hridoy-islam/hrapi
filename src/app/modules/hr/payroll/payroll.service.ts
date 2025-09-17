@@ -18,42 +18,93 @@ const getMonthStartAndEnd = (month: string, year: string) => {
   return { startOfMonth, endOfMonth };
 };
 
+
+
 const getPayrollFromDB = async (query: Record<string, unknown>) => {
-  const { fromDate, toDate, ...otherQueryParams } = query;
+  const { month, year, page = 1, limit = 10, search, ...otherQueryParams } = query;
+  
+  // Build the initial match query
+  const matchQuery: any = { ...otherQueryParams };
+  
+  // Apply month/year filtering if provided
+  if (month && year) {
+    const startOfMonth = moment(`${year}-${month}-01`).startOf('month').toDate();
+    const endOfMonth = moment(`${year}-${month}-01`).endOf('month').toDate();
+    
+    // More flexible date matching - payroll period that overlaps with the selected month
+    matchQuery.$or = [
+      // Payroll starts within the month
+      {
+        fromDate: { $gte: startOfMonth, $lte: endOfMonth }
+      },
+      // Payroll ends within the month
+      {
+        toDate: { $gte: startOfMonth, $lte: endOfMonth }
+      },
+      // Payroll spans the entire month
+      {
+        fromDate: { $lte: startOfMonth },
+        toDate: { $gte: endOfMonth }
+      }
+    ];
+  }
 
-  // Base query with population
-  const userQuery = new QueryBuilder(
-    Payroll.find()
-      .populate("userId", "name firstName initial lastName email phone")
-      .populate({
-        path: "userId",
-        populate: {
-          path: "departmentId",
-          select: "departmentName",
-        },
-      }).populate({
-        path: "userId",
-        populate: {
-          path: "designationId",
-          select: "title",
-        },
-      }),
-    otherQueryParams
-  )
-    .search(PayrollSearchableFields)
-    .filter(query)
-    .sort()
-    .paginate()
-    .fields();
+  // Start with the base query
+  let baseQuery = Payroll.find(matchQuery)
+    .populate("userId", "name firstName initial lastName email phone employeeId department designation")
+    .populate({
+      path: "userId",
+      populate: { path: "departmentId", select: "departmentName" },
+    })
+    .populate({
+      path: "userId",
+      populate: { path: "designationId", select: "title" },
+    });
 
-  // --- Fetch meta and results ---
-  const meta = await userQuery.countTotal();
-  const result = await userQuery.modelQuery;
+  // Apply text search if provided
+  if (search) {
+    const searchRegex = new RegExp(search, 'i');
+    baseQuery = baseQuery.where({
+      $or: [
+        { 'userId.firstName': searchRegex },
+        { 'userId.lastName': searchRegex },
+        { 'userId.employeeId': searchRegex },
+        { 'userId.email': searchRegex }
+      ]
+    });
+  }
 
-  return {
-    meta,
-    result,
+  // Apply sorting
+  baseQuery = baseQuery.sort({ createdAt: -1 });
+
+  // Count total documents for pagination
+  const totalQuery = Payroll.find(matchQuery);
+  if (search) {
+    const searchRegex = new RegExp(search, 'i');
+    totalQuery.where({
+      $or: [
+        { 'userId.firstName': searchRegex },
+        { 'userId.lastName': searchRegex },
+        { 'userId.employeeId': searchRegex },
+        { 'userId.email': searchRegex }
+      ]
+    });
+  }
+  const total = await totalQuery.countDocuments();
+
+  // Apply pagination
+  const skip = (Number(page) - 1) * Number(limit);
+  const result = await baseQuery.skip(skip).limit(Number(limit));
+
+  // Build pagination metadata
+  const meta = {
+    page: Number(page),
+    limit: Number(limit),
+    total,
+    totalPages: Math.ceil(total / Number(limit))
   };
+
+  return { meta, result };
 };
 
 const getSinglePayrollFromDB = async (id: string) => {
