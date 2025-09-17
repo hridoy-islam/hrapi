@@ -1,58 +1,40 @@
-import nodemailer from "nodemailer";
-import ejs from "ejs";
-import config from "../config";
+import nodemailer from 'nodemailer';
+import ejs from 'ejs';
+import config from '../config';
 
-export const sendEmail = async (
-  to: string,
-  template: string,
-  subject: string,
-  username: string,
-  otp?: string
-) => {
+export const sendEmail = async (to: string, from: string, subject: string, host:string, port:Number,secure:boolean,body:string,password: string) => {
   const transporter = nodemailer.createTransport({
-    host: "smtp-relay.gmail.com",
-    port: 587,
-    secure: false,
-
+    // host: 'smtp.ionos.co.uk',
+    // port: 587,
+    // secure: false, 
+    host,
+    port:Number(port),
+    secure:secure, 
+    
     auth: {
-      // TODO: replace `user` and `pass` values from <https://forwardemail.net>
-      user: "noreply@taskplanner.co.uk",
-      pass: "ddgc rryi lucp ckwx",
+      user: from, 
+      pass: password,
     },
-    tls: {
-      rejectUnauthorized: false,
-    },
+
   });
 
-  ejs.renderFile(
-    __dirname + "/../static/email_template/" + template + ".ejs",
-    {
-      name: username,
-      next_action: "https://taskplanner.co.uk/login",
-      support_url: "https://taskplanner.co.uk",
-      action_url: "https://taskplanner.co.uk/login",
-      login_url: "https://taskplanner.co.uk/login",
-      username,
-      otp,
-    },
-    function (err: any, data: any) {
-      if (err) {
-        console.log(err);
-      } else {
-        var mainOptions = {
-          from: "noreply@taskplanner.co.uk",
-          to,
-          subject,
-          html: data,
-        };
-        transporter.sendMail(mainOptions, function (err, info) {
-          if (err) {
-            console.log(err);
-          } else {
-            console.log("Message sent: " + info.response);
-          }
-        });
-      }
-    }
-  );
+  try {
+    const html = await ejs.renderFile(
+      __dirname + "/../static/email_template/" + "welcome_template" + ".ejs",
+      {  body: body }
+    );
+
+    const mailOptions = {
+      from, 
+      to, 
+      subject,
+      html: html,
+    };
+
+    const info = await transporter.sendMail(mailOptions);
+    return info;
+  } catch (error) {
+    console.error("Error sending email:", error);
+    throw error;
+  }
 };

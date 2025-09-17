@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { UserRoutes } from "../modules/user/user.route";
 import { AuthRoutes } from "../modules/auth/auth.router";
-import {  NoticeRoutes } from "../modules/hr/notice/notice.router";
+import { NoticeRoutes } from "../modules/hr/notice/notice.router";
 import { DepartmentRoutes } from "../modules/hr/department/department.router";
 import { EmailRoutes } from "../modules/hr/email-setup/email-setup.router";
 import { AttendanceRoutes } from "../modules/hr/attendance/attendance.router";
@@ -18,6 +18,7 @@ import { RightToWorkRoutes } from "../modules/hr/rightToWork/rightToWork.router"
 import { BankHolidayRoutes } from "../modules/hr/bank-holiday/bank-holiday.router";
 import { PayrollRoutes } from "../modules/hr/payroll/payroll.router";
 import { RequestDocumentRoutes } from "../modules/hr/request-document/requestDocument.router";
+import { UploadDocumentRoutes } from "../modules/hr/documents/documents.route";
 
 const router = Router();
 
@@ -50,7 +51,7 @@ const moduleRoutes = [
     path: "/hr/vacancy",
     route: VacancyRoutes,
   },
- 
+
   {
     path: "/hr/applicant",
     route: ApplicantRoutes,
@@ -98,6 +99,10 @@ const moduleRoutes = [
   {
     path: "/hr/request-document",
     route: RequestDocumentRoutes,
+  },
+  {
+    path: "/documents",
+    route: UploadDocumentRoutes,
   },
 ];
 

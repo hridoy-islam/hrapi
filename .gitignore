@@ -9,7 +9,7 @@
 work.json
 auth.json
 .env*
-
+work.json
 # testing
 /coverage
 # send readme.md inside of dist folder to github and do not send the rest of the files
