@@ -4,6 +4,7 @@ import { TRightToWork } from "./rightToWork.interface";
 const LogEntrySchema = new Schema({
   title: { type: String },
   date: { type: Date },
+   document: { type: String },
   updatedBy: { type: Schema.Types.ObjectId,  ref: "User" },
 });
 
@@ -17,7 +18,7 @@ const RightToWorkSchema = new Schema<TRightToWork>(
       enum: ["active", "closed", "expired","needs-check"],
       default: "active",
     },
-    documents: [{ type: String }],
+    // documents: [{ type: String }],
     nextCheckDate: { type: Date },
     logs: [LogEntrySchema],
   },

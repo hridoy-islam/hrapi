@@ -77,6 +77,7 @@ const updateRightToWorkIntoDB = async (
     logsToAdd.push({
       title: `RTW Start Date Updated to ${moment(payload.startDate).format("DD MMM YYYY")}`,
       date: new Date(),
+      document: payload.document,
       updatedBy: payload.updatedBy,
     });
   }
@@ -86,6 +87,8 @@ const updateRightToWorkIntoDB = async (
     logsToAdd.push({
       title: `RTW Expiry Date Updated to ${moment(payload.expiryDate).format("DD MMM YYYY")}`,
       date: new Date(),
+      document: payload.document,
+
       updatedBy: payload.updatedBy,
     });
   }
@@ -101,10 +104,12 @@ const updateRightToWorkIntoDB = async (
       title: `RTW Next Check Date Updated from ${oldDate} to ${newDate}`,
       date: new Date(),
       updatedBy: payload.updatedBy,
+      document: payload.document,
+
     });
   }
 
- 
+
   // Push logs to existing logs
   if (logsToAdd.length > 0) {
     rightToWork.logs?.push(...logsToAdd);
@@ -129,8 +134,8 @@ const updateRightToWorkIntoDB = async (
   });
 
   const result = await rightToWork.save();
-  
-  
+
+
   return result;
 };
 
