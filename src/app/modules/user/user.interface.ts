@@ -57,6 +57,7 @@ export interface TUser {
   otpExpires: Date | null;
   accountNo?: string;
   sortCode?: string;
+  beneficiaryName?:string;
   beneficiary?: string;
 
   // Fields from Employee model

@@ -171,6 +171,7 @@ const userSchema = new Schema<TUser, UserModel>(
     accountNo: { type: String },
     sortCode: { type: String },
     otpExpires: { type: Date, required: false },
+    beneficiaryName: { type: String },
 
     beneficiary: { type: BeneficiarySchema },
 
