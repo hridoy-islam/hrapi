@@ -63,7 +63,7 @@ const getPayrollFromDB = async (query: Record<string, unknown>) => {
 
   // Apply text search if provided
   if (search) {
-    const searchRegex = new RegExp(search, 'i');
+    const searchRegex = new RegExp(search as any, 'i');
     baseQuery = baseQuery.where({
       $or: [
         { 'userId.firstName': searchRegex },
@@ -80,7 +80,7 @@ const getPayrollFromDB = async (query: Record<string, unknown>) => {
   // Count total documents for pagination
   const totalQuery = Payroll.find(matchQuery);
   if (search) {
-    const searchRegex = new RegExp(search, 'i');
+    const searchRegex = new RegExp(search as any, 'i');
     totalQuery.where({
       $or: [
         { 'userId.firstName': searchRegex },

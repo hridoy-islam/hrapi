@@ -45,8 +45,8 @@ const getAttendanceFromDB = async (query: Record<string, unknown>) => {
 
     userQuery.modelQuery
       .where("clockIn")
-      .gte(startOfMonth)  // whole month start
-      .lte(endOfMonth);   // whole month end
+      .gte(startOfMonth as any)  // whole month start
+      .lte(endOfMonth as any);   // whole month end
   }
 
   // --- Case 2: Filter by Custom Date Range (day-to-day) ---
@@ -56,8 +56,8 @@ const getAttendanceFromDB = async (query: Record<string, unknown>) => {
 
     userQuery.modelQuery
       .where("clockIn")
-      .gte(startDate)
-      .lte(endDate);
+      .gte(startDate as any)
+      .lte(endDate as any);
   }
 
   // --- Fetch meta and results ---

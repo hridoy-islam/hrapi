@@ -77,8 +77,8 @@ const updateRightToWorkIntoDB = async (
     logsToAdd.push({
       title: `RTW Start Date Updated to ${moment(payload.startDate).format("DD MMM YYYY")}`,
       date: new Date(),
-      document: payload.document,
-      updatedBy: payload.updatedBy,
+      document: (payload as any)?.document,
+      updatedBy: (payload as any)?.updatedBy,
     });
   }
 
@@ -87,9 +87,9 @@ const updateRightToWorkIntoDB = async (
     logsToAdd.push({
       title: `RTW Expiry Date Updated to ${moment(payload.expiryDate).format("DD MMM YYYY")}`,
       date: new Date(),
-      document: payload.document,
+      document: (payload as any)?.document,
 
-      updatedBy: payload.updatedBy,
+      updatedBy: (payload as any)?.updatedBy,
     });
   }
 
@@ -103,8 +103,8 @@ const updateRightToWorkIntoDB = async (
     logsToAdd.push({
       title: `RTW Next Check Date Updated from ${oldDate} to ${newDate}`,
       date: new Date(),
-      updatedBy: payload.updatedBy,
-      document: payload.document,
+      updatedBy: (payload as any)?.updatedBy,
+      document: (payload as any)?.document,
 
     });
   }
@@ -129,7 +129,7 @@ const updateRightToWorkIntoDB = async (
   // Apply other payload properties
   Object.keys(payload).forEach(key => {
     if (key !== 'startDate' && key !== 'expiryDate' && key !== 'nextCheckDate') {
-      rightToWork[key] = payload[key];
+      (rightToWork as any)[key] = (payload as any)[key];
     }
   });
 

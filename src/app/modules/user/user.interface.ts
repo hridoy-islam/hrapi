@@ -48,6 +48,7 @@ export interface TUser {
   colleagues?: Types.ObjectId[];
   isDeleted: boolean;
   authorized: boolean;
+  isFullTime?: boolean;
   address?: string;
   image?: string;
   phone?: string;
