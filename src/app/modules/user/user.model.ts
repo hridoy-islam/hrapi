@@ -79,33 +79,28 @@ const BeneficiarySchema = new Schema({
   // }
 });
 
-
-const trainingSchema = new Schema(
-  {
-    trainingId: {
-      type: Schema.Types.ObjectId,
-      ref: "Training",
-      required: true,
-    },
-    status: {
-      type: String,
-    },
-    assignedDate: {
-      type: Date,
-    },
-    expireDate: {
-      type: Date,
-     
-    },
-    completedAt:{
-      type: Date,
-    },
-    certificate:{
-      type: String,
-    }
-  }
- 
-);
+const trainingSchema = new Schema({
+  trainingId: {
+    type: Schema.Types.ObjectId,
+    ref: "Training",
+    required: true,
+  },
+  status: {
+    type: String,
+  },
+  assignedDate: {
+    type: Date,
+  },
+  expireDate: {
+    type: Date,
+  },
+  completedAt: {
+    type: Date,
+  },
+  certificate: {
+    type: String,
+  },
+});
 
 const userSchema = new Schema<TUser, UserModel>(
   {
@@ -155,6 +150,13 @@ const userSchema = new Schema<TUser, UserModel>(
     address: {
       type: String,
     },
+    address2: {
+      type: String,
+    },
+    themeColor: {
+      type: String,
+      default: "#a78bfa",
+    },
     phone: {
       type: String,
     },
@@ -170,8 +172,9 @@ const userSchema = new Schema<TUser, UserModel>(
     },
     accountNo: { type: String },
     sortCode: { type: String },
-    otpExpires: { type: Date, required: false },
     beneficiaryName: { type: String },
+    subscriptionId: { type: Schema.Types.ObjectId, ref: "SubscriptionPlan" },
+    otpExpires: { type: Date, required: false },
 
     beneficiary: { type: BeneficiarySchema },
 
@@ -273,7 +276,7 @@ const userSchema = new Schema<TUser, UserModel>(
     startDate: {
       type: Date,
     },
-    wtrDocumentUrl: {
+    rtwDocumentUrl: {
       type: String,
     },
     area: {
@@ -311,9 +314,7 @@ const userSchema = new Schema<TUser, UserModel>(
       type: Schema.Types.ObjectId,
       ref: "Department",
     },
-    training: [
-     { type: trainingSchema}
-    ],
+    training: [{ type: trainingSchema }],
     designationId: {
       type: Schema.Types.ObjectId,
       ref: "Designation",

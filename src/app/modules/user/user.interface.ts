@@ -42,6 +42,7 @@ export interface TUser {
   name:string,
   email: string;
   password: string;
+  themeColor?:string;
   role: "user" | "admin" | "company" | "creator" | "director";
   status: "block" | "active";
   company?: Types.ObjectId;
@@ -50,6 +51,7 @@ export interface TUser {
   authorized: boolean;
   isFullTime?: boolean;
   address?: string;
+  address2?: string;
   image?: string;
   phone?: string;
   googleUid?: string;
@@ -60,6 +62,7 @@ export interface TUser {
   sortCode?: string;
   beneficiaryName?:string;
   beneficiary?: string;
+  subscriptionId?:Types.ObjectId;
 
   // Fields from Employee model
   profilePictureUrl?: string;
@@ -95,7 +98,7 @@ export interface TUser {
   applicantId?: Types.ObjectId;
   availableFrom?: Date;
   startDate?: Date;
-  wtrDocumentUrl?: string;
+  rtwDocumentUrl?: string;
   area?: string;
   contractHours?: Number;
   carTravelAllowance?: boolean;

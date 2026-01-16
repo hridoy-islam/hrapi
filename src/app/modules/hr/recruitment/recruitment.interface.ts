@@ -6,7 +6,7 @@ export interface TRecruitment {
   applicantId: Types.ObjectId; // linked applicant
   availableFrom: Date;
   startDate: Date;
-  wtrDocumentUrl?: string; // WTR = Working Time Regulation Document
+  rtwDocumentUrl?: string; // WTR = Working Time Regulation Document
   area: string;
   isFullTime: boolean;
   carTravelAllowance: boolean;
@@ -15,7 +15,7 @@ export interface TRecruitment {
     | "part-time"
     | "contractor"
     | "temporary"
-    | "intern"; // Enum
+    | "intern"; 
   rightToWork: {
     hasExpiry: boolean;
     expiryDate?: Date;

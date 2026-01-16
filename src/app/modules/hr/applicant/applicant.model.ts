@@ -9,7 +9,7 @@ const applicantSchema = new Schema<TApplicant>(
       required: true,
       ref: "Vacancy",
     },
-    profilePictureUrl: {
+    image: {
       type: String,
     },
     title: {

@@ -19,6 +19,11 @@ import { BankHolidayRoutes } from "../modules/hr/bank-holiday/bank-holiday.route
 import { PayrollRoutes } from "../modules/hr/payroll/payroll.router";
 import { RequestDocumentRoutes } from "../modules/hr/request-document/requestDocument.router";
 import { UploadDocumentRoutes } from "../modules/hr/documents/documents.route";
+import { SubscriptionPlanRoutes } from "../modules/subscriptionPlan/subscriptionPlan.router";
+import { AdminNoticeRoutes } from "../modules/noticeAdmin/noticeAdmin.router";
+import { CompanyReportRoutes } from "../modules/companyReport/companyReport.router";
+import { EmployeeDocumentRoutes } from "../modules/hr/employeeDocument/employeeDocument.router";
+import { ScheduleCheckRoutes } from "../modules/scheduleCheck/scheduleCheck.router";
 
 const router = Router();
 
@@ -30,6 +35,10 @@ const moduleRoutes = [
   {
     path: "/auth",
     route: AuthRoutes,
+  },
+  {
+    path: "/subscription-plans",
+    route: SubscriptionPlanRoutes,
   },
   {
     path: "/hr/notice",
@@ -103,6 +112,22 @@ const moduleRoutes = [
   {
     path: "/documents",
     route: UploadDocumentRoutes,
+  },
+  {
+    path: "/admin-notice",
+    route: AdminNoticeRoutes,
+  },
+  {
+    path: "/company-report",
+    route: CompanyReportRoutes,
+  },
+  {
+    path: "/employee-documents",
+    route: EmployeeDocumentRoutes,
+  },
+   {
+    path: "/schedule-check",
+    route: ScheduleCheckRoutes,
   },
 ];
 

@@ -4,7 +4,7 @@ export interface TApplicant {
   _id: Types.ObjectId;
   vacancyId: Types.ObjectId; // reference to vacnancy
   // stage - 1  // Personal Details
-  profilePictureUrl?: string; // Uploaded profile photo URL (optional)
+  image?: string; // Uploaded profile photo URL (optional)
   
   // Personal Details
   title: string; // Mr, Mrs, Miss, etc.

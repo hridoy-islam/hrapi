@@ -15,7 +15,6 @@ import sendResponse from "../../utils/sendResponse";
 import moment from "moment";
 import { RightToWork } from "../hr/rightToWork/rightToWork.model";
 
-
 function generateOTP() {
   const otp = Math.floor(1000 + Math.random() * 9000).toString();
   return otp;
@@ -23,7 +22,9 @@ function generateOTP() {
 
 const checkLogin = async (payload: TLogin) => {
   try {
-    const foundUser = await User.isUserExists(payload.email);
+      const normalizedEmail = payload.email.trim().toLowerCase();
+
+    const foundUser = await User.isUserExists(normalizedEmail);
     if (!foundUser) {
       throw new AppError(httpStatus.NOT_FOUND, "Login Detials is not correct");
     }
@@ -34,16 +35,16 @@ const checkLogin = async (payload: TLogin) => {
       );
     }
 
-
     if (!(await User.isPasswordMatched(payload?.password, foundUser?.password)))
       throw new AppError(httpStatus.FORBIDDEN, "Password do not matched");
 
     const jwtPayload = {
       _id: foundUser._id?.toString(),
-      email: foundUser?.email,
+      email: foundUser?.email?.toLowerCase(),
       name: foundUser?.name,
       role: foundUser?.role,
-      authorized: foundUser?.authorized
+      authorized: foundUser?.authorized,
+      image:foundUser?.image
     };
 
     const accessToken = createToken(
@@ -76,7 +77,7 @@ const refreshToken = async (token: string) => {
   }
   const decoded = verifyToken(token, config.jwt_refresh_secret as string);
 
-  const {  email } = decoded;
+  const { email } = decoded;
 
   const foundUser = await User.isUserExists(email);
 
@@ -85,7 +86,7 @@ const refreshToken = async (token: string) => {
   }
 
   try {
-    const jwtPayload= {
+    const jwtPayload = {
       _id: foundUser._id.toString(),
       email: foundUser.email,
       name: foundUser.name,
@@ -184,7 +185,8 @@ const googleLogin = async (payload: {
 };
 
 const createUserIntoDB = async (payload: TCreateUser) => {
-  const user = await User.isUserExists(payload.email);
+  const normalizedEmail = payload.email.trim().toLowerCase();
+  const user = await User.isUserExists(normalizedEmail);
   if (user) {
     throw new AppError(httpStatus.NOT_FOUND, "This user already exists!");
   }
@@ -194,20 +196,18 @@ const createUserIntoDB = async (payload: TCreateUser) => {
     payload.password = "123456";
   }
 
- 
   const otp = generateOTP();
   const newUserPayload = {
     ...payload,
+    email: normalizedEmail,
     otp,
   };
 
   const result = await User.create(newUserPayload);
 
   try {
-
     await RightToWork.create({
-      employeeId: result._id, 
-     
+      employeeId: result._id,
     });
     // await sendEmail(
     //   payload.email,
@@ -216,12 +216,11 @@ const createUserIntoDB = async (payload: TCreateUser) => {
     //   payload.name
     // );
   } catch (error) {
-    console.error('Error sending welcome email:', error);
+    console.error("Error sending welcome email:", error);
   }
 
   return result;
 };
-
 
 const EmailSendOTP = async (email: string) => {
   const user = await User.isUserExists(email);
@@ -234,30 +233,27 @@ const EmailSendOTP = async (email: string) => {
   // send email
 };
 
-
-
-
 export const verifyEmailIntoDB = async (email: string, otp: string) => {
   const foundUser = await User.findOne({ email: email.toLowerCase() });
 
   if (!foundUser) {
-    throw new AppError(httpStatus.NOT_FOUND, 'Email is not correct');
+    throw new AppError(httpStatus.NOT_FOUND, "Email is not correct");
   }
 
   // Check OTP
   if (foundUser.otp !== otp) {
-    throw new AppError(httpStatus.BAD_REQUEST, 'Invalid OTP!');
+    throw new AppError(httpStatus.BAD_REQUEST, "Invalid OTP!");
   }
 
   // Check OTP expiry using moment
   if (foundUser.otpExpires && moment().isAfter(moment(foundUser.otpExpires))) {
-    throw new AppError(httpStatus.BAD_REQUEST, 'OTP has expired');
+    throw new AppError(httpStatus.BAD_REQUEST, "OTP has expired");
   }
 
   // Update user: mark as authorized and clear OTP
   await User.updateOne(
     { email: email.toLowerCase() },
-    { authorized: true, otp: '', otpExpires: null }
+    { authorized: true, otp: "", otpExpires: null }
   );
 
   const jwtPayload = {
@@ -281,7 +277,7 @@ export const verifyEmailIntoDB = async (email: string, otp: string) => {
 
   return {
     accessToken,
-    refreshToken
+    refreshToken,
   };
 };
 
@@ -303,7 +299,6 @@ export const verifyEmailIntoDB = async (email: string, otp: string) => {
 //   sendEmail(user.email, resetUILink);
 // };
 
-
 const forgetPasswordOtp = async (email: string) => {
   const user = await User.isUserExists(email);
   if (!user) {
@@ -315,23 +310,22 @@ const resetPassword = async (
   payload: { email: string; newPassword: string },
   token: string
 ) => {
-  const user = await User.findOne({ email: payload.email }).select('+password');
+  const user = await User.findOne({ email: payload.email }).select("+password");
   if (!user) {
     throw new AppError(httpStatus.NOT_FOUND, "This user is not found !");
   }
-  
+
   const decoded = jwt.verify(
     token,
     config.jwt_access_secret as string
   ) as JwtPayload;
-  
+
   if (payload.email !== decoded.email) {
     throw new AppError(httpStatus.FORBIDDEN, "You are forbidden!");
   }
-  
+
   user.password = payload.newPassword;
-  await user.save(); 
-  
+  await user.save();
 
   return user;
 };

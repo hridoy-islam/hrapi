@@ -16,7 +16,7 @@ const recruitmentSchema = new Schema<TRecruitment>(
     startDate: {
       type: Date,
     },
-    wtrDocumentUrl: {
+    rtwDocumentUrl: {
       type: String,
     },
     area: {
