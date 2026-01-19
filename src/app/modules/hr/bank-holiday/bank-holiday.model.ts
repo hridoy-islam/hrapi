@@ -13,6 +13,11 @@ const BankHolidaySchema = new Schema<TBankHoliday>({
   year: {
     type: Number,
   },
+     companyId: {
+      type: Schema.Types.ObjectId,
+      required: true,
+      ref: "User",
+    },
 });
 
 export const BankHoliday = model<TBankHoliday>(
