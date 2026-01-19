@@ -2,7 +2,7 @@
 import express from "express";
 
 import { UploadDocumentController } from "./documents.controller";
-import { upload } from "../../../utils/multer";
+import { upload } from "../../utils/multer";
 // import auth from '../../middlewares/auth';
 
 const router = express.Router();

@@ -2,9 +2,9 @@ import { Storage } from "@google-cloud/storage";
 import httpStatus from "http-status";
 
 import pdfParse from "pdf-parse";
-import AppError from "../../../errors/AppError";
-import { User } from "../../user/user.model";
-import config from "../../../config";
+import AppError from "../../errors/AppError";
+import { User } from "../user/user.model";
+import config from "../../config";
 
 const storage = new Storage({
   keyFilename: "./work.json",

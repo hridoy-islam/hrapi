@@ -261,7 +261,7 @@ const userSchema = new Schema<TUser, UserModel, TEmployee>(
     startDate: {
       type: Date,
     },
-    wtrDocumentUrl: {
+    rtwDocumentUrl: {
       type: String,
     },
     area: {
