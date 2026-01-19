@@ -1,5 +1,5 @@
 import { model, Schema } from "mongoose";
-import { TRightToWork } from "./rightToWork.interface";
+import { TImmigrationStatus } from "./immigrationStatus.interface";
 
 const LogEntrySchema = new Schema({
   title: { type: String },
@@ -8,18 +8,17 @@ const LogEntrySchema = new Schema({
   updatedBy: { type: Schema.Types.ObjectId,  ref: "User" },
 });
 
-const RightToWorkSchema = new Schema<TRightToWork>(
+const ImmigrationStatusSchema = new Schema<TImmigrationStatus>(
   {
     employeeId: { type: Schema.Types.ObjectId, required: true, ref: "User" },
   
-    // documents: [{ type: String }],
     nextCheckDate: { type: Date },
     logs: [LogEntrySchema],
   },
   { timestamps: true }
 );
 
-export const RightToWork = model<TRightToWork>(
-  "RightToWork",
-  RightToWorkSchema
+export const ImmigrationStatus = model<TImmigrationStatus>(
+  "ImmigrationStatus",
+  ImmigrationStatusSchema
 );

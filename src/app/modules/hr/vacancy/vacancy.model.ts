@@ -7,21 +7,22 @@ const VacancySchema = new Schema<TVacancy>(
     description: { type: String, required: true },
     location: { type: String },
     employmentType: {
-      type: String,      
+      type: String,
       required: true,
     },
     salaryRange: {
       min: { type: Number },
       max: { type: Number },
-      negotiable: Boolean,
+      negotiable: { type: Boolean },
     },
     skillsRequired: { type: String },
     applicationDeadline: { type: Date },
     postedBy: { type: Schema.Types.ObjectId, ref: "User", required: true },
     status: { type: String, enum: ["active", "closed"], default: "active" },
+    companyId: { type: Schema.Types.ObjectId, required: true, ref: "User" },
   },
 
-  { timestamps: true }
+  { timestamps: true },
 );
 
 export const Vacancy = model<TVacancy>("Vacancy", VacancySchema);

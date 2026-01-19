@@ -20,6 +20,18 @@ const ScheduleCheckSchema = new Schema<TScheduleCheck>(
       type: Number,
       default: 0,
     },
+    visaCheckDate: {
+      type: Number,
+      default: 0,
+    },
+    appraisalCheckDate: {
+      type: Number,
+      default: 0,
+    },
+     immigrationCheckDate: {
+      type: Number,
+      default: 0,
+    },
   },
   {
     timestamps: true,

@@ -3,6 +3,7 @@ import { Types } from "mongoose";
 
 export interface TRecruitment {
   _id: Types.ObjectId;
+  companyId:Types.ObjectId;
   applicantId: Types.ObjectId; // linked applicant
   availableFrom: Date;
   startDate: Date;

@@ -15,6 +15,7 @@ export interface TVacancy {
   applicationDeadline?: Date;
   postedBy?: Types.ObjectId;
   status?: "active" | "closed";
+  companyId?:Types.ObjectId;
   // createdAt?: Date;
   // updatedAt?: Date;
 }

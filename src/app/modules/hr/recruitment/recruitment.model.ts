@@ -10,6 +10,8 @@ const recruitmentSchema = new Schema<TRecruitment>(
       required: true,
       ref: "Applicant"
     },
+        companyId: { type: Schema.Types.ObjectId, required: true, ref: "User" },
+
     availableFrom: {
       type: Date,
     },

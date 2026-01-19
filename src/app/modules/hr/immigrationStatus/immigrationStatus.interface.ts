@@ -6,7 +6,7 @@ export interface TLogEntry {
   updatedBy: string;
 }
 
-export interface TRightToWork {
+export interface TImmigrationStatus {
   employeeId: Types.ObjectId;
   nextCheckDate?: Date;
 

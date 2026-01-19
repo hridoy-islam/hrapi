@@ -5,4 +5,7 @@ export interface TScheduleCheck {
   dbsCheckDate: number;
   rtwCheckDate: number;
   passportCheckDate: number;
+  visaCheckDate:number;
+  appraisalCheckDate:number;
+  immigrationCheckDate:number;
 }

@@ -24,6 +24,11 @@ import { AdminNoticeRoutes } from "../modules/noticeAdmin/noticeAdmin.router";
 import { CompanyReportRoutes } from "../modules/companyReport/companyReport.router";
 import { EmployeeDocumentRoutes } from "../modules/hr/employeeDocument/employeeDocument.router";
 import { ScheduleCheckRoutes } from "../modules/scheduleCheck/scheduleCheck.router";
+import { VisaCheckRoutes } from "../modules/hr/visaCheck/visaCheck.router";
+import { DbsFormRoutes } from "../modules/dbs/dbsForm.route";
+import { PassportRoutes } from "../modules/passport/passport.route";
+import { AppraisalRoutes } from "../modules/appraisal/appraisal.route";
+import { ImmigrationStatusRoutes } from "../modules/hr/immigrationStatus/immigrationStatus.router";
 
 const router = Router();
 
@@ -125,9 +130,29 @@ const moduleRoutes = [
     path: "/employee-documents",
     route: EmployeeDocumentRoutes,
   },
-   {
+  {
     path: "/schedule-check",
     route: ScheduleCheckRoutes,
+  },
+  {
+    path: "/visa",
+    route: VisaCheckRoutes,
+  },
+    {
+    path: "/dbs",
+    route: DbsFormRoutes,
+  },
+  {
+    path: "/passport",
+    route: PassportRoutes,
+  },
+  {
+    path: "/appraisal",
+    route: AppraisalRoutes,
+  },
+  {
+    path: "/immigration",
+    route: ImmigrationStatusRoutes,
   },
 ];
 

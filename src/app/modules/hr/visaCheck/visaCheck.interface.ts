@@ -6,9 +6,11 @@ export interface TLogEntry {
   updatedBy: string;
 }
 
-export interface TRightToWork {
+export interface TVisaCheck {
   employeeId: Types.ObjectId;
-  nextCheckDate?: Date;
-
+  startDate: Date;
+  expiryDate: Date;
+  status?: string;
+  documents: string[];
   logs?: TLogEntry[];
 }

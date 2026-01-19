@@ -2,19 +2,19 @@ import httpStatus from "http-status";
 
 import AppError from "../../../errors/AppError";
 import QueryBuilder from "../../../builder/QueryBuilder";
-import { RightToWorkSearchableFields } from "./rightToWork.constant";
-import { RightToWork } from "./rightToWork.model";
-import { TRightToWork } from "./rightToWork.interface";
+import { ImmigrationStatusSearchableFields } from "./immigrationStatus.constant";
+import { ImmigrationStatus } from "./immigrationStatus.model";
+import { TImmigrationStatus } from "./immigrationStatus.interface";
 import moment from "moment";
 
-const getAllRightToWorkFromDB = async (query: Record<string, unknown>) => {
+const getAllImmigrationStatusFromDB = async (query: Record<string, unknown>) => {
   const userQuery = new QueryBuilder(
-    RightToWork.find()
+    ImmigrationStatus.find()
       .populate("logs.updatedBy", "firstName lastName initial name")
       .populate("employeeId", "firstName lastName initial name"),
     query
   )
-    .search(RightToWorkSearchableFields)
+    .search(ImmigrationStatusSearchableFields)
     .filter(query)
     .sort()
     .paginate()
@@ -29,15 +29,15 @@ const getAllRightToWorkFromDB = async (query: Record<string, unknown>) => {
   };
 };
 
-const getSingleRightToWorkFromDB = async (id: string) => {
-  const result = await RightToWork.findById(id);
+const getSingleImmigrationStatusFromDB = async (id: string) => {
+  const result = await ImmigrationStatus.findById(id);
   return result;
 };
 
-const createRightToWorkIntoDB = async (payload: any) => {
+const createImmigrationStatusIntoDB = async (payload: any) => {
   try {
     const initialLogEntry = {
-      title: "Initial Right to Work Verification", // Professional title
+      title: "Initiate Immigration Status Verification", // Professional title
       date: new Date(), 
       updatedBy: payload.updatedBy,
       document: payload.document || "", 
@@ -49,10 +49,10 @@ const createRightToWorkIntoDB = async (payload: any) => {
       logs: [initialLogEntry], 
     };
 
-    const result = await RightToWork.create(rtwData);
+    const result = await ImmigrationStatus.create(rtwData);
     return result;
   } catch (error: any) {
-    console.error("Error in createRightToWorkIntoDB:", error);
+    console.error("Error in createImmigrationStatusIntoDB:", error);
 
     if (error instanceof AppError) {
       throw error;
@@ -60,19 +60,19 @@ const createRightToWorkIntoDB = async (payload: any) => {
 
     throw new AppError(
       httpStatus.INTERNAL_SERVER_ERROR,
-      error.message || "Failed to create RightToWork"
+      error.message || "Failed to create ImmigrationStatus"
     );
   }
 };
 
-const updateRightToWorkIntoDB = async (
+const updateImmigrationStatusIntoDB = async (
   id: string,
-  payload: Partial<TRightToWork>
+  payload: Partial<TImmigrationStatus>
 ) => {
-  const rightToWork = await RightToWork.findById(id);
+  const immigrationStatus = await ImmigrationStatus.findById(id);
 
-  if (!rightToWork) {
-    throw new AppError(httpStatus.NOT_FOUND, "RightToWork not found");
+  if (!immigrationStatus) {
+    throw new AppError(httpStatus.NOT_FOUND, "ImmigrationStatus not found");
   }
 
   const logsToAdd = [];
@@ -85,14 +85,14 @@ const updateRightToWorkIntoDB = async (
   };
 
 
-  if (payload.nextCheckDate && !areDatesEqual(payload.nextCheckDate, rightToWork.nextCheckDate)) {
-    const oldDate = rightToWork.nextCheckDate
-      ? moment(rightToWork.nextCheckDate).format('DD MMM YYYY')
+  if (payload.nextCheckDate && !areDatesEqual(payload.nextCheckDate, immigrationStatus.nextCheckDate)) {
+    const oldDate = immigrationStatus.nextCheckDate
+      ? moment(immigrationStatus.nextCheckDate).format('DD MMM YYYY')
       : 'N/A';
     const newDate = moment(payload.nextCheckDate).format('DD MMM YYYY');
 
     logsToAdd.push({
-      title: `RTW Next Check Date Updated from ${oldDate} to ${newDate}`,
+      title: `Immigration status Check Date Updated from ${oldDate} to ${newDate}`,
       date: new Date(),
       updatedBy: (payload as any)?.updatedBy,
       document: (payload as any)?.document,
@@ -103,29 +103,29 @@ const updateRightToWorkIntoDB = async (
 
   // Push logs to existing logs
   if (logsToAdd.length > 0) {
-    rightToWork.logs?.push(...logsToAdd);
+    immigrationStatus.logs?.push(...logsToAdd);
   }
 
   if (payload.nextCheckDate !== undefined) {
-    rightToWork.nextCheckDate = payload.nextCheckDate;
+    immigrationStatus.nextCheckDate = payload.nextCheckDate;
   }
 
   // Apply other payload properties
   Object.keys(payload).forEach(key => {
     if ( key !== 'nextCheckDate') {
-      (rightToWork as any)[key] = (payload as any)[key];
+      (immigrationStatus as any)[key] = (payload as any)[key];
     }
   });
 
-  const result = await rightToWork.save();
+  const result = await immigrationStatus.save();
 
 
   return result;
 };
 
-export const RightToWorkServices = {
-  getAllRightToWorkFromDB,
-  getSingleRightToWorkFromDB,
-  createRightToWorkIntoDB,
-  updateRightToWorkIntoDB,
+export const ImmigrationStatusServices = {
+  getAllImmigrationStatusFromDB,
+  getSingleImmigrationStatusFromDB,
+  createImmigrationStatusIntoDB,
+  updateImmigrationStatusIntoDB,
 };
