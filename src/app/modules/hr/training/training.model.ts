@@ -23,6 +23,11 @@ const trainingSchema = new Schema<TrainingModule>(
     reminderBeforeDays: {
       type: Number,
     },
+        companyId: {
+      type: Schema.Types.ObjectId,
+      required: true,
+      ref: "User",
+    },
   },
   {
     timestamps: true,

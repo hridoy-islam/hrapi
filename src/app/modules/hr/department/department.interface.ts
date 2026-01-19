@@ -7,4 +7,6 @@ export interface TDepartment {
   departmentName: string;  
   description: string;  
   status: "inactive" | "active";
+    companyId: Types.ObjectId;
+
 }

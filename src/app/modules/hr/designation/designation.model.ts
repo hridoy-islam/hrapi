@@ -12,6 +12,12 @@ const designationSchema = new Schema<TDesignation>(
     description: {
       type: String,
     },
+    
+        companyId: {
+      type: Schema.Types.ObjectId,
+      required: true,
+      ref: "User",
+    },
     permissions: {
       type: Map,
       of: new mongoose.Schema({

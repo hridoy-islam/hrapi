@@ -18,7 +18,11 @@ const departmentSchema = new Schema<TDepartment>(
       type: String,      
       default: "active",
     },  
-   
+       companyId: {
+      type: Schema.Types.ObjectId,
+      required: true,
+      ref: "User",
+    },
    
   },
   {

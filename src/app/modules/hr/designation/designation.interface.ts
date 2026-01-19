@@ -4,6 +4,8 @@ export interface TDesignation {
   _id: Types.ObjectId;
   title: string;
   description?: string;
+    companyId: Types.ObjectId;
+
   permissions: {
     [module: string]: {
       canView: boolean;

@@ -15,6 +15,11 @@ const shiftSchema = new Schema<TShift>(
       type: String,
       required: true,
     },
+        companyId: {
+      type: Schema.Types.ObjectId,
+      required: true,
+      ref: "User",
+    },
   }
 );
 

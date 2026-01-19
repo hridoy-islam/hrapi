@@ -2,6 +2,8 @@ import { Types } from "mongoose";
 
 export interface TrainingModule {
     _id: Types.ObjectId;
+      companyId: Types.ObjectId;
+
     name: string;
     description?: string;
     isRecurring: boolean;

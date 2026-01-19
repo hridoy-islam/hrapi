@@ -4,6 +4,8 @@ import {  Types } from "mongoose";
 
 export interface TEmail {
   _id: Types.ObjectId;
+    companyId: Types.ObjectId;
+
   email: string;  
   password: string;
   host: string;

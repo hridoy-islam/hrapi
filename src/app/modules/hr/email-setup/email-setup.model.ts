@@ -11,6 +11,11 @@ const EmailSchema = new Schema<TEmail>(
       type: String,
       required: true,
     },
+        companyId: {
+      type: Schema.Types.ObjectId,
+      required: true,
+      ref: "User",
+    },
     password: {
       type: String,
       required: true,
