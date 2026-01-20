@@ -6,6 +6,9 @@ import { User } from "./user.model";
 import AppError from "../../errors/AppError";
 import { CompanyReport } from "../companyReport/companyReport.model";
 import { SubscriptionPlan } from "../subscriptionPlan/subscriptionPlan.model";
+import bcrypt from "bcrypt";
+import config from "../../config";
+
 
 const getAllUserFromDB = async (query: Record<string, unknown>) => {
   const userQuery = new QueryBuilder(
@@ -101,6 +104,11 @@ const updateUserIntoDB = async (id: string, payload: Partial<TUser>) => {
       logMessage: reportLogMessage,
       amount: newPlan.price,
     });
+  }
+
+  if (payload.password) {
+    // Hash the password before updating if it's provided
+    payload.password = await bcrypt.hash(payload.password, Number(config.bcrypt_salt_rounds));
   }
 
   const result = await User.findByIdAndUpdate(id, payload, {

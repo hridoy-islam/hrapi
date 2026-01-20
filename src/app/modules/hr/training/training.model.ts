@@ -13,9 +13,9 @@ const trainingSchema = new Schema<TrainingModule>(
     description: {
       type: String,
     },
-    isRecurring: {
-      type: Boolean,
-    },
+    // isRecurring: {
+    //   type: Boolean,
+    // },
 
     validityDays: {
       type: Number,
@@ -28,6 +28,7 @@ const trainingSchema = new Schema<TrainingModule>(
       required: true,
       ref: "User",
     },
+    
   },
   {
     timestamps: true,

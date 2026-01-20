@@ -30,6 +30,7 @@ import { PassportRoutes } from "../modules/passport/passport.route";
 import { ImmigrationStatusRoutes } from "../modules/hr/immigrationStatus/immigrationStatus.router";
 import { ScheduleCheckStatusRoutes } from "../modules/scheduleCheckStatus/scheduleCheckStatus.router";
 import { AppraisalRoutes } from "../modules/hr/appraisal/appraisal.router";
+import { EmployeeTrainingRoutes } from "../modules/hr/employeeTraining/employeeTraining.router";
 
 const router = Router();
 
@@ -159,6 +160,10 @@ const moduleRoutes = [
   {
     path: "/schedule-status",
     route: ScheduleCheckStatusRoutes,
+  },
+  {
+    path: "/employee-training",
+    route: EmployeeTrainingRoutes,
   },
 ];
 

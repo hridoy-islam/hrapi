@@ -9,26 +9,23 @@ const departmentSchema = new Schema<TDepartment>(
     departmentName: {
       type: String,
       required: true,
-    }, 
+    },
     description: {
       type: String,
-    
-    }, 
+    },
     status: {
-      type: String,      
+      type: String,
       default: "active",
-    },  
-       companyId: {
+    },
+    companyId: {
       type: Schema.Types.ObjectId,
       required: true,
       ref: "User",
     },
-   
   },
   {
     timestamps: true,
-  }
+  },
 );
-
 
 export const Department = model<TDepartment>("Department", departmentSchema);
