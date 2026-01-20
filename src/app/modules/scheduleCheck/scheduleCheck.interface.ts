@@ -8,4 +8,6 @@ export interface TScheduleCheck {
   visaCheckDate:number;
   appraisalCheckDate:number;
   immigrationCheckDate:number;
+  spotCheckDate:number;
+  supervisionCheckDate:number;
 }

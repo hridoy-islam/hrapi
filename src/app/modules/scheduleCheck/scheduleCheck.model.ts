@@ -32,6 +32,14 @@ const ScheduleCheckSchema = new Schema<TScheduleCheck>(
       type: Number,
       default: 0,
     },
+     spotCheckDate: {
+      type: Number,
+      default: 0,
+    },
+     supervisionCheckDate: {
+      type: Number,
+      default: 0,
+    },
   },
   {
     timestamps: true,

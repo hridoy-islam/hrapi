@@ -1,7 +1,9 @@
 import { RequestHandler } from "express";
-import catchAsync from "../../utils/catchAsync";
-import sendResponse from "../../utils/sendResponse";
+;
 import httpStatus from "http-status";
+
+import catchAsync from "../../../utils/catchAsync";
+import sendResponse from "../../../utils/sendResponse";
 import { AppraisalServices } from "./appraisal.service";
 
 const getAllAppraisal: RequestHandler = catchAsync(async (req, res) => {
@@ -9,7 +11,7 @@ const getAllAppraisal: RequestHandler = catchAsync(async (req, res) => {
   sendResponse(res, {
     statusCode: httpStatus.OK,
     success: true,
-    message: "Appraisals retrived succesfully",
+    message: "Appraisal retrived succesfully",
     data: result,
   });
 });
@@ -19,7 +21,7 @@ const getSingleAppraisal = catchAsync(async (req, res) => {
   sendResponse(res, {
     statusCode: httpStatus.OK,
     success: true,
-    message: "Appraisal is retrieved succesfully",
+    message: "Single Appraisal is retrieved succesfully",
     data: result,
   });
 });
@@ -35,21 +37,24 @@ const updateAppraisal = catchAsync(async (req, res) => {
   });
 });
 
-const createAppraisal: RequestHandler = catchAsync(async (req, res) => {
-  const result = await AppraisalServices.createAppraisalIntoDB(req.body);
-
+const createAppraisal = catchAsync(async (req, res) => {
+  
+  const result = await AppraisalServices.createAppraisalIntoDB( req.body);
   sendResponse(res, {
-    statusCode: httpStatus.CREATED,
+    statusCode: httpStatus.OK,
     success: true,
-    message: "Appraisal created successfully",
+    message: "Appraisal Created succesfully",
     data: result,
   });
 });
 
+
+
 export const AppraisalControllers = {
-  getAllAppraisal,
-  getSingleAppraisal,
-  updateAppraisal,
-  createAppraisal
-  
+
+    getAllAppraisal,
+    getSingleAppraisal,
+    createAppraisal,
+    updateAppraisal,    
 };
+

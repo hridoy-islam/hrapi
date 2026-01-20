@@ -155,7 +155,7 @@ const userSchema = new Schema<TUser, UserModel>(
     },
     themeColor: {
       type: String,
-      default: "#a78bfa",
+      default: "#38bdf8",
     },
     phone: {
       type: String,

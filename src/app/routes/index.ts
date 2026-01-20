@@ -27,8 +27,9 @@ import { ScheduleCheckRoutes } from "../modules/scheduleCheck/scheduleCheck.rout
 import { VisaCheckRoutes } from "../modules/hr/visaCheck/visaCheck.router";
 import { DbsFormRoutes } from "../modules/dbs/dbsForm.route";
 import { PassportRoutes } from "../modules/passport/passport.route";
-import { AppraisalRoutes } from "../modules/appraisal/appraisal.route";
 import { ImmigrationStatusRoutes } from "../modules/hr/immigrationStatus/immigrationStatus.router";
+import { ScheduleCheckStatusRoutes } from "../modules/scheduleCheckStatus/scheduleCheckStatus.router";
+import { AppraisalRoutes } from "../modules/hr/appraisal/appraisal.router";
 
 const router = Router();
 
@@ -146,13 +147,18 @@ const moduleRoutes = [
     path: "/passport",
     route: PassportRoutes,
   },
+
+  {
+    path: "/immigration",
+    route: ImmigrationStatusRoutes,
+  },
   {
     path: "/appraisal",
     route: AppraisalRoutes,
   },
   {
-    path: "/immigration",
-    route: ImmigrationStatusRoutes,
+    path: "/schedule-status",
+    route: ScheduleCheckStatusRoutes,
   },
 ];
 

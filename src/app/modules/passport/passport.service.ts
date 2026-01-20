@@ -6,7 +6,7 @@ import { TPassport } from "./passport.interface";
 import { PassportSearchableFields } from "./passport.constant";
 
 const getAllPassportFromDB = async (query: Record<string, unknown>) => {
-  const PassportQuery = new QueryBuilder(Passport.find(), query)
+  const PassportQuery = new QueryBuilder(Passport.find().populate("logs.updatedBy", "firstName lastName initial name"), query)
     .search(PassportSearchableFields)
     .filter(query)
     .sort()
@@ -27,27 +27,65 @@ const getSinglePassportFromDB = async (id: string) => {
   return result;
 };
 
-const updatePassportIntoDB = async (id: string, payload: Partial<TPassport>) => {
+const createPassportIntoDB = async (
+  payload: Partial<TPassport> & { date?: Date; updatedBy?: string }
+) => {
+  const { date, updatedBy, ...formData } = payload;
+
+  // 2. Create the initial log entry
+  const initialLog = {
+    title: "Passport Record Initiated",
+    date: new Date(),
+    updatedBy: updatedBy,
+    document: (formData as any).document || "", 
+  };
+
+  // 3. Prepare the document data with the log array
+  const docData = {
+    ...formData,
+    updatedBy,
+    logs: [initialLog],
+  };
+
+  // 4. Create the record
+  const result = await Passport.create(docData);
+  return result;
+};
+
+const updatePassportIntoDB = async (
+  id: string,
+  payload: Partial<TPassport> & { date?: Date; updatedBy?: string; title?: string }
+) => {
+  // 1. Check if passport exists
   const passport = await Passport.findById(id);
   if (!passport) {
     throw new AppError(httpStatus.NOT_FOUND, "Passport not found");
   }
 
-  const result = await Passport.findByIdAndUpdate(id, payload, {
-    new: true,
-    runValidators: true,
-  });
+ 
+  const { date, updatedBy, title, ...updateData } = payload;
+
+  const newLogEntry = {
+    title: "Passport Details Updated",
+    date: new Date(),
+    updatedBy: updatedBy,
+    document: (updateData as any).document || "",
+  };
+
+  const result = await Passport.findByIdAndUpdate(
+    id,
+    {
+      $set: updateData,
+      $push: { logs: newLogEntry },
+    },
+    {
+      new: true,
+      runValidators: true,
+    }
+  );
 
   return result;
 };
-
-
-const createPassportIntoDB = async (payload: Partial<TPassport>) => {
-  const result = await Passport.create(payload);
-  return result;
-};
-
-
 
 
 export const PassportServices = {
