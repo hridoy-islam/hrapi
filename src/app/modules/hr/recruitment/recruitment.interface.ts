@@ -7,7 +7,8 @@ export interface TRecruitment {
   applicantId: Types.ObjectId; // linked applicant
   availableFrom: Date;
   startDate: Date;
-  rtwDocumentUrl?: string; // WTR = Working Time Regulation Document
+  rtwDocumentUrl?: string; 
+  rtwCheckDate?: Date; 
   area: string;
   isFullTime: boolean;
   carTravelAllowance: boolean;

@@ -279,6 +279,9 @@ const userSchema = new Schema<TUser, UserModel>(
     rtwDocumentUrl: {
       type: String,
     },
+    rtwCheckDate : {
+      type: Date,
+    },
     area: {
       type: String,
     },
@@ -293,7 +296,19 @@ const userSchema = new Schema<TUser, UserModel>(
       enum: ["full-time", "part-time", "contractor", "temporary", "intern"],
     },
     rightToWork: {
-      type: RightToWorkSchema,
+      type: String,
+    },
+    dbs: {
+      type: String,
+    },
+    passport: {
+      type: String,
+    },
+    proofOfAddress: {
+      type: String,
+    },
+    immigrationStatus: {
+      type: String,
     },
     payroll: {
       type: PayrollSchema,

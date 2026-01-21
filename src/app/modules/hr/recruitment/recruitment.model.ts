@@ -21,6 +21,9 @@ const recruitmentSchema = new Schema<TRecruitment>(
     rtwDocumentUrl: {
       type: String,
     },
+    rtwCheckDate: {
+      type: Date,
+    },
     area: {
       type: String,
       required: true,

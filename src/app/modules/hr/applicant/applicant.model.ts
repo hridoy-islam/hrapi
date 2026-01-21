@@ -134,10 +134,26 @@ const applicantSchema = new Schema<TApplicant>(
     notes: {
       type: String,
     },
+    
+    dbs: {
+      type: String,
+    },
+    passport: {
+      type: String,
+    },
+    rightToWork: {
+      type: String,
+    },
+    immigrationStatus: {
+      type: String,
+    },
+    proofOfAddress: {
+      type: String,
+    },
   },
   {
     timestamps: true,
-  }
+  },
 );
 
 export const Applicant = model<TApplicant>("Applicant", applicantSchema);

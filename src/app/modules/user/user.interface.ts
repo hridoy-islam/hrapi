@@ -39,10 +39,10 @@ export interface BeneficiaryDetails {
 
 export interface TUser {
   _id: Types.ObjectId;
-  name:string,
+  name: string;
   email: string;
   password: string;
-  themeColor?:string;
+  themeColor?: string;
   role: "user" | "admin" | "company" | "creator" | "director";
   status: "block" | "active";
   company?: Types.ObjectId;
@@ -60,9 +60,9 @@ export interface TUser {
   otpExpires: Date | null;
   accountNo?: string;
   sortCode?: string;
-  beneficiaryName?:string;
+  beneficiaryName?: string;
   beneficiary?: string;
-  subscriptionId?:Types.ObjectId;
+  subscriptionId?: Types.ObjectId;
 
   // Fields from Employee model
   profilePictureUrl?: string;
@@ -99,21 +99,30 @@ export interface TUser {
   availableFrom?: Date;
   startDate?: Date;
   rtwDocumentUrl?: string;
+  rtwCheckDate?: Date;
   area?: string;
   contractHours?: Number;
   carTravelAllowance?: boolean;
-  recruitmentEmploymentType?: "full-time" | "part-time" | "contractor" | "temporary" | "intern";
-  rightToWork?: RightToWork;
+  recruitmentEmploymentType?:
+    | "full-time"
+    | "part-time"
+    | "contractor"
+    | "temporary"
+    | "intern";
   payroll?: Payroll;
   equalityInformation?: EqualityInformation;
   detailedBeneficiary?: BeneficiaryDetails;
-  departmentId:Types.ObjectId;
+  departmentId: Types.ObjectId;
   training: Types.ObjectId[];
   designationId: Types.ObjectId;
-    vacancyId?: Types.ObjectId;
-      passportNo:string;
-passportExpiry:Date;
-
+  vacancyId?: Types.ObjectId;
+  passportNo: string;
+  passportExpiry: Date;
+  dbs?: string;
+  passport?: string;
+  rightToWork?: string;
+  immigrationStatus?: string;
+  proofOfAddress?: string;
 }
 
 export interface UserModel extends Model<TUser> {
@@ -122,7 +131,7 @@ export interface UserModel extends Model<TUser> {
   //instance methods for checking if passwords are matched
   isPasswordMatched(
     plainTextPassword: string,
-    hashedPassword: string
+    hashedPassword: string,
   ): Promise<boolean>;
   // isJWTIssuedBeforePasswordChanged(
   //   passwordChangedTimestamp: Date,

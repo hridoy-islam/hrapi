@@ -50,7 +50,12 @@ passportExpiry:Date;
   hasDisability: boolean;
   disabilityDetails?: string;
   needsReasonableAdjustment: boolean;
-  reasonableAdjustmentDetails?: string;
+  reasonableAdjustmentDetails:string;
+  dbs?: string;
+  passport?: string;
+  rightToWork?: string;
+  immigrationStatus?: string;
+  proofOfAddress?: string;
 
   status:
     | "applied"
