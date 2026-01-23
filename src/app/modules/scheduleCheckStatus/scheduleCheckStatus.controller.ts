@@ -95,6 +95,78 @@ const getRtwStatusList: RequestHandler = catchAsync(async (req, res) => {
   });
 });
 
+const getSpotCheckStatusList: RequestHandler = catchAsync(async (req, res) => {
+  const { companyId } = req.params;
+  const result = await ScheduleCheckStatuServices.getSpotCheckComplianceList(companyId);
+
+  sendResponse(res, {
+    statusCode: httpStatus.OK,
+    success: true,
+    message: "Spot Check compliance list retrieved successfully",
+    data: result,
+  });
+});
+
+const getSupervisionStatusList: RequestHandler = catchAsync(async (req, res) => {
+  const { companyId } = req.params;
+  const result = await ScheduleCheckStatuServices.getSupervisionComplianceList(companyId);
+
+  sendResponse(res, {
+    statusCode: httpStatus.OK,
+    success: true,
+    message: "Supervision compliance list retrieved successfully",
+    data: result,
+  });
+});
+
+const getTrainingStatusList: RequestHandler = catchAsync(async (req, res) => {
+  const { companyId } = req.params;
+  const result = await ScheduleCheckStatuServices.getTrainingComplianceList(companyId);
+
+  sendResponse(res, {
+    statusCode: httpStatus.OK,
+    success: true,
+    message: "Training compliance list retrieved successfully",
+    data: result,
+  });
+});
+
+
+const getInductionStatusList: RequestHandler = catchAsync(async (req, res) => {
+  const { companyId } = req.params;
+  const result = await ScheduleCheckStatuServices.getInductionComplianceList(companyId);
+
+  sendResponse(res, {
+    statusCode: httpStatus.OK,
+    success: true,
+    message: "Induction compliance list retrieved successfully",
+    data: result,
+  });
+});
+
+const getDisciplinaryStatusList: RequestHandler = catchAsync(async (req, res) => {
+  const { companyId } = req.params;
+  const result = await ScheduleCheckStatuServices.getDisciplinaryComplianceList(companyId);
+
+  sendResponse(res, {
+    statusCode: httpStatus.OK,
+    success: true,
+    message: "Disciplinary compliance list retrieved successfully",
+    data: result,
+  });
+});
+const getQAStatusList: RequestHandler = catchAsync(async (req, res) => {
+  const { companyId } = req.params;
+  const result = await ScheduleCheckStatuServices.getQaComplianceList(companyId);
+
+  sendResponse(res, {
+    statusCode: httpStatus.OK,
+    success: true,
+    message: "Quality Assurance compliance list retrieved successfully",
+    data: result,
+  });
+});
+
 export const ScheduleCheckStatusControllers = {
   getAllScheduleCheckStatus,
   getPassportStatusList,
@@ -103,4 +175,10 @@ export const ScheduleCheckStatusControllers = {
   getImmigrationStatusList,
   getAppraisalStatusList,
   getRtwStatusList,
+  getSpotCheckStatusList,
+  getSupervisionStatusList,
+  getTrainingStatusList,
+  getInductionStatusList, 
+  getDisciplinaryStatusList ,
+  getQAStatusList
 };

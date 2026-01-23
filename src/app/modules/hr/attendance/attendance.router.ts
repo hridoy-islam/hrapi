@@ -30,11 +30,6 @@ AttendanceControllers.updateAttendance
 );
 
 
-router.patch(
-  "/clock-event/:attendanceId",
-//   auth("admin", "user", "creator", "company", "director"),
-AttendanceControllers.clockOutAttendance
-);
 
 
 export const AttendanceRoutes = router;

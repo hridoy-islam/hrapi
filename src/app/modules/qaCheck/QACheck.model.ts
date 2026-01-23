@@ -1,6 +1,6 @@
 /* eslint-disable no-unused-vars */
 import { Schema, model } from "mongoose";
-import { TLogEntry, TSpotCheck } from "./spotCheck.interface";
+import { TLogEntry, TQACheck } from "./QACheck.interface";
 
 
 const LogEntrySchema = new Schema<TLogEntry>(
@@ -13,7 +13,7 @@ const LogEntrySchema = new Schema<TLogEntry>(
   }
 );
 
-const SpotCheckSchema = new Schema<TSpotCheck>(
+const QACheckSchema = new Schema<TQACheck>(
   {
     employeeId: { 
       type: Schema.Types.ObjectId, 
@@ -26,7 +26,7 @@ const SpotCheckSchema = new Schema<TSpotCheck>(
       
     },
 
-    spotCheckNote:{
+    QACheckNote:{
       type:String
     },
     
@@ -39,4 +39,4 @@ const SpotCheckSchema = new Schema<TSpotCheck>(
   { timestamps: true }
 );
 
-export const SpotCheck = model<TSpotCheck>("SpotCheck", SpotCheckSchema);
+export const QACheck = model<TQACheck>("QACheck", QACheckSchema);

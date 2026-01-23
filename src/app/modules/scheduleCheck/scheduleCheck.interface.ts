@@ -10,4 +10,9 @@ export interface TScheduleCheck {
   immigrationCheckDate:number;
   spotCheckDate:number;
   supervisionCheckDate:number;
+  disciplinaryCheckDate:number;
+  spotCheckDuration:number;
+  supervisionDuration:number
+  qaCheckDuration:number
+  qaCheckDate:number
 }

@@ -3,9 +3,10 @@ import { Types } from "mongoose";
 export interface TAttendance {
  
   userId: Types.ObjectId;
-  clockIn: Date;
+  shiftId?: Types.ObjectId;
+  clockIn: string;
 
-  clockOut?: Date;
+  clockOut?: string;
   location?: {
     latitude?: number;
     longitude?: number;

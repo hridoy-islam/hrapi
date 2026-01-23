@@ -11,20 +11,23 @@ const attendanceSchema = new Schema<TAttendance>(
       required: true,
       ref: "User",
     },
+    shiftId: {
+      type: Schema.Types.ObjectId,
+      ref: "Shift",
+    },
     clockIn: {
-      type: Date,
+      type: String,
     },
     clockOut: {
-      type: Date,
+      type: String,
     },
     eventType: {
       type: String,
-      enum: ["clock_in", "clock_out","manual"],
+      enum: ["clock_in", "clock_out", "manual"],
     },
     clockType: {
       type: String,
       enum: ["face", "qr", "pin", "manual"],
-
     },
     location: {
       latitude: { type: Number },
@@ -67,13 +70,13 @@ const attendanceSchema = new Schema<TAttendance>(
         capturedAt: { type: Date, default: Date.now },
       },
     ],
-    timestamp:{
-      type: Date
-    }
+    timestamp: {
+      type: Date,
+    },
   },
   {
     timestamps: true,
-  }
+  },
 );
 
 export const Attendance = model<TAttendance>("Attendance", attendanceSchema);

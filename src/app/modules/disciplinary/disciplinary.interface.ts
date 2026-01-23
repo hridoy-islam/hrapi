@@ -7,14 +7,16 @@ export interface TLogEntry {
   date: Date; 
   updatedBy: Types.ObjectId;
   document?: string; 
-  note?: string;
+note:string
 }
 
-export interface TSpotCheck {
+export interface TDisciplinary {
   employeeId: Types.ObjectId;
-  scheduledDate: Date; 
-  completionDate?: Date;
-  spotCheckNote?:string;
+  issueDeadline: Date; 
+  extendDeadline: Date; 
+  issueDocument:string;
+  issueNote:string;
+  action: string;
   logs: TLogEntry[];
   createdAt?: Date;
   updatedAt?: Date;

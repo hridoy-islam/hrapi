@@ -4,6 +4,9 @@ import AppError from "../../errors/AppError";
 import { Supervision } from "./supervision.model";
 import { TSupervision } from "./supervision.interface";
 import { SupervisionSearchableFields } from "./supervision.constant";
+import { User } from "../user/user.model";
+import { ScheduleCheck } from "../scheduleCheck/scheduleCheck.model";
+import moment from "moment";
 
 const getAllSupervisionFromDB = async (query: Record<string, unknown>) => {
   const SupervisionQuery = new QueryBuilder(Supervision.find().populate("logs.updatedBy", "firstName lastName initial name"), query)
@@ -27,59 +30,110 @@ const getSingleSupervisionFromDB = async (id: string) => {
   return result;
 };
 
-const updateSupervisionIntoDB = async (id: string, payload: Partial<TSupervision>& { date?: Date; updatedBy?: string }) => {
+const updateSupervisionIntoDB = async (
+  id: string,
+  payload: Partial<TSupervision> & { updatedBy?: string; document?: string; note?: string }
+) => {
   const supervision = await Supervision.findById(id);
   if (!supervision) {
-    throw new AppError(httpStatus.NOT_FOUND, "Supervision not found");
+    throw new AppError(httpStatus.NOT_FOUND, "Supervision record not found");
   }
 
- const {  date, updatedBy, ...updateData } = payload;
+  const { updatedBy, document, note, ...updateData } = payload;
 
-  const newLogEntry = {
-    title: "DBS Details Updated",
-    date:  new Date(),
-    updatedBy: updatedBy,
-    document: updateData.dbsDocumentUrl||'',
+  const updateQuery: any = {
+    $set: { ...updateData },
+    $push: {},
+    $unset: {},
   };
 
+  if (updateData.completionDate) {
+    
+    // 1. Create Log Entry
+    const newLogEntry = {
+      title: `Supervision completed for ${moment(
+    supervision.scheduledDate
+  ).format("DD MMM YYYY")}`,
+      date: new Date(),
+      updatedBy: updatedBy,
+      document: document || "",
+      note: note || "",
+    };
+    updateQuery.$push.logs = newLogEntry;
+
+    // 2. Clear the active session note
+    updateQuery.$set.sessionNote = "";
+
+    // 3. Calculate Next Scheduled Date
+    const employee = await User.findById(supervision.employeeId);
+    
+    let durationToAdd = 30; 
+
+    if (employee && employee.company) {
+      const scheduleSettings = await ScheduleCheck.findOne({ companyId: employee.company });
+
+      // If settings exist and supervisionDuration is > 0, use it.
+      if (scheduleSettings && scheduleSettings.supervisionDuration > 0) {
+        durationToAdd = scheduleSettings.supervisionDuration;
+      }
+    }
+
+    const nextScheduledDate = moment(supervision.scheduledDate)
+      .add(durationToAdd, 'days')
+      .toDate();
+
+    updateQuery.$set.scheduledDate = nextScheduledDate;
+  } 
   
+  else {
+    if (note !== undefined) {
+      updateQuery.$set.sessionNote = note;
+    }
+  }
+
+  // Cleanup empty operators
+  if (Object.keys(updateQuery.$push).length === 0) delete updateQuery.$push;
+  if (Object.keys(updateQuery.$unset).length === 0) delete updateQuery.$unset;
+
   const result = await Supervision.findByIdAndUpdate(
     id,
-    {
-      $set: updateData,
-      $push: { logs: newLogEntry },
-    },
+    updateQuery,
     {
       new: true,
       runValidators: true,
     }
   );
+
   return result;
 };
 
+const createSupervisionIntoDB = async (
+  payload: Partial<TSupervision> & { updatedBy?: string; note?: string, document?: string; }
+) => {
+  const { updatedBy, note,document, ...supervisionData } = payload;
 
-const createSupervisionIntoDB = async (payload: Partial<TSupervision> & { date?: Date; updatedBy?: string }) => {
- const {  date, updatedBy, ...formData } = payload;
-
+  // 1. Prepare Initial Log
+  const scheduledDateStr = supervisionData.scheduledDate 
+    ? moment(supervisionData.scheduledDate).format('DD MMM YYYY') 
+    : "Not Set";
 
   const initialLog = {
-    title:  `DBS Record Initiated`,
-    date:  new Date(),
-    updatedBy: updatedBy, 
-    document: formData.dbsDocumentUrl||'',
+    title: `Supervision Scheduled for ${scheduledDateStr}`,
+    date: new Date(),
+    updatedBy: updatedBy,
+    document: document||"", 
+    note: note,
   };
 
-  
-  const docData = {
-    ...formData,
-    updatedBy, 
+  // 2. Create Record with Log
+  const result = await Supervision.create({
+    ...supervisionData,
     logs: [initialLog],
-  };
+    sessionNote: note || "" // Set initial session note if provided
+  });
 
-  const result = await Supervision.create(docData);
   return result;
 };
-
 
 
 

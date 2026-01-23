@@ -33,6 +33,10 @@ import { AppraisalRoutes } from "../modules/hr/appraisal/appraisal.router";
 import { EmployeeTrainingRoutes } from "../modules/hr/employeeTraining/employeeTraining.router";
 import { SupervisionRoutes } from "../modules/supervision/supervision.route";
 import { SpotCheckRoutes } from "../modules/spotCheck/spotCheck.route";
+import { CompanyBranchRoutes } from "../modules/companyBranch/companyBranch.router";
+import { InductionRoutes } from "../modules/induction/induction.route";
+import { DisciplinaryRoutes } from "../modules/disciplinary/disciplinary.route";
+import { QACheckRoutes } from "../modules/qaCheck/QACheck.route";
 
 const router = Router();
 
@@ -174,6 +178,22 @@ const moduleRoutes = [
   {
     path: "/spot-check",
     route: SpotCheckRoutes,
+  },
+  {
+    path: "/company-branch",
+    route: CompanyBranchRoutes,
+  },
+  {
+    path: "/induction",
+    route: InductionRoutes,
+  },
+  {
+    path: "/disciplinary",
+    route: DisciplinaryRoutes,
+  },
+  {
+    path: "/qa",
+    route: QACheckRoutes,
   },
 ];
 

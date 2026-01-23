@@ -1,25 +1,42 @@
 /* eslint-disable no-unused-vars */
 import { Schema, model, Types } from "mongoose";
-import { TSupervision } from "./supervision.interface";
+import { TLogEntry, TSupervision } from "./supervision.interface";
 
-const LogEntrySchema = new Schema({
-  title: { type: String },
-  date: { type: Date },
-  updatedBy: { type: Schema.Types.ObjectId, ref: "User" },
-  document:{ type: String },
+const LogEntrySchema = new Schema<TLogEntry>({
+  title: { type: String, required: true },
+  date: { type: Date, default: Date.now },
+  updatedBy: { type: Schema.Types.ObjectId, ref: "User", required: true },
+  document: { type: String },
+  note: { type: String },
 });
 
 const SupervisionSchema = new Schema<TSupervision>(
   {
-    userId: { type: Schema.Types.ObjectId, ref: "User", required: true },
-    // DBS Certificate Details
-    disclosureNumber: { type: String },
-    dbsDocumentUrl: { type: String },
-    dateOfIssue: { type: Date },
-    expiryDate: { type: Date },
+    employeeId: {
+      type: Schema.Types.ObjectId,
+      ref: "User",
+      required: true,
+    },
+
+    // Core Supervision Fields
+    scheduledDate: {
+      type: Date,
+
+    },
+
+    completionDate: {
+      type: Date,
+    },
+    sessionNote: {
+      type: String,
+    },
+
     logs: [LogEntrySchema],
   },
-  { timestamps: true },
+  { timestamps: true }, // Handles createdAt and updatedAt automatically
 );
 
-export const Supervision = model<TSupervision>("Supervision", SupervisionSchema);
+export const Supervision = model<TSupervision>(
+  "Supervision",
+  SupervisionSchema,
+);

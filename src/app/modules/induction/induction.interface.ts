@@ -7,15 +7,15 @@ export interface TLogEntry {
   date: Date; 
   updatedBy: Types.ObjectId;
   document?: string; 
-  note?: string;
+
 }
 
-export interface TSpotCheck {
+export interface TInduction {
   employeeId: Types.ObjectId;
-  scheduledDate: Date; 
-  completionDate?: Date;
-  spotCheckNote?:string;
+  inductionDate: Date; 
+  action:string;
   logs: TLogEntry[];
+  noPromotion:boolean;
   createdAt?: Date;
   updatedAt?: Date;
 }

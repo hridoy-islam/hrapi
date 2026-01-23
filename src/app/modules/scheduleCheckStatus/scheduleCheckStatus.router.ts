@@ -54,4 +54,38 @@ router.get(
   ScheduleCheckStatusControllers.getRtwStatusList
 );
 
+router.get(
+  "/:companyId/spot-check",
+  auth("admin", "company"),
+  ScheduleCheckStatusControllers.getSpotCheckStatusList
+);
+
+router.get(
+  "/:companyId/supervision",
+  auth("admin", "company"),
+  ScheduleCheckStatusControllers.getSupervisionStatusList
+);
+
+router.get(
+  "/:companyId/training",
+  auth("admin", "company"),
+  ScheduleCheckStatusControllers.getTrainingStatusList
+);
+router.get(
+  "/:companyId/induction",
+  auth("admin", "company"),
+  ScheduleCheckStatusControllers.getInductionStatusList
+);
+
+router.get(
+  "/:companyId/disciplinary",
+  auth("admin", "company"),
+  ScheduleCheckStatusControllers.getDisciplinaryStatusList
+);
+router.get(
+  "/:companyId/qa",
+  auth("admin", "company"),
+  ScheduleCheckStatusControllers.getQAStatusList
+);
+
 export const ScheduleCheckStatusRoutes = router;

@@ -10,11 +10,11 @@ export interface TLogEntry {
   note?: string;
 }
 
-export interface TSpotCheck {
+export interface TQACheck {
   employeeId: Types.ObjectId;
   scheduledDate: Date; 
   completionDate?: Date;
-  spotCheckNote?:string;
+  QACheckNote?:string;
   logs: TLogEntry[];
   createdAt?: Date;
   updatedAt?: Date;

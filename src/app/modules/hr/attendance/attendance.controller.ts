@@ -39,16 +39,6 @@ const updateAttendance = catchAsync(async (req, res) => {
 });
 
 
-const clockOutAttendance = catchAsync(async (req, res) => {
-  const { id } = req.params;
-  const result = await AttendanceServices.updateAttendanceIntoDB(id, req.body);
-  sendResponse(res, {
-    statusCode: httpStatus.OK,
-    success: true,
-    message: "Clocked Out succesfully",
-    data: result,
-  });
-});
 
 const createAttendance = catchAsync(async (req, res) => {
   
@@ -65,7 +55,7 @@ export const AttendanceControllers = {
     createAttendance,
     getAllAttendance,
     getSingleAttendance,
-    clockOutAttendance,
+    
     updateAttendance
 };
 
