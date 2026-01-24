@@ -4,7 +4,7 @@ import { AuthRoutes } from "../modules/auth/auth.router";
 import { NoticeRoutes } from "../modules/hr/notice/notice.router";
 import { DepartmentRoutes } from "../modules/hr/department/department.router";
 import { EmailRoutes } from "../modules/hr/email-setup/email-setup.router";
-import { AttendanceRoutes } from "../modules/hr/attendance/attendance.router";
+import { AttendanceRoutes } from "../modules/attendance/attendance.router";
 import { VacancyRoutes } from "../modules/hr/vacancy/vacancy.router";
 import { ApplicantRoutes } from "../modules/hr/applicant/applicant.router";
 import { RecruitmentRoutes } from "../modules/hr/recruitment/recruitment.router";
@@ -37,6 +37,7 @@ import { CompanyBranchRoutes } from "../modules/companyBranch/companyBranch.rout
 import { InductionRoutes } from "../modules/induction/induction.route";
 import { DisciplinaryRoutes } from "../modules/disciplinary/disciplinary.route";
 import { QACheckRoutes } from "../modules/qaCheck/QACheck.route";
+import { CSVRouter } from "../modules/csv/csv.route";
 
 const router = Router();
 
@@ -194,6 +195,10 @@ const moduleRoutes = [
   {
     path: "/qa",
     route: QACheckRoutes,
+  },
+  {
+    path: "/csv",
+    route: CSVRouter,
   },
 ];
 

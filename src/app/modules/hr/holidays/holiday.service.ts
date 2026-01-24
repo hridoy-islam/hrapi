@@ -7,7 +7,7 @@ import AppError from "../../../errors/AppError";
 import QueryBuilder from "../../../builder/QueryBuilder";
 import { User } from "../../user/user.model";
 import moment from "moment";
-import { Attendance } from "../attendance/attendance.model";
+import { Attendance } from "../../attendance/attendance.model";
 import { Types } from "mongoose";
 import { Leave } from "../leave/leave.model";
 
@@ -31,8 +31,8 @@ const calculateHolidayHours = async (userId:any) => {
   let totalDurationMs = 0;
   
   attendances.forEach(attendance => {
-    const clockIn = moment(attendance.clockIn);
-    const clockOut = moment(attendance.clockOut);
+    const clockIn = moment((attendance as any).clockIn);
+    const clockOut = moment((attendance as any).clockOut);
     totalDurationMs += clockOut.diff(clockIn); // Difference in milliseconds
   });
 

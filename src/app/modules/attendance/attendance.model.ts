@@ -15,10 +15,16 @@ const attendanceSchema = new Schema<TAttendance>(
       type: Schema.Types.ObjectId,
       ref: "Shift",
     },
-    clockIn: {
+    startDate: {
       type: String,
     },
-    clockOut: {
+    startTime: {
+      type: String,
+    },
+    endDate: {
+      type: String,
+    },
+    endTime: {
       type: String,
     },
     eventType: {
@@ -28,11 +34,6 @@ const attendanceSchema = new Schema<TAttendance>(
     clockType: {
       type: String,
       enum: ["face", "qr", "pin", "manual"],
-    },
-    location: {
-      latitude: { type: Number },
-      longitude: { type: Number },
-      address: { type: String },
     },
     source: {
       type: String,
@@ -57,6 +58,9 @@ const attendanceSchema = new Schema<TAttendance>(
     },
     notes: {
       type: String,
+    },
+    duration:{
+      type:Number,
     },
     breakTimes: [
       {
