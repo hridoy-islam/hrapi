@@ -26,6 +26,16 @@ const getSinglePayroll = catchAsync(async (req, res) => {
     data: result,
   });
 });
+const regeneratePayroll = catchAsync(async (req, res) => {
+  const { id } = req.params;
+  const result = await PayrollServices.regeneratePayrollById(id);
+  sendResponse(res, {
+    statusCode: httpStatus.OK,
+    success: true,
+    message: "Payroll is regenerate succesfully",
+    data: result,
+  });
+});
 
 const updatePayroll = catchAsync(async (req, res) => {
   const { id } = req.params;
@@ -56,6 +66,7 @@ export const PayrollControllers = {
     createPayroll,
     getAllPayroll,
     getSinglePayroll,
-    updatePayroll
+    updatePayroll,
+    regeneratePayroll
 };
 
