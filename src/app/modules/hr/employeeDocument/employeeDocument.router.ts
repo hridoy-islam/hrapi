@@ -15,6 +15,11 @@ router.get(
   auth("admin", "company"),
 EmployeeDocumentControllers.getSingleEmployeeDocument
 );
+router.get(
+  "/status/:id",
+  auth("admin", "company"),
+  EmployeeDocumentControllers.getEmployeeComplianceStatus,
+);
 router.post(
   "/",
   auth("admin", "company"),

@@ -167,6 +167,21 @@ const getQAStatusList: RequestHandler = catchAsync(async (req, res) => {
   });
 });
 
+
+const getRequiredDocumentStatusList: RequestHandler = catchAsync(async (req, res) => {
+  const { companyId } = req.params;
+  const result =
+    await ScheduleCheckStatuServices.getEmployeeDocumentComplianceList(companyId);
+
+  sendResponse(res, {
+    statusCode: httpStatus.OK,
+    success: true,
+    message: "Quality Assurance compliance list retrieved successfully",
+    data: result,
+  });
+});
+
+
 export const ScheduleCheckStatusControllers = {
   getAllScheduleCheckStatus,
   getPassportStatusList,
@@ -178,7 +193,8 @@ export const ScheduleCheckStatusControllers = {
   getSpotCheckStatusList,
   getSupervisionStatusList,
   getTrainingStatusList,
-  getInductionStatusList, 
-  getDisciplinaryStatusList ,
-  getQAStatusList
+  getInductionStatusList,
+  getDisciplinaryStatusList,
+  getQAStatusList,
+  getRequiredDocumentStatusList
 };

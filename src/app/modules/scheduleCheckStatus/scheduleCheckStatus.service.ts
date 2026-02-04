@@ -15,6 +15,8 @@ import { EmployeeTraining } from "../hr/employeeTraining/employeeTraining.model"
 import { Induction } from "../induction/induction.model";
 import { Disciplinary } from "../disciplinary/disciplinary.model";
 import { QACheck } from "../qaCheck/QACheck.model";
+import { EmployeeDocument } from "../hr/employeeDocument/employeeDocument.model";
+import { MIN_REFERENCE_COUNT, REQUIRED_DOCUMENTS_LIST } from "../hr/employeeDocument/employeeDocument.constant";
 
 const getSettingsAndThreshold = async (
   companyId: string,
@@ -483,6 +485,71 @@ const getQaComplianceList = async (companyId: string) => {
   });
 };
 
+
+
+
+const getEmployeeDocumentComplianceList = async (companyId: string) => {
+  // 1. Fetch all employees in the company
+  const employees = await User.find({
+    company: companyId,
+    role: "employee",
+  })
+    .select("firstName lastName email designationId departmentId avatar")
+    .populate("departmentId designationId");
+
+  if (employees.length === 0) return [];
+
+  const employeeIds = employees.map((e) => e._id);
+
+  // 2. Fetch ALL documents for these employees in one go (Performance optimization)
+  const allDocs = await EmployeeDocument.find({
+    employeeId: { $in: employeeIds },
+  }).select("employeeId documentTitle");
+
+  // 3. Iterate through employees and check their documents against the list
+  const nonCompliantList = employees
+    .map((user) => {
+      // Filter docs for this specific user
+      const userDocs = allDocs.filter(
+        (d) => d.employeeId.toString() === user._id.toString(),
+      );
+
+      // Normalize titles for comparison
+      const uploadedTitles = userDocs.map((d) =>
+        d.documentTitle.trim().toLowerCase(),
+      );
+
+      // Check for missing mandatory documents
+      const missing = REQUIRED_DOCUMENTS_LIST.filter(
+        (req) => !uploadedTitles.includes(req.toLowerCase()),
+      );
+
+      // Check Reference Logic (Min 2)
+      // Exclude "DBS Reference" to avoid confusion if it exists separately
+      const refCount = uploadedTitles.filter(
+        (t) => t.includes("reference") && !t.includes("dbs"),
+      ).length;
+
+      if (refCount < MIN_REFERENCE_COUNT) {
+        missing.push(
+          `Reference (Uploaded: ${refCount}, Required: ${MIN_REFERENCE_COUNT})`,
+        );
+      }
+
+      if (missing.length > 0) {
+        return {
+          employeeId: user,
+          missingDocuments: missing,
+          status: "missing",
+        };
+      }
+      return null; 
+    })
+    .filter((item) => item !== null); 
+
+  return nonCompliantList;
+};
+
 const getCompanyComplianceStats = async (companyId: string) => {
   const employees = await User.find({
     company: companyId,
@@ -504,6 +571,7 @@ const getCompanyComplianceStats = async (companyId: string) => {
       training: 0,
       induction: 0,
       disciplinary: 0,
+      employeeDocument: 0, // NEW
     };
   }
 
@@ -550,7 +618,6 @@ const getCompanyComplianceStats = async (companyId: string) => {
     },
   }));
 
-  // Execute Queries
   const [
     compliantPassportIds,
     compliantVisaIds,
@@ -561,9 +628,10 @@ const getCompanyComplianceStats = async (companyId: string) => {
     compliantSpotCheckIds,
     compliantSupervisionIds,
     compliantQaIds,
-    compliantInductionIds, // NEW: Count employees WITH induction
-    activeDisciplinaryIssues, // NEW: Count ACTIVE disciplinary issues nearing deadline
+    compliantInductionIds,
+    activeDisciplinaryIssues,
     nonCompliantTrainingIds,
+    allEmployeeDocs, 
   ] = await Promise.all([
     // Standard Checks
     Passport.distinct("userId", {
@@ -590,7 +658,6 @@ const getCompanyComplianceStats = async (companyId: string) => {
       employeeId: { $in: employeeIds },
       nextCheckDate: { $gt: getSafeThreshold(intervals.rtw) },
     }),
-
     // Spot & Supervision
     SpotCheck.distinct("employeeId", {
       employeeId: { $in: employeeIds },
@@ -604,13 +671,12 @@ const getCompanyComplianceStats = async (companyId: string) => {
       employeeId: { $in: employeeIds },
       scheduledDate: { $gt: getSafeThreshold(intervals.qa) },
     }),
-    // Induction: Check simply for existence
+    // Induction
     Induction.distinct("employeeId", {
       employeeId: { $in: employeeIds },
       inductionDate: { $exists: true },
     }),
-
-    // Disciplinary: Count ISSUES (where deadline is close or passed)
+    // Disciplinary
     Disciplinary.find({
       employeeId: { $in: employeeIds },
       issueDeadline: {
@@ -618,7 +684,6 @@ const getCompanyComplianceStats = async (companyId: string) => {
         $lte: getSafeThreshold(intervals.disciplinary),
       },
     }).countDocuments(),
-
     // Training
     trainingNonComplianceConditions.length > 0
       ? EmployeeTraining.distinct("employeeId", {
@@ -626,7 +691,35 @@ const getCompanyComplianceStats = async (companyId: string) => {
           $or: trainingNonComplianceConditions,
         })
       : Promise.resolve([]),
+
+    // NEW: Fetch All Documents for calc
+    EmployeeDocument.find({
+      employeeId: { $in: employeeIds },
+    }).select("employeeId documentTitle"),
   ]);
+
+  let employeeDocumentNonCompliantCount = 0;
+
+  employeeIds.forEach((empId) => {
+    const userDocs = allEmployeeDocs.filter(
+      (d) => d.employeeId.toString() === empId.toString(),
+    );
+    const uploadedTitles = userDocs.map((d) =>
+      d.documentTitle.trim().toLowerCase(),
+    );
+
+    const isMissingRequired = REQUIRED_DOCUMENTS_LIST.some(
+      (req) => !uploadedTitles.includes(req.toLowerCase()),
+    );
+
+    const refCount = uploadedTitles.filter(
+      (t) => t.includes("reference") && !t.includes("dbs"),
+    ).length;
+
+    if (isMissingRequired || refCount < MIN_REFERENCE_COUNT) {
+      employeeDocumentNonCompliantCount++;
+    }
+  });
 
   return {
     passport: totalEmployees - compliantPassportIds.length,
@@ -637,12 +730,11 @@ const getCompanyComplianceStats = async (companyId: string) => {
     rtw: totalEmployees - compliantRTWIds.length,
     spot: totalEmployees - compliantSpotCheckIds.length,
     supervision: totalEmployees - compliantSupervisionIds.length,
-
-    // NEW METRICS
-    induction: totalEmployees - compliantInductionIds.length, // Count Missing
-    disciplinary: activeDisciplinaryIssues, // Count Active & Urgent Issues
+    induction: totalEmployees - compliantInductionIds.length,
     qa: totalEmployees - compliantQaIds.length,
+    disciplinary: activeDisciplinaryIssues,
     training: nonCompliantTrainingIds.length,
+    employeeDocument: employeeDocumentNonCompliantCount, 
   };
 };
 
@@ -660,4 +752,5 @@ export const ScheduleCheckStatuServices = {
   getInductionComplianceList,
   getDisciplinaryComplianceList,
   getQaComplianceList,
+  getEmployeeDocumentComplianceList,
 };

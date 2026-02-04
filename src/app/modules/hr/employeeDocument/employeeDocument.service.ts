@@ -4,7 +4,7 @@ import AppError from "../../../errors/AppError";
 import QueryBuilder from "../../../builder/QueryBuilder";
 import { EmployeeDocument } from "./employeeDocument.model";
 import { TEmployeeDocument } from "./employeeDocument.interface";
-import { EmployeeDocumentSearchableFields } from "./employeeDocument.constant";
+import { EmployeeDocumentSearchableFields, MIN_REFERENCE_COUNT, REQUIRED_DOCUMENTS_LIST } from "./employeeDocument.constant";
 
 
 const getAllEmployeeDocumentFromDB = async (query: Record<string, unknown>) => {
@@ -88,13 +88,47 @@ const deleteEmployeeDocumentFromDB = async (id: string) => {
 
 
 
-export const EmployeeDocumentServices = {
-    getAllEmployeeDocumentFromDB,
-    getSingleEmployeeDocumentFromDB,
-    updateEmployeeDocumentIntoDB,
-    createEmployeeDocumentIntoDB,
-    deleteEmployeeDocumentFromDB
+const getEmployeeComplianceStatus = async (id: string) => {
+  const employeeDocuments = await EmployeeDocument.find({ employeeId: id });
+
+ 
+  const uploadedTitles = employeeDocuments.map((doc) => 
+    doc.documentTitle.trim().toLowerCase()
+  );
+
+  // 3. Count how many "Reference" documents exist
+  const referenceCount = uploadedTitles.filter((title) => 
+    title.includes("reference") && !title.includes("dbs") // Exclude "DBS Reference" if it's separate
+  ).length;
+
   
+  const missingDocuments = REQUIRED_DOCUMENTS_LIST.filter((reqDoc) => {
+    return !uploadedTitles.includes(reqDoc.toLowerCase());
+  });
+
+  const isReferenceCompliant = referenceCount >= MIN_REFERENCE_COUNT;
+  if (!isReferenceCompliant) {
+    missingDocuments.push(`Reference (Uploaded: ${referenceCount}, Required: ${MIN_REFERENCE_COUNT})`);
+  }
+
+  return {
+    employeeId: id,
+    totalUploaded: employeeDocuments.length,
+    isCompliant: missingDocuments.length === 0, 
+    missingDocuments: missingDocuments, 
+    uploadedDocuments: employeeDocuments, 
+  };
+};
+
+
+
+export const EmployeeDocumentServices = {
+  getAllEmployeeDocumentFromDB,
+  getSingleEmployeeDocumentFromDB,
+  updateEmployeeDocumentIntoDB,
+  createEmployeeDocumentIntoDB,
+  deleteEmployeeDocumentFromDB,
+  getEmployeeComplianceStatus,
 };
 
 

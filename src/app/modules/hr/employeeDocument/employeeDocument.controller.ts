@@ -28,6 +28,17 @@ const getSingleEmployeeDocument = catchAsync(async (req, res) => {
   });
 });
 
+const getEmployeeComplianceStatus = catchAsync(async (req, res) => {
+  const { id } = req.params;
+  const result = await EmployeeDocumentServices.getEmployeeComplianceStatus(id);
+  sendResponse(res, {
+    statusCode: httpStatus.OK,
+    success: true,
+    message: "Employee Document status is retrieved succesfully",
+    data: result,
+  });
+});
+
 const updateEmployeeDocument = catchAsync(async (req, res) => {
   const { id } = req.params;
   const result = await EmployeeDocumentServices.updateEmployeeDocumentIntoDB(id, req.body);
@@ -63,10 +74,11 @@ const deleteEmployeeDocument = catchAsync(async (req, res) => {
 
 
 export const EmployeeDocumentControllers = {
-    getAllEmployeeDocument,
-    getSingleEmployeeDocument,
-    updateEmployeeDocument,
-    createEmployeeDocument,
-    deleteEmployeeDocument
+  getAllEmployeeDocument,
+  getSingleEmployeeDocument,
+  updateEmployeeDocument,
+  createEmployeeDocument,
+  deleteEmployeeDocument,
+  getEmployeeComplianceStatus,
 };
 

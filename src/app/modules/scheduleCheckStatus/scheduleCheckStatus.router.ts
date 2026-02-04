@@ -88,4 +88,10 @@ router.get(
   ScheduleCheckStatusControllers.getQAStatusList
 );
 
+router.get(
+  "/:companyId/required-documents",
+  auth("admin", "company"),
+  ScheduleCheckStatusControllers.getRequiredDocumentStatusList,
+);
+
 export const ScheduleCheckStatusRoutes = router;
