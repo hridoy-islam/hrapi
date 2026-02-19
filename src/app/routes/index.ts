@@ -38,6 +38,7 @@ import { InductionRoutes } from "../modules/induction/induction.route";
 import { DisciplinaryRoutes } from "../modules/disciplinary/disciplinary.route";
 import { QACheckRoutes } from "../modules/qaCheck/QACheck.route";
 import { CSVRouter } from "../modules/csv/csv.route";
+import { RotaRoutes } from "../modules/rota/rota.router";
 
 const router = Router();
 
@@ -199,6 +200,10 @@ const moduleRoutes = [
   {
     path: "/csv",
     route: CSVRouter,
+  },
+  {
+    path: "/rota",
+    route: RotaRoutes,
   },
 ];
 
