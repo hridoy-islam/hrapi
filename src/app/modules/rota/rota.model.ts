@@ -47,6 +47,10 @@ const RotaSchema = new Schema<TRota>(
     endDate: {
       type: String,
     },
+
+    color:{
+      type:String
+    }
   },
   {
     timestamps: true,

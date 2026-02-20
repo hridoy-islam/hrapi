@@ -10,4 +10,5 @@ export interface TRota {
   leaveType: string;
   startDate: string;
   endDate: string;
+  color: string;
 }
