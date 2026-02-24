@@ -126,6 +126,7 @@ export interface TUser {
   niDoc?: string;
   isBritish?: boolean;
   noRtwCheck?: boolean;
+  index?:number;
 }
 
 export interface UserModel extends Model<TUser> {
