@@ -1,6 +1,6 @@
 import mongoose, { model, Schema } from "mongoose";
 import { TApplicant } from "./applicant.interface";
-import { string } from "zod";
+import { boolean, string } from "zod";
 
 const applicantSchema = new Schema<TApplicant>(
   {
@@ -134,7 +134,9 @@ const applicantSchema = new Schema<TApplicant>(
     notes: {
       type: String,
     },
-    
+    isBritish:{
+      type: Boolean
+    },
     dbs: {
       type: String,
     },
@@ -148,6 +150,9 @@ const applicantSchema = new Schema<TApplicant>(
       type: String,
     },
     proofOfAddress: {
+      type: String,
+    },
+    niDoc: {
       type: String,
     },
   },

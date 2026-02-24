@@ -82,6 +82,7 @@ const getPassportComplianceList = async (companyId: string) => {
   const nonCompliantUsers = await User.find({
     company: companyId,
     role: "employee",
+    noRtwCheck: { $ne: true },
     _id: { $nin: compliantIds },
   })
     .select("firstName lastName email designationId departmentId avatar")
@@ -121,6 +122,7 @@ const getVisaComplianceList = async (companyId: string) => {
   const nonCompliantUsers = await User.find({
     company: companyId,
     role: "employee",
+    noRtwCheck: { $ne: true },
     _id: { $nin: compliantIds },
   })
     .select("firstName lastName email designationId departmentId avatar")
@@ -190,6 +192,7 @@ const getImmigrationComplianceList = async (companyId: string) => {
 
   const nonCompliantUsers = await User.find({
     company: companyId,
+    noRtwCheck: { $ne: true },
     role: "employee",
     _id: { $nin: compliantIds },
   })
@@ -261,6 +264,7 @@ const getRtwComplianceList = async (companyId: string) => {
   const nonCompliantUsers = await User.find({
     company: companyId,
     role: "employee",
+    noRtwCheck: { $ne: true },
     _id: { $nin: compliantIds },
   })
     .select("firstName lastName email designationId departmentId avatar")
@@ -494,7 +498,7 @@ const getEmployeeDocumentComplianceList = async (companyId: string) => {
     company: companyId,
     role: "employee",
   })
-    .select("firstName lastName email designationId departmentId avatar")
+    .select("firstName lastName email designationId departmentId avatar isBritish") // <--- Added isBritish
     .populate("departmentId designationId");
 
   if (employees.length === 0) return [];
@@ -509,23 +513,28 @@ const getEmployeeDocumentComplianceList = async (companyId: string) => {
   // 3. Iterate through employees and check their documents against the list
   const nonCompliantList = employees
     .map((user) => {
-      // Filter docs for this specific user
       const userDocs = allDocs.filter(
         (d) => d.employeeId.toString() === user._id.toString(),
       );
 
-      // Normalize titles for comparison
       const uploadedTitles = userDocs.map((d) =>
         d.documentTitle.trim().toLowerCase(),
       );
 
-      // Check for missing mandatory documents
-      const missing = REQUIRED_DOCUMENTS_LIST.filter(
+      let requiredForThisUser = [...REQUIRED_DOCUMENTS_LIST];
+      
+      if (user.noRtwCheck) {
+        requiredForThisUser = requiredForThisUser.filter(
+          (req) => !["Immigration Status", "Right to Work", "Passport"].includes(req)
+        );
+      } 
+
+      // Check for missing mandatory documents against dynamically generated list
+      const missing = requiredForThisUser.filter(
         (req) => !uploadedTitles.includes(req.toLowerCase()),
       );
 
       // Check Reference Logic (Min 2)
-      // Exclude "DBS Reference" to avoid confusion if it exists separately
       const refCount = uploadedTitles.filter(
         (t) => t.includes("reference") && !t.includes("dbs"),
       ).length;
@@ -554,39 +563,25 @@ const getCompanyComplianceStats = async (companyId: string) => {
   const employees = await User.find({
     company: companyId,
     role: "employee",
-  }).select("_id");
+  }).select("_id noRtwCheck isBritish"); // <--- Added flags here
+  
   const employeeIds = employees.map((user) => user._id);
   const totalEmployees = employeeIds.length;
+  
+  // Create restricted list of employees who actually need RTW checks
+  const rtwRequiredEmployeeIds = employees.filter((user) => !user.noRtwCheck).map((u) => u._id);
 
   if (totalEmployees === 0) {
     return {
-      passport: 0,
-      rtw: 0,
-      visa: 0,
-      dbs: 0,
-      immigration: 0,
-      appraisal: 0,
-      spot: 0,
-      supervision: 0,
-      training: 0,
-      induction: 0,
-      disciplinary: 0,
-      employeeDocument: 0, // NEW
+      passport: 0, rtw: 0, visa: 0, dbs: 0, immigration: 0, appraisal: 0,
+      spot: 0, supervision: 0, training: 0, induction: 0, disciplinary: 0, employeeDocument: 0, 
     };
   }
 
   const settings = await ScheduleCheck.findOne({ companyId });
   const defaults = {
-    passport: 30,
-    visa: 30,
-    dbs: 30,
-    immigration: 30,
-    appraisal: 30,
-    rtw: 30,
-    spot: 30,
-    supervision: 30,
-    disciplinary: 30,
-    qa: 30,
+    passport: 30, visa: 30, dbs: 30, immigration: 30, appraisal: 30,
+    rtw: 30, spot: 30, supervision: 30, disciplinary: 30, qa: 30,
   };
 
   const intervals = {
@@ -602,20 +597,13 @@ const getCompanyComplianceStats = async (companyId: string) => {
     qa: settings?.qaCheckDate || defaults.qa,
   };
 
-  const getSafeThreshold = (days: number) =>
-    moment().add(days, "days").toDate();
+  const getSafeThreshold = (days: number) => moment().add(days, "days").toDate();
 
   // Training Conditions
-  const companyTrainings = await Training.find({ companyId }).select(
-    "_id reminderBeforeDays",
-  );
+  const companyTrainings = await Training.find({ companyId }).select("_id reminderBeforeDays");
   const trainingNonComplianceConditions = companyTrainings.map((t) => ({
     trainingId: t._id,
-    expireDate: {
-      $lte: moment()
-        .add(t.reminderBeforeDays || 30, "days")
-        .toDate(),
-    },
+    expireDate: { $lte: moment().add(t.reminderBeforeDays || 30, "days").toDate() },
   }));
 
   const [
@@ -633,32 +621,33 @@ const getCompanyComplianceStats = async (companyId: string) => {
     nonCompliantTrainingIds,
     allEmployeeDocs, 
   ] = await Promise.all([
-    // Standard Checks
+    // ---> Use restricted `rtwRequiredEmployeeIds` for these 4 queries <---
     Passport.distinct("userId", {
-      userId: { $in: employeeIds },
+      userId: { $in: rtwRequiredEmployeeIds },
       passportExpiryDate: { $gt: getSafeThreshold(intervals.passport) },
     }),
     VisaCheck.distinct("employeeId", {
-      employeeId: { $in: employeeIds },
+      employeeId: { $in: rtwRequiredEmployeeIds },
       expiryDate: { $gt: getSafeThreshold(intervals.visa) },
     }),
+    ImmigrationStatus.distinct("employeeId", {
+      employeeId: { $in: rtwRequiredEmployeeIds },
+      nextCheckDate: { $gt: getSafeThreshold(intervals.immigration) },
+    }),
+    RightToWork.distinct("employeeId", {
+      employeeId: { $in: rtwRequiredEmployeeIds },
+      nextCheckDate: { $gt: getSafeThreshold(intervals.rtw) },
+    }),
+    // ---------------------------------------------------------------------
+
     DbsForm.distinct("userId", {
       userId: { $in: employeeIds },
       expiryDate: { $gt: getSafeThreshold(intervals.dbs) },
-    }),
-    ImmigrationStatus.distinct("employeeId", {
-      employeeId: { $in: employeeIds },
-      nextCheckDate: { $gt: getSafeThreshold(intervals.immigration) },
     }),
     Appraisal.distinct("employeeId", {
       employeeId: { $in: employeeIds },
       nextCheckDate: { $gt: getSafeThreshold(intervals.appraisal) },
     }),
-    RightToWork.distinct("employeeId", {
-      employeeId: { $in: employeeIds },
-      nextCheckDate: { $gt: getSafeThreshold(intervals.rtw) },
-    }),
-    // Spot & Supervision
     SpotCheck.distinct("employeeId", {
       employeeId: { $in: employeeIds },
       scheduledDate: { $gt: getSafeThreshold(intervals.spot) },
@@ -671,28 +660,20 @@ const getCompanyComplianceStats = async (companyId: string) => {
       employeeId: { $in: employeeIds },
       scheduledDate: { $gt: getSafeThreshold(intervals.qa) },
     }),
-    // Induction
     Induction.distinct("employeeId", {
       employeeId: { $in: employeeIds },
       inductionDate: { $exists: true },
     }),
-    // Disciplinary
     Disciplinary.find({
       employeeId: { $in: employeeIds },
-      issueDeadline: {
-        $exists: true,
-        $lte: getSafeThreshold(intervals.disciplinary),
-      },
+      issueDeadline: { $exists: true, $lte: getSafeThreshold(intervals.disciplinary) },
     }).countDocuments(),
-    // Training
     trainingNonComplianceConditions.length > 0
       ? EmployeeTraining.distinct("employeeId", {
           employeeId: { $in: employeeIds },
           $or: trainingNonComplianceConditions,
         })
       : Promise.resolve([]),
-
-    // NEW: Fetch All Documents for calc
     EmployeeDocument.find({
       employeeId: { $in: employeeIds },
     }).select("employeeId documentTitle"),
@@ -700,15 +681,27 @@ const getCompanyComplianceStats = async (companyId: string) => {
 
   let employeeDocumentNonCompliantCount = 0;
 
-  employeeIds.forEach((empId) => {
+  employees.forEach((user) => {
     const userDocs = allEmployeeDocs.filter(
-      (d) => d.employeeId.toString() === empId.toString(),
+      (d) => d.employeeId.toString() === user._id.toString(),
     );
     const uploadedTitles = userDocs.map((d) =>
       d.documentTitle.trim().toLowerCase(),
     );
 
-    const isMissingRequired = REQUIRED_DOCUMENTS_LIST.some(
+    // Apply isBritish Logic inside the stat counter
+    let requiredForThisUser = [...REQUIRED_DOCUMENTS_LIST];
+    if (user.noRtwCheck) {
+      requiredForThisUser = requiredForThisUser.filter(
+        (req) => !["Immigration Status", "Passport","Right to Work"].includes(req)
+      );
+    } else {
+      requiredForThisUser = requiredForThisUser.filter(
+        (req) => req !== "Ni number/Driving licence"
+      );
+    }
+
+    const isMissingRequired = requiredForThisUser.some(
       (req) => !uploadedTitles.includes(req.toLowerCase()),
     );
 
@@ -722,12 +715,14 @@ const getCompanyComplianceStats = async (companyId: string) => {
   });
 
   return {
-    passport: totalEmployees - compliantPassportIds.length,
-    visa: totalEmployees - compliantVisaIds.length,
+    // Determine counts using the restricted employee total lengths where applicable
+    passport: rtwRequiredEmployeeIds.length - compliantPassportIds.length,
+    visa: rtwRequiredEmployeeIds.length - compliantVisaIds.length,
+    immigration: rtwRequiredEmployeeIds.length - compliantImmigrationIds.length,
+    rtw: rtwRequiredEmployeeIds.length - compliantRTWIds.length,
+    // ...everything else uses totalEmployees length
     dbs: totalEmployees - compliantDbsIds.length,
-    immigration: totalEmployees - compliantImmigrationIds.length,
     appraisal: totalEmployees - compliantAppraisalIds.length,
-    rtw: totalEmployees - compliantRTWIds.length,
     spot: totalEmployees - compliantSpotCheckIds.length,
     supervision: totalEmployees - compliantSupervisionIds.length,
     induction: totalEmployees - compliantInductionIds.length,
@@ -737,7 +732,6 @@ const getCompanyComplianceStats = async (companyId: string) => {
     employeeDocument: employeeDocumentNonCompliantCount, 
   };
 };
-
 export const ScheduleCheckStatuServices = {
   getCompanyComplianceStats,
   getPassportComplianceList,

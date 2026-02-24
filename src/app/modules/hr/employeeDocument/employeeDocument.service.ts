@@ -5,6 +5,7 @@ import QueryBuilder from "../../../builder/QueryBuilder";
 import { EmployeeDocument } from "./employeeDocument.model";
 import { TEmployeeDocument } from "./employeeDocument.interface";
 import { EmployeeDocumentSearchableFields, MIN_REFERENCE_COUNT, REQUIRED_DOCUMENTS_LIST } from "./employeeDocument.constant";
+import { User } from "../../user/user.model";
 
 
 const getAllEmployeeDocumentFromDB = async (query: Record<string, unknown>) => {
@@ -89,22 +90,40 @@ const deleteEmployeeDocumentFromDB = async (id: string) => {
 
 
 const getEmployeeComplianceStatus = async (id: string) => {
+  // 1. Fetch the user to get their specific flags (isBritish, noRtwCheck)
+  const user = await User.findById(id).select("isBritish noRtwCheck");
+  
+  if (!user) {
+    throw new Error("Employee not found");
+  }
+
+  // 2. Fetch the documents uploaded by this employee
   const employeeDocuments = await EmployeeDocument.find({ employeeId: id });
 
- 
   const uploadedTitles = employeeDocuments.map((doc) => 
     doc.documentTitle.trim().toLowerCase()
   );
 
-  // 3. Count how many "Reference" documents exist
+  // 3. Dynamic required documents logic based on user profile
+  let requiredForThisUser = [...REQUIRED_DOCUMENTS_LIST];
+      
+  if (user.noRtwCheck) {
+    // If no RTW check is needed: Remove ALL RTW-related documents
+    requiredForThisUser = requiredForThisUser.filter(
+      (req) => !["Immigration Status", "Right to Work", "Passport"].includes(req)
+    );
+  }
+   
+
+  // 4. Find which required documents are missing
+  const missingDocuments = requiredForThisUser.filter((reqDoc) => {
+    return !uploadedTitles.includes(reqDoc.toLowerCase());
+  });
+
+  // 5. Count how many "Reference" documents exist
   const referenceCount = uploadedTitles.filter((title) => 
     title.includes("reference") && !title.includes("dbs") // Exclude "DBS Reference" if it's separate
   ).length;
-
-  
-  const missingDocuments = REQUIRED_DOCUMENTS_LIST.filter((reqDoc) => {
-    return !uploadedTitles.includes(reqDoc.toLowerCase());
-  });
 
   const isReferenceCompliant = referenceCount >= MIN_REFERENCE_COUNT;
   if (!isReferenceCompliant) {
@@ -119,7 +138,6 @@ const getEmployeeComplianceStatus = async (id: string) => {
     uploadedDocuments: employeeDocuments, 
   };
 };
-
 
 
 export const EmployeeDocumentServices = {

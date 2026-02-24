@@ -123,6 +123,9 @@ export interface TUser {
   rightToWork?: string;
   immigrationStatus?: string;
   proofOfAddress?: string;
+  niDoc?: string;
+  isBritish?: boolean;
+  noRtwCheck?: boolean;
 }
 
 export interface UserModel extends Model<TUser> {

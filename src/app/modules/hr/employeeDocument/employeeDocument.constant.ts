@@ -21,9 +21,9 @@ export const REQUIRED_DOCUMENTS_LIST = [
   "Health Declaration / Post employment Medical Questionnaire",
   "Identification Document",
   "DBS Reference",
-  "National Insurance",
   "Bank Account Details",
   "P46 / P45",
+  "Ni number/Driving licence"
 ];
 
 export const MIN_REFERENCE_COUNT = 2;

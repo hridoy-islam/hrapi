@@ -325,6 +325,17 @@ const userSchema = new Schema<TUser, UserModel>(
     passportExpiry: {
       type: Date,
     },
+    isBritish:{
+      type: Boolean,
+      default:false
+    },
+    noRtwCheck:{
+      type: Boolean,
+      default:false
+    },
+     niDoc: {
+      type: String,
+    },
     departmentId: {
       type: Schema.Types.ObjectId,
       ref: "Department",

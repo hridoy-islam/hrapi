@@ -45,6 +45,7 @@ passportExpiry:Date;
   gender: string; // Male, Female, Other
   maritalStatus: string; // Single, Married, etc.
   ethnicOrigin?: string; // Ethnic background
+  isBritish: boolean;
 
   // Disability Information
   hasDisability: boolean;
@@ -56,6 +57,7 @@ passportExpiry:Date;
   rightToWork?: string;
   immigrationStatus?: string;
   proofOfAddress?: string;
+  niDoc?: string;
 
   status:
     | "applied"
