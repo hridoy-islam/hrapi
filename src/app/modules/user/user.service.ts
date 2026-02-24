@@ -65,6 +65,25 @@ const updateUserIntoDB = async (id: string, payload: Partial<TUser>) => {
     throw new AppError(httpStatus.NOT_FOUND, "User not found");
   }
 
+
+   if (payload.email) {
+    const normalizedEmail = payload.email.trim().toLowerCase();
+
+    const existingUser = await User.findOne({
+      _id: { $ne: id }, // exclude current user
+      email: normalizedEmail,
+    
+    });
+
+    if (existingUser) {
+      throw new AppError(
+        httpStatus.BAD_REQUEST,
+        "This email already exists"
+      );
+    }
+
+    payload.email = normalizedEmail;
+  }
   if (payload.subscriptionId) {
     
     const newPlan = await SubscriptionPlan.findById(payload.subscriptionId);
