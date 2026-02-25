@@ -17,6 +17,15 @@ const getAllRota: RequestHandler = catchAsync(async (req, res) => {
     data: result,
   });
 });
+const getUpcomingRota: RequestHandler = catchAsync(async (req, res) => {
+  const result = await RotaServices.getUpcomingRotaFromDB(req.query);
+  sendResponse(res, {
+    statusCode: httpStatus.OK,
+    success: true,
+    message: "Rotas retrived succesfully",
+    data: result,
+  });
+});
 
 
 const getSingleRota = catchAsync(async (req, res) => {
@@ -95,6 +104,7 @@ export const RotaControllers = {
     createRota,
     deleteRota,
     bulkAssignRota,
-    copyRota
+    copyRota,
+    getUpcomingRota
 };
 

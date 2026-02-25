@@ -31,6 +31,10 @@ const noticeSchema = new Schema<TNotice>(
     noticeBy: {
        type: Schema.Types.ObjectId, ref: "User",
     },
+    companyId: {
+       type: Schema.Types.ObjectId, ref: "User",
+       required: true
+    },
     status: {
       type: String,
       default: "active",

@@ -80,7 +80,34 @@ const updateRotaIntoDB = async (id: string, payload: Partial<TRota>) => {
 
   return result;
 };
+const getUpcomingRotaFromDB = async (query: Record<string, unknown>) => {
+  const { ...restQuery } = query;
 
+  // Get today's date in the same format stored in the DB (YYYY-MM-DD)
+  const today = moment().format('YYYY-MM-DD');
+
+  // Filter strictly for tasks/shifts from today onwards
+  const dateFilter = {
+    startDate: { $gte: today }
+  };
+
+  // Use the existing QueryBuilder for search, filter, pagination, etc.
+  // Default sorting by startDate ascending so the nearest shifts appear first
+  const rotaQuery = new QueryBuilder(Rota.find(dateFilter).sort({ startDate: 1 }), restQuery)
+    .search(RotaSearchableFields)
+    .filter(restQuery) 
+    .sort()
+    .paginate()
+    .fields();
+
+  const meta = await rotaQuery.countTotal();
+  const result = await rotaQuery.modelQuery;
+
+  return {
+    meta,
+    result,
+  };
+};
 
 
 const deleteRotaFromDB = async (id: string) => {
@@ -359,7 +386,8 @@ export const RotaServices = {
     createRotaIntoDB,
     deleteRotaFromDB,
     copyRotaIntoDB,
-    bulkAssignRotaIntoDB
+    bulkAssignRotaIntoDB,
+    getUpcomingRotaFromDB
   
 };
 

@@ -7,12 +7,17 @@ import auth from "../../middlewares/auth";
 const router = express.Router();
 router.get(
   "/",
-  auth("admin", "company", "creator", "user", "director"),
+  auth("admin", "company", "creator", "user", "director","employee"),
   RotaControllers.getAllRota
 );
 router.get(
+  "/upcoming-rota",
+  auth("admin", "user", "director", "company", "creator","employee"),
+  RotaControllers.getUpcomingRota
+);
+router.get(
   "/:id",
-  auth("admin", "user", "director", "company", "creator"),
+  auth("admin", "user", "director", "company", "creator","employee"),
 RotaControllers.getSingleRota
 );
 router.post(
@@ -38,6 +43,7 @@ router.post(
   auth("admin", "user", "director", "company", "creator"),
   RotaControllers.bulkAssignRota
 );
+
 
 router.post(
   "/copy",

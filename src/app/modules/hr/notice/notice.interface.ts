@@ -7,6 +7,7 @@ export interface TNotice {
   noticeDescription: string;
   noticeSetting: "department" | "designation" | "individual" | "all";
   department?:mongoose.Types.ObjectId;  
+  companyId?:mongoose.Types.ObjectId;  
   designation?:mongoose.Types.ObjectId[]; 
   users?: mongoose.Types.ObjectId[];       
   noticeBy?: string;      

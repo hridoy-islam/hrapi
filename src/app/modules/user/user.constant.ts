@@ -4,6 +4,7 @@ export const USER_ROLE = {
   company: "company",
   creator: "creator",
   director: "director",
+  employee: "employee",
 } as const;
 
 export const UserStatus = ["block", "active"];
