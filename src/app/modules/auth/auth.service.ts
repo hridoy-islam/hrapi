@@ -331,6 +331,36 @@ const resetPassword = async (
   return user;
 };
 
+
+
+const ChangePassword = async (
+  userId: string,
+  currentPassword: string,
+  newPassword: string
+) => {
+  // Step 1: Find the user by ID
+  const user = await User.findById(userId).select("+password");
+  if (!user) {
+    throw new AppError(httpStatus.NOT_FOUND, "User not found!");
+  }
+
+  // Step 2: Verify the current password
+  const isPasswordValid = await User.isPasswordMatched(
+    currentPassword,
+    user.password
+  );
+  if (!isPasswordValid) {
+    throw new AppError(httpStatus.BAD_REQUEST, "Current password is incorrect");
+  }
+
+  user.password = newPassword;
+  await user.save();
+
+  // Return success message
+  return { message: "Password updated successfully" };
+};
+
+
 export const AuthServices = {
   checkLogin,
   createUserIntoDB,
@@ -340,4 +370,5 @@ export const AuthServices = {
   verifyEmailIntoDB,
   EmailSendOTP,
   refreshToken,
+  ChangePassword,
 };

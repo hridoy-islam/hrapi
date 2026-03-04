@@ -24,6 +24,7 @@ const login = catchAsync(async (req, res) => {
   });
 });
 
+
 const refreshToken = catchAsync(async (req, res) => {
   const refreshToken = req.cookies.refreshToken;
   if (!refreshToken) {
@@ -123,6 +124,25 @@ const emailVerifySendOtp = catchAsync(async (req, res) => {
   });
 });
 
+const ChangePassword = catchAsync(async (req, res) => {
+  // Extract data from request
+  const { currentPassword, newPassword } = req.body;
+  const { id } = req.params;
+  const result = await AuthServices.ChangePassword(
+    id,
+    currentPassword,
+    newPassword,
+  );
+  // Send success response
+  sendResponse(res, {
+    statusCode: httpStatus.OK,
+    success: true,
+    message: "Password changed succesfully",
+    data: result,
+  });
+});
+
+
 export const AuthControllers = {
   login,
   createUser,
@@ -133,4 +153,5 @@ export const AuthControllers = {
   verifyEmail,
   emailVerifySendOtp,
   refreshToken,
+  ChangePassword,
 };

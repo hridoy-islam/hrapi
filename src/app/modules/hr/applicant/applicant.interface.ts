@@ -5,7 +5,7 @@ export interface TApplicant {
   vacancyId: Types.ObjectId; // reference to vacnancy
   // stage - 1  // Personal Details
   image?: string; // Uploaded profile photo URL (optional)
-  
+
   // Personal Details
   title: string; // Mr, Mrs, Miss, etc.
   firstName: string;
@@ -15,9 +15,15 @@ export interface TApplicant {
 
   // Official Numbers
   nationalInsuranceNumber?: string;
+  idDocumentType?: string;
+  drivingLicenceNo?: string;
+
+  drivingLicenceExpiry?: string;
+
   nhsNumber?: string;
-passportNo:string;
-passportExpiry:Date;
+
+  passportNo: string;
+  passportExpiry: Date;
   // Application Details
   applicationDate: Date;
   availableFromDate: Date;
@@ -25,9 +31,8 @@ passportExpiry:Date;
   position: string; // Desired job position
   source: string; // Where the candidate came from (e.g., Referral, Indeed)
   branch: string; // Office location
-  
 
-  // Stage -2 
+  // Stage -2
   // Contact Information
 
   homePhone?: string;
@@ -40,7 +45,7 @@ passportExpiry:Date;
   postCode: string;
   country: string;
 
-  // stage -3 
+  // stage -3
   // Demographic Information
   gender: string; // Male, Female, Other
   maritalStatus: string; // Single, Married, etc.
@@ -51,7 +56,7 @@ passportExpiry:Date;
   hasDisability: boolean;
   disabilityDetails?: string;
   needsReasonableAdjustment: boolean;
-  reasonableAdjustmentDetails:string;
+  reasonableAdjustmentDetails: string;
   dbs?: string;
   passport?: string;
   rightToWork?: string;

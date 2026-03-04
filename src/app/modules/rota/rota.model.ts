@@ -10,19 +10,17 @@ const RotaSchema = new Schema<TRota>(
     },
 
     employeeId: {
-      type: String,
+      type: Schema.Types.ObjectId,
       required: true,
       ref: "User",
     },
 
     startTime: {
       type: String,
-
     },
 
     endTime: {
       type: String,
-
     },
 
     note: {
@@ -32,29 +30,32 @@ const RotaSchema = new Schema<TRota>(
     },
 
     leaveType: {
-      type: String, 
-   
+      type: String,
     },
     shiftName: {
-      type: String, 
-   
+      type: String,
     },
 
     startDate: {
       type: String,
     },
-    
+
     endDate: {
       type: String,
     },
 
-    color:{
-      type:String
-    }
+    color: {
+      type: String,
+    },
+    departmentId: {
+      type: Schema.Types.ObjectId,
+      ref: "Department",
+      required: true,
+    },
   },
   {
     timestamps: true,
-  }
+  },
 );
 
 export const Rota = model<TRota>("Rota", RotaSchema);

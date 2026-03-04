@@ -63,4 +63,10 @@ router.patch(
   AuthControllers.verifyEmail
 );
 
+router.patch(
+  "/:id/change-password",
+
+  AuthControllers.ChangePassword,
+);
+
 export const AuthRoutes = router;

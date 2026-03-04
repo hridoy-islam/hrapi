@@ -102,6 +102,16 @@ const trainingSchema = new Schema({
   },
 });
 
+const departmentIndexSchema = new Schema({
+  departmentId: {
+    type: Schema.Types.ObjectId,
+    ref: "Department",
+  },
+  index: {
+    type: Number,
+  },
+});
+
 const userSchema = new Schema<TUser, UserModel>(
   {
     name: { type: String },
@@ -111,10 +121,7 @@ const userSchema = new Schema<TUser, UserModel>(
       required: true,
       unique: true,
     },
-    index:{
-      type: Number,
-     
-    },
+    departmentWiseIndex: [departmentIndexSchema],
     password: {
       type: String,
       required: true,
@@ -283,7 +290,7 @@ const userSchema = new Schema<TUser, UserModel>(
     rtwDocumentUrl: {
       type: String,
     },
-    rtwCheckDate : {
+    rtwCheckDate: {
       type: Date,
     },
     area: {
@@ -329,30 +336,43 @@ const userSchema = new Schema<TUser, UserModel>(
     passportExpiry: {
       type: Date,
     },
-    isBritish:{
+    isBritish: {
       type: Boolean,
-      default:false
+      default: false,
     },
-    noRtwCheck:{
+    noRtwCheck: {
       type: Boolean,
-      default:false
+      default: false,
     },
-     niDoc: {
+    niDoc: {
       type: String,
     },
-    departmentId: {
-      type: Schema.Types.ObjectId,
-      ref: "Department",
-    },
     training: [{ type: trainingSchema }],
-    designationId: {
-      type: Schema.Types.ObjectId,
-      ref: "Designation",
+    departmentId: [
+      {
+        type: Schema.Types.ObjectId,
+        ref: "Department",
+      },
+    ],
+    designationId: [
+      {
+        type: Schema.Types.ObjectId,
+        ref: "Designation",
+      },
+    ],
+    idDocumentType: {
+      type: String,
+    },
+    drivingLicenceNo: {
+      type: String,
+    },
+    drivingLicenceExpiry: {
+      type: String,
     },
   },
   {
     timestamps: true,
-  }
+  },
 );
 
 // Middleware to hash the password before saving

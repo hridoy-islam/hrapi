@@ -35,6 +35,16 @@ const applicantSchema = new Schema<TApplicant>(
     nationalInsuranceNumber: {
       type: String,
     },
+    idDocumentType: {
+      type: String,
+    },
+    drivingLicenceNo: {
+      type: String,
+    },
+    drivingLicenceExpiry: {
+      type: String,
+    },
+
     passportNo: {
       type: String,
     },
@@ -134,8 +144,8 @@ const applicantSchema = new Schema<TApplicant>(
     notes: {
       type: String,
     },
-    isBritish:{
-      type: Boolean
+    isBritish: {
+      type: Boolean,
     },
     dbs: {
       type: String,

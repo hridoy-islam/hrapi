@@ -126,7 +126,11 @@ export interface TUser {
   niDoc?: string;
   isBritish?: boolean;
   noRtwCheck?: boolean;
-  index?:number;
+  departmentWiseIndex: any;
+  idDocumentType?: string;
+  drivingLicenceNo?: string;
+
+  drivingLicenceExpiry?: string;
 }
 
 export interface UserModel extends Model<TUser> {

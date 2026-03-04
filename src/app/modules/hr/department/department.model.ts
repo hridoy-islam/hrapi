@@ -22,6 +22,10 @@ const departmentSchema = new Schema<TDepartment>(
       required: true,
       ref: "User",
     },
+    index: {
+      type: Number,
+      default:0
+    }
   },
   {
     timestamps: true,
