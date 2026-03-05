@@ -7,7 +7,7 @@ import { Department } from "./department.model";
 import { TDepartment } from "./department.interface";
 
 const getDepartmentFromDB = async (query: Record<string, unknown>) => {
-  const userQuery = new QueryBuilder(Department.find(), query)
+  const userQuery = new QueryBuilder(Department.find().populate('parentDepartmentId'), query)
     .search(DepartmentSearchableFields)
     .filter(query)
     .sort()

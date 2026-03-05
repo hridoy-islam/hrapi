@@ -8,4 +8,5 @@ export interface TDepartment {
   status: "inactive" | "active";
   companyId: Types.ObjectId;
   index: number;
+  parentDepartmentId: Types.ObjectId;
 }

@@ -13,6 +13,11 @@ const departmentSchema = new Schema<TDepartment>(
     description: {
       type: String,
     },
+    parentDepartmentId: {
+      type: Schema.Types.ObjectId,
+      ref: "Department",
+    },
+
     status: {
       type: String,
       default: "active",
@@ -24,8 +29,8 @@ const departmentSchema = new Schema<TDepartment>(
     },
     index: {
       type: Number,
-      default:0
-    }
+      default: 0,
+    },
   },
   {
     timestamps: true,
