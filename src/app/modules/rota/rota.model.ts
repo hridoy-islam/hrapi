@@ -1,5 +1,20 @@
-import { Schema, model, Types } from "mongoose";
+import { Schema, model } from "mongoose";
 import { TRota } from "./rota.interface";
+
+/* Attendance Log Schema */
+const AttendanceLogSchema = new Schema(
+  {
+    clockIn: {
+      type: String,
+    },
+    clockOut: {
+      type: String,
+    },
+  },
+  {
+    timestamps: true,
+  },
+);
 
 const RotaSchema = new Schema<TRota>(
   {
@@ -25,13 +40,13 @@ const RotaSchema = new Schema<TRota>(
 
     note: {
       type: String,
-
       default: "",
     },
 
     leaveType: {
       type: String,
     },
+
     shiftName: {
       type: String,
     },
@@ -47,10 +62,21 @@ const RotaSchema = new Schema<TRota>(
     color: {
       type: String,
     },
+
     departmentId: {
       type: Schema.Types.ObjectId,
       ref: "Department",
       required: true,
+    },
+
+    status: {
+      type: String,
+      enum: ["clockin", "clockout", "completed", "absent"],
+    },
+
+    attendanceLogs: {
+      type: [AttendanceLogSchema],
+      default: [],
     },
   },
   {

@@ -27,6 +27,15 @@ const getUpcomingRota: RequestHandler = catchAsync(async (req, res) => {
   });
 });
 
+const getAttendance: RequestHandler = catchAsync(async (req, res) => {
+  const result = await RotaServices.createRotaAttendanceIntoDB(req.body);
+  sendResponse(res, {
+    statusCode: httpStatus.OK,
+    success: true,
+    message: "Attendance succesfully Recorded",
+    data: result,
+  });
+});
 
 const getSingleRota = catchAsync(async (req, res) => {
   const { id } = req.params;
@@ -98,13 +107,14 @@ const bulkAssignRota = catchAsync(async (req, res) => {
 
 
 export const RotaControllers = {
-    getAllRota,
-    getSingleRota,
-    updateRota,
-    createRota,
-    deleteRota,
-    bulkAssignRota,
-    copyRota,
-    getUpcomingRota
+  getAllRota,
+  getSingleRota,
+  updateRota,
+  createRota,
+  deleteRota,
+  bulkAssignRota,
+  copyRota,
+  getUpcomingRota,
+  getAttendance,
 };
 

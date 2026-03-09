@@ -12,4 +12,6 @@ export interface TRota {
   endDate: string;
   color: string;
   departmentId: Types.ObjectId;
+  status: string;
+  attendanceLogs:any
 }

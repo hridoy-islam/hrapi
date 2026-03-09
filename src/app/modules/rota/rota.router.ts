@@ -51,4 +51,10 @@ router.post(
   RotaControllers.copyRota
 );
 
+router.post(
+  "/attendance",
+  // auth("admin", "user", "director", "company", "creator"),
+  RotaControllers.getAttendance,
+);
+
 export const RotaRoutes = router;
