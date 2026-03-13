@@ -355,7 +355,7 @@ const calculatePayrollData = async (userId: string, companyId: string, fromDate:
   const attendanceList = [];
 
   for (const record of attendanceRecords) {
-    const recordDate = record.startDate;
+    const recordDate = (record as any).startDate;
     const dayOfWeek = moment(recordDate).format('dddd');
 
     // --- Shift Matching Logic ---
@@ -363,8 +363,8 @@ const calculatePayrollData = async (userId: string, companyId: string, fromDate:
     let matchedRateDoc = null;
     let minDiff = Infinity;
     
-    if (record.startTime) {
-      const attendanceStartMins = timeToMinutes(record.startTime);
+    if ((record as any).startTime) {
+      const attendanceStartMins = timeToMinutes((record as any).startTime);
 
       // Loop through all Rate Profiles
       for (const rateDoc of employeeRates) {
@@ -389,7 +389,7 @@ const calculatePayrollData = async (userId: string, companyId: string, fromDate:
     if (!matchedRateDoc || !matchedShift) {
       throw new AppError(
         httpStatus.BAD_REQUEST, 
-        `No matching shift found for attendance on ${recordDate} at ${record.startTime}. Please ensure employee rate is configured with appropriate shifts.`
+        `No matching shift found for attendance on ${recordDate} at ${(record as any).startTime}. Please ensure employee rate is configured with appropriate shifts.`
       );
     }
 
@@ -408,9 +408,9 @@ const calculatePayrollData = async (userId: string, companyId: string, fromDate:
     // --- Time Logic: Calculate overlap between shift and attendance ---
     let hoursWorked = 0;
     
-    if (record.startTime && record.endTime) {
-       let attendanceStart = timeToMinutes(record.startTime);
-       let attendanceEnd = timeToMinutes(record.endTime);
+    if ((record as any).startTime && (record as any).endTime) {
+       let attendanceStart = timeToMinutes((record as any).startTime);
+       let attendanceEnd = timeToMinutes((record as any).endTime);
        let shiftStart = timeToMinutes(matchedShift.startTime);
        let shiftEnd = timeToMinutes(matchedShift.endTime);
        
@@ -470,10 +470,10 @@ const calculatePayrollData = async (userId: string, companyId: string, fromDate:
     attendanceList.push({
       employementRateId: matchedRateDoc._id,
       shiftId: matchedShift._id,
-      startDate: record.startDate,
-      startTime: record.startTime,
-      endDate: record.endDate,
-      endTime: record.endTime,
+      startDate: (record as any).startDate,
+      startTime: (record as any).startTime,
+      endDate: (record as any).endDate,
+      endTime: (record as any).endTime,
       payRate: payRate,
       note: '',
       bankHoliday: false,

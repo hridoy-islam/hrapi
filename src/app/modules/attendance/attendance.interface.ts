@@ -1,50 +1,37 @@
 import { Types } from "mongoose";
 
+export interface TAttendanceLog {
+  _id?: Types.ObjectId;
+  clockIn?: string;
+  clockInDate?: string;
+  clockOutDate?: string;
+  clockOut?: string;
+}
+
 export interface TAttendance {
-  _id?: Types.ObjectId; // Optional: Useful if you ever need to access the ID directly
+  _id?: Types.ObjectId;
+
   userId: Types.ObjectId;
-  shiftId?: Types.ObjectId;
-  
+  rotaId: Types.ObjectId;
 
-  startDate?: string; 
-  startTime?: string; 
-  endDate?: string;   
-  endTime?: string;   
+  date: string;
 
-  location?: {
-    latitude?: number;
-    longitude?: number;
-    address?: string;
-  };
+  status: "clockin" | "clockout" | "completed" | "absent";
 
-  eventType: "clock_in" | "clock_out" | "manual"; // Added 'manual'
+  attendanceLogs: TAttendanceLog[];
+
+  totalDuration: number;
+
   clockType?: "face" | "qr" | "pin" | "manual";
-  source: "accessControl" | "desktopApp" | "mobileApp";
-  
+
+  source?: "accessControl" | "desktopApp" | "mobileApp";
+
   deviceId?: string;
-  
-  approvalRequired?: boolean;
-  approvalStatus?: "pending" | "approved" | "rejected";
-  approvedBy?: Types.ObjectId;
-  approvedAt?: Date;
-  
+
+  location?: string;
+
   notes?: string;
-  
-  duration?: number; 
 
-  breakTimes?: {
-    breakStart: Date;
-    breakEnd: Date;
-  }[];
-
-  screenshots?: {
-    url: string;
-    capturedAt: Date;
-  }[];
-
-  
-  timestamp?: Date; 
-  
   createdAt?: Date;
   updatedAt?: Date;
 }

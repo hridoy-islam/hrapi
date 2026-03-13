@@ -4,6 +4,18 @@ import { Schema, model } from "mongoose";
 
 import { TAttendance } from "./attendance.interface";
 
+
+const AttendanceLogSchema = new Schema(
+  {
+    clockIn: { type: String },
+    clockInDate: { type: String },
+    clockOut: { type: String },
+    clockOutDate: { type: String },
+
+  },
+  { _id: true }
+);
+
 const attendanceSchema = new Schema<TAttendance>(
   {
     userId: {
@@ -11,25 +23,27 @@ const attendanceSchema = new Schema<TAttendance>(
       required: true,
       ref: "User",
     },
-    shiftId: {
+    rotaId: {
       type: Schema.Types.ObjectId,
-      ref: "Shift",
+      required: true,
+      ref: "Rota",
     },
-    startDate: {
-      type: String,
+    date: {
+      type: String, 
+      required: true,
     },
-    startTime: {
+    status: {
       type: String,
+      enum: ["clockin", "clockout", "completed", "absent"],
+      default: "clockin",
     },
-    endDate: {
-      type: String,
+    attendanceLogs: {
+      type: [AttendanceLogSchema],
+      default: [],
     },
-    endTime: {
-      type: String,
-    },
-    eventType: {
-      type: String,
-      enum: ["clock_in", "clock_out", "manual"],
+    totalDuration: {
+      type: Number, // Total minutes worked across all logs in this shift
+      default: 0,
     },
     clockType: {
       type: String,
@@ -39,48 +53,14 @@ const attendanceSchema = new Schema<TAttendance>(
       type: String,
       enum: ["accessControl", "desktopApp", "mobileApp"],
     },
-    deviceId: {
-      type: String,
-    },
-    approvalRequired: {
-      type: Boolean,
-    },
-    approvalStatus: {
-      type: String,
-      enum: ["pending", "approved", "rejected"],
-    },
-    approvedBy: {
-      type: Schema.Types.ObjectId,
-      ref: "User",
-    },
-    approvedAt: {
-      type: Date,
-    },
-    notes: {
-      type: String,
-    },
-    duration:{
-      type:Number,
-    },
-    breakTimes: [
-      {
-        breakStart: { type: Date },
-        breakEnd: { type: Date },
-      },
-    ],
-    screenshots: [
-      {
-        url: { type: String },
-        capturedAt: { type: Date, default: Date.now },
-      },
-    ],
-    timestamp: {
-      type: Date,
-    },
+    deviceId: { type: String },
+    location: { type: String },
+    notes: { type: String },
   },
   {
     timestamps: true,
-  },
+  }
 );
+
 
 export const Attendance = model<TAttendance>("Attendance", attendanceSchema);
