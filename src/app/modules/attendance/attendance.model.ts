@@ -1,48 +1,43 @@
 /* eslint-disable @typescript-eslint/no-this-alias */
-
 import { Schema, model } from "mongoose";
-
 import { TAttendance } from "./attendance.interface";
-
-
-const AttendanceLogSchema = new Schema(
-  {
-    clockIn: { type: String },
-    clockInDate: { type: String },
-    clockOut: { type: String },
-    clockOutDate: { type: String },
-
-  },
-  { _id: true }
-);
 
 const attendanceSchema = new Schema<TAttendance>(
   {
     userId: {
       type: Schema.Types.ObjectId,
-      required: true,
       ref: "User",
     },
-    rotaId: {
+    serviceUserId: {
       type: Schema.Types.ObjectId,
-      required: true,
-      ref: "Rota",
+      ref: "ServiceUser",
     },
-    date: {
-      type: String, 
-      required: true,
+    // Replaced visitorId with string fields for ad-hoc visitors
+    visitorName: {
+      type: String,
     },
+    visitorPhone: {
+      type: String,
+    },
+    userType: {
+      type: String,
+      enum: ["employee", "service_user", "visitor"],
+      default: "employee",
+    },
+
+    clockIn: { type: String },
+    clockInDate: { type: String },
+    clockOut: { type: String },
+    clockOutDate: { type: String },
+
     status: {
       type: String,
       enum: ["clockin", "clockout", "completed", "absent"],
       default: "clockin",
     },
-    attendanceLogs: {
-      type: [AttendanceLogSchema],
-      default: [],
-    },
+
     totalDuration: {
-      type: Number, // Total minutes worked across all logs in this shift
+      type: Number,
       default: 0,
     },
     clockType: {
@@ -56,11 +51,14 @@ const attendanceSchema = new Schema<TAttendance>(
     deviceId: { type: String },
     location: { type: String },
     notes: { type: String },
+    companyId: {
+      type: Schema.Types.ObjectId,
+      ref: "User",
+    },
   },
   {
     timestamps: true,
-  }
+  },
 );
-
 
 export const Attendance = model<TAttendance>("Attendance", attendanceSchema);

@@ -39,6 +39,7 @@ import { DisciplinaryRoutes } from "../modules/disciplinary/disciplinary.route";
 import { QACheckRoutes } from "../modules/qaCheck/QACheck.route";
 import { CSVRouter } from "../modules/csv/csv.route";
 import { RotaRoutes } from "../modules/rota/rota.router";
+import { ServiceUserRoutes } from "../modules/serviceUser/serviceUser.router";
 
 const router = Router();
 
@@ -204,6 +205,10 @@ const moduleRoutes = [
   {
     path: "/rota",
     route: RotaRoutes,
+  },
+  {
+    path: "/serviceuser",
+    route: ServiceUserRoutes,
   },
 ];
 

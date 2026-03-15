@@ -51,11 +51,22 @@ const createAttendance = catchAsync(async (req, res) => {
   });
 });
 
+const getCompanyEmployeesLatestAttendance = catchAsync(async (req, res) => {
+  const result = await AttendanceServices.getCompanyEmployeesLatestAttendance(req.query);
+  sendResponse(res, {
+    statusCode: httpStatus.OK,
+    success: true,
+    message: "Company employees latest attendance retrieved successfully",
+    data: result,
+  });
+});
+
 export const AttendanceControllers = {
     createAttendance,
     getAllAttendance,
     getSingleAttendance,
     
-    updateAttendance
+    updateAttendance,
+    getCompanyEmployeesLatestAttendance
 };
 

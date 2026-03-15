@@ -1,26 +1,28 @@
 import { Types } from "mongoose";
 
-export interface TAttendanceLog {
-  _id?: Types.ObjectId;
-  clockIn?: string;
-  clockInDate?: string;
-  clockOutDate?: string;
-  clockOut?: string;
-}
-
 export interface TAttendance {
   _id?: Types.ObjectId;
 
-  userId: Types.ObjectId;
-  rotaId: Types.ObjectId;
+  // User References
+  userId?: Types.ObjectId;
+  serviceUserId?: Types.ObjectId;
 
-  date: string;
+  // Visitor Fields
+  visitorName?: string;
+  visitorPhone?: string;
+
+  userType?: "employee" | "service_user" | "visitor";
+
+  // Clock Times
+  clockIn?: string;
+  clockInDate?: string;
+
+  clockOut?: string;
+  clockOutDate?: string;
 
   status: "clockin" | "clockout" | "completed" | "absent";
 
-  attendanceLogs: TAttendanceLog[];
-
-  totalDuration: number;
+  totalDuration?: number;
 
   clockType?: "face" | "qr" | "pin" | "manual";
 
@@ -31,6 +33,8 @@ export interface TAttendance {
   location?: string;
 
   notes?: string;
+
+  companyId?: Types.ObjectId;
 
   createdAt?: Date;
   updatedAt?: Date;

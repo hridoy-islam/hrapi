@@ -11,6 +11,10 @@ router.get(
 //   auth("admin", "company", "creator", "user", "director"),
 AttendanceControllers.getAllAttendance
 );
+router.get(
+  "/employee-status",
+  AttendanceControllers.getCompanyEmployeesLatestAttendance
+);
 
 router.get(
   "/:id",
