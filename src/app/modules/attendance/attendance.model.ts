@@ -1,6 +1,7 @@
 /* eslint-disable @typescript-eslint/no-this-alias */
 import { Schema, model } from "mongoose";
 import { TAttendance } from "./attendance.interface";
+import { string } from "zod";
 
 const attendanceSchema = new Schema<TAttendance>(
   {
@@ -18,6 +19,9 @@ const attendanceSchema = new Schema<TAttendance>(
     },
     visitorPhone: {
       type: String,
+    },
+    visitReason:{
+      type:String
     },
     userType: {
       type: String,

@@ -352,29 +352,25 @@ const deleteRotaFromDB = async (id: string) => {
 
 
 
+
+
 const copyRotaIntoDB = async (payload: {
   companyId: string;
-  type: "week" | "month";
+  type: "week" | "month" | "day";
   sourceStart: string;
   targetStart: string;
 }) => {
   const { companyId, type, sourceStart, targetStart } = payload;
 
-  const sourceStartMom = moment(sourceStart).startOf(
-    type === "week" ? "week" : "month",
-  );
+  // Determine the correct moment unit based on the type
+  const timeUnit: moment.unitOfTime.StartOf = 
+    type === "week" ? "week" : type === "month" ? "month" : "day";
 
-  const sourceEndMom = moment(sourceStart).endOf(
-    type === "week" ? "week" : "month",
-  );
-
-  const targetStartMom = moment(targetStart).startOf(
-    type === "week" ? "week" : "month",
-  );
-
-  const targetEndMom = moment(targetStart).endOf(
-    type === "week" ? "week" : "month",
-  );
+  const sourceStartMom = moment(sourceStart).startOf(timeUnit);
+  const sourceEndMom = moment(sourceStart).endOf(timeUnit);
+  
+  const targetStartMom = moment(targetStart).startOf(timeUnit);
+  const targetEndMom = moment(targetStart).endOf(timeUnit);
 
   // ✅ Get source rotas
   const sourceRotas = await Rota.find({
@@ -388,7 +384,7 @@ const copyRotaIntoDB = async (payload: {
   if (!sourceRotas.length) {
     throw new AppError(
       httpStatus.NOT_FOUND,
-      "No shifts found in the source period to copy.",
+      "No shifts found in the source period to copy."
     );
   }
 
@@ -407,7 +403,7 @@ const copyRotaIntoDB = async (payload: {
   const leaveConflictSet = new Set(
     targetRotas
       .filter((r) => leaveTypes.includes(r.leaveType))
-      .map((r) => `${r.employeeId}_${r.startDate}_${r.departmentId}`),
+      .map((r) => `${r.employeeId}_${r.startDate}_${r.departmentId}`)
   );
 
   // 🔥 Time conflict set
@@ -416,8 +412,8 @@ const copyRotaIntoDB = async (payload: {
       .filter((r) => r.startTime && r.endTime)
       .map(
         (r) =>
-          `${r.employeeId}_${r.startDate}_${r.departmentId}_${r.startTime}_${r.endTime}`,
-      ),
+          `${r.employeeId}_${r.startDate}_${r.departmentId}_${r.startTime}_${r.endTime}`
+      )
   );
 
   // Fetch employee names
@@ -431,31 +427,25 @@ const copyRotaIntoDB = async (payload: {
     .select("firstName lastName")
     .lean();
 
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const employeeMap = new Map(
     employees.map((emp: any) => [
       emp._id.toString(),
       { firstName: emp.firstName, lastName: emp.lastName },
-    ]),
+    ])
   );
 
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const rotasToCreate: any[] = [];
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const skippedRecords: any[] = [];
 
   for (const rota of sourceRotas) {
     let newStartDate: string;
     let newEndDate: string;
 
-    if (type === "week") {
-      const diffDays = targetStartMom.diff(sourceStartMom, "days");
-
-      newStartDate = moment(rota.startDate)
-        .add(diffDays, "days")
-        .format("YYYY-MM-DD");
-
-      newEndDate = moment(rota.endDate)
-        .add(diffDays, "days")
-        .format("YYYY-MM-DD");
-    } else {
+    // Both "week" and "day" can be shifted accurately by mapping the exact difference in days
+    if (type === "month") {
       const diffMonths = targetStartMom.diff(sourceStartMom, "months");
 
       newStartDate = moment(rota.startDate)
@@ -464,6 +454,16 @@ const copyRotaIntoDB = async (payload: {
 
       newEndDate = moment(rota.endDate)
         .add(diffMonths, "months")
+        .format("YYYY-MM-DD");
+    } else {
+      const diffDays = targetStartMom.diff(sourceStartMom, "days");
+
+      newStartDate = moment(rota.startDate)
+        .add(diffDays, "days")
+        .format("YYYY-MM-DD");
+
+      newEndDate = moment(rota.endDate)
+        .add(diffDays, "days")
         .format("YYYY-MM-DD");
     }
 
@@ -474,6 +474,7 @@ const copyRotaIntoDB = async (payload: {
         ? `${rota.employeeId}_${newStartDate}_${rota.departmentId}_${rota.startTime}_${rota.endTime}`
         : null;
 
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const empInfo: any = employeeMap.get(rota.employeeId.toString());
 
     // 🔥 1️⃣ Leave Conflict
@@ -504,6 +505,7 @@ const copyRotaIntoDB = async (payload: {
       continue;
     }
 
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unused-vars
     const { _id, createdAt, updatedAt, __v, ...restRotaData } = rota as any;
 
     rotasToCreate.push({
@@ -513,6 +515,7 @@ const copyRotaIntoDB = async (payload: {
     });
   }
 
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let result: any[] = [];
 
   if (rotasToCreate.length > 0) {

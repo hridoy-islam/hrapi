@@ -8,6 +8,7 @@ import { User } from "../user/user.model";
 import { Types } from "mongoose";
 import moment from "moment-timezone";
 import { Rota } from "../rota/rota.model";
+import { ServiceUser } from "../serviceUser/serviceUser.model";
 
 // Constants
 const UK_TIMEZONE = "Europe/London";
@@ -265,6 +266,155 @@ const getCompanyEmployeesLatestAttendance = async (query: Record<string, unknown
     result: paginatedResult,
   };
 };
+
+
+export const getCompanyServiceUsersLatestAttendance = async (query: Record<string, unknown>) => {
+  const { companyId, page = 1, limit = 10, searchTerm } = query;
+
+  if (!companyId) {
+    throw new AppError(httpStatus.BAD_REQUEST, "Company ID is required.");
+  }
+
+  // 1. Build ServiceUser Match Query
+  const serviceUserMatch: any = { company: new Types.ObjectId(companyId as string) };
+  
+  if (searchTerm) {
+    serviceUserMatch.$or = [
+      { firstName: { $regex: searchTerm, $options: "i" } },
+      { lastName: { $regex: searchTerm, $options: "i" } },
+      { email: { $regex: searchTerm, $options: "i" } }
+    ];
+  }
+
+  // 2. Fetch ALL matching ServiceUsers
+  const serviceUsers = await ServiceUser.find(serviceUserMatch)
+    .select("firstName lastName email phone profileImage") // Adjust selected fields based on your ServiceUser schema
+    .lean();
+
+  if (!serviceUsers.length) {
+    return {
+      meta: {
+        page: Number(page),
+        limit: limit === "all" ? 0 : Number(limit),
+        total: 0,
+        totalPage: 0,
+      },
+      result: [],
+    };
+  }
+
+  const suIds = serviceUsers.map((su:any) => su._id);
+
+  // 3. Aggregate Latest Attendance for these Service Users
+  const latestAttendances = await Attendance.aggregate([
+    { $match: { serviceUserId: { $in: suIds }, userType: "service_user" } },
+    { $sort: { createdAt: -1 } }, 
+    {
+      $group: {
+        _id: "$serviceUserId", 
+        latestStatus: { $first: "$status" },
+        clockIn: { $first: "$clockIn" },
+        clockInDate: { $first: "$clockInDate" },
+        clockOut: { $first: "$clockOut" },
+        clockOutDate: { $first: "$clockOutDate" },
+        lastUpdated: { $first: "$createdAt" },
+      },
+    },
+  ]);
+
+  // Create a lookup map
+  const attendanceMap = new Map();
+  latestAttendances.forEach((record) => {
+    attendanceMap.set(record._id.toString(), record);
+  });
+
+  // 4. Merge Data AND filter for 'clockin' only
+  const clockedInServiceUsers = serviceUsers.reduce((acc: any[], user) => {
+    const attendanceInfo = attendanceMap.get(user._id.toString());
+    
+    // Check if the service user's latest status is exactly "clockin"
+    if (attendanceInfo && attendanceInfo.latestStatus === "clockin") {
+      acc.push({
+        ...user,
+        latestAttendance: attendanceInfo,
+      });
+    }
+    return acc;
+  }, []);
+
+  // 5. Apply Pagination
+  const pageNumber = Number(page);
+  const limitNumber = limit === "all" ? 0 : Number(limit);
+  const skip = (pageNumber - 1) * limitNumber;
+  
+  const totalClockedIn = clockedInServiceUsers.length;
+  
+  const paginatedResult = limitNumber === 0 
+    ? clockedInServiceUsers 
+    : clockedInServiceUsers.slice(skip, skip + limitNumber);
+
+  return {
+    meta: {
+      page: pageNumber,
+      limit: limitNumber === 0 ? totalClockedIn : limitNumber,
+      total: totalClockedIn,
+      totalPage: limitNumber === 0 ? 1 : Math.ceil(totalClockedIn / limitNumber),
+    },
+    result: paginatedResult,
+  };
+};
+
+export const getCompanyVisitorsLatestAttendance = async (query: Record<string, unknown>) => {
+  const { companyId, page = 1, limit = 10, searchTerm } = query;
+
+  if (!companyId) {
+    throw new AppError(httpStatus.BAD_REQUEST, "Company ID is required.");
+  }
+
+  const pageNumber = Number(page);
+  const limitNumber = limit === "all" ? 0 : Number(limit);
+  const skip = (pageNumber - 1) * limitNumber;
+
+  // 1. Build Query for Visitors who are currently clocked in
+  const matchStage: any = {
+    companyId: new Types.ObjectId(companyId as string),
+    userType: "visitor",
+    status: "clockin" // We only want visitors actively inside the premises
+  };
+
+  // 2. Add Search functionality for embedded visitor fields
+  if (searchTerm) {
+    matchStage.$or = [
+      { visitorName: { $regex: searchTerm, $options: "i" } },
+      { visitorPhone: { $regex: searchTerm, $options: "i" } },
+      { visitReason: { $regex: searchTerm, $options: "i" } },
+    ];
+  }
+
+  // 3. Get Totals
+  const totalVisitors = await Attendance.countDocuments(matchStage);
+
+  // 4. Fetch Paginated Results
+  let visitorsQuery = Attendance.find(matchStage).sort({ createdAt: -1 }).lean();
+  
+  if (limitNumber > 0) {
+    visitorsQuery = visitorsQuery.skip(skip).limit(limitNumber);
+  }
+
+  const visitors = await visitorsQuery;
+
+  return {
+    meta: {
+      page: pageNumber,
+      limit: limitNumber === 0 ? totalVisitors : limitNumber,
+      total: totalVisitors,
+      totalPage: limitNumber === 0 ? 1 : Math.ceil(totalVisitors / limitNumber),
+    },
+    result: visitors,
+  };
+};
+
+
 
 export const createAttendanceIntoDB = async (
   payload: Partial<TAttendance> & { actionType?: 'clock_in' | 'clock_out' }

@@ -32,6 +32,7 @@ export interface TAttendance {
 
   location?: string;
 
+  visitReason?: string;
   notes?: string;
 
   companyId?: Types.ObjectId;
