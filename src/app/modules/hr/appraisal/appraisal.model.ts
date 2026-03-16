@@ -4,7 +4,7 @@ import { TAppraisal } from "./appraisal.interface";
 const LogEntrySchema = new Schema({
   title: { type: String },
   date: { type: Date },
-   document: { type: String },
+   document: [{ type: String }],
   updatedBy: { type: Schema.Types.ObjectId,  ref: "User" },
 });
 

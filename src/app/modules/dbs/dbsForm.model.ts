@@ -6,7 +6,7 @@ const LogEntrySchema = new Schema({
   title: { type: String },
   date: { type: Date },
   updatedBy: { type: Schema.Types.ObjectId, ref: "User" },
-  document:{ type: String },
+  document:[{ type: String }],
 });
 
 const DbsFormSchema = new Schema<TDbsForm>(
@@ -14,7 +14,7 @@ const DbsFormSchema = new Schema<TDbsForm>(
     userId: { type: Schema.Types.ObjectId, ref: "User", required: true },
     // DBS Certificate Details
     disclosureNumber: { type: String },
-    dbsDocumentUrl: { type: String },
+    dbsDocumentUrl: [{ type: String }],
     dateOfIssue: { type: Date },
     expiryDate: { type: Date },
     logs: [LogEntrySchema],

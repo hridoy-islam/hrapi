@@ -4,7 +4,7 @@ import { TPassport } from "./passport.interface";
 const LogEntrySchema = new Schema({
   title: { type: String },
   date: { type: Date },
-  document: { type: String },
+  document: [{ type: String }],
   updatedBy: { type: Schema.Types.ObjectId, ref: "User" },
 });
 const PassportSchema = new Schema<TPassport>(

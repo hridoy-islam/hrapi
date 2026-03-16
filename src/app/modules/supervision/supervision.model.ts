@@ -6,7 +6,7 @@ const LogEntrySchema = new Schema<TLogEntry>({
   title: { type: String, required: true },
   date: { type: Date, default: Date.now },
   updatedBy: { type: Schema.Types.ObjectId, ref: "User", required: true },
-  document: { type: String },
+  document: [{ type: String }],
   note: { type: String },
 });
 

@@ -7,7 +7,7 @@ const LogEntrySchema = new Schema<TLogEntry>({
   title: { type: String },
   date: { type: Date, default: Date.now },
   updatedBy: { type: Schema.Types.ObjectId, ref: "User" },
-  document: { type: String },
+  document: [{ type: String }],
 });
 
 const InductionSchema = new Schema<TInduction>(

@@ -607,19 +607,19 @@ const getCompanyComplianceStats = async (companyId: string) => {
   }));
 
   const [
-    compliantPassportIds,
-    compliantVisaIds,
-    compliantDbsIds,
-    compliantImmigrationIds,
-    compliantAppraisalIds,
-    compliantRTWIds,
-    compliantSpotCheckIds,
-    compliantSupervisionIds,
-    compliantQaIds,
-    compliantInductionIds,
-    activeDisciplinaryIssues,
-    nonCompliantTrainingIds,
-    allEmployeeDocs, 
+     compliantPassportIds,
+  compliantVisaIds,
+  compliantImmigrationIds,  
+  compliantRTWIds,         
+  compliantDbsIds,         
+  compliantAppraisalIds,  
+  compliantSpotCheckIds,
+  compliantSupervisionIds,
+  compliantQaIds,
+  compliantInductionIds,
+  activeDisciplinaryIssues,
+  nonCompliantTrainingIds,
+  allEmployeeDocs,
   ] = await Promise.all([
     // ---> Use restricted `rtwRequiredEmployeeIds` for these 4 queries <---
     Passport.distinct("userId", {
