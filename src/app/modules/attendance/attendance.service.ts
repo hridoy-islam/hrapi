@@ -41,43 +41,41 @@ const getAttendanceFromDB = async (query: Record<string, unknown>) => {
     sort,
     fields,
     searchTerm,
-    ...filters // the rest of the query params
+    ...filters 
   } = query;
 
   // =========================================================
   // 1. Prepare Filters for List (User Relationships)
   // =========================================================
-  let listTargetUserIds: Types.ObjectId[] = [];
-  const listUserFilter: Record<string, unknown> = {};
-
-  if (companyId) listUserFilter.company = new Types.ObjectId(companyId as string);
-  if (designationId) listUserFilter.designationId = new Types.ObjectId(designationId as string);
-  if (departmentId) listUserFilter.departmentId = new Types.ObjectId(departmentId as string);
-  if (userId) listUserFilter._id = new Types.ObjectId(userId as string);
-
-  // If any user-level filter is applied, we must resolve user IDs first
-  if (companyId || designationId || userId || departmentId) {
-    const filteredUsers = await User.find(listUserFilter).select("_id");
-
-    if (filteredUsers.length === 0) {
-      return {
-        meta: {
-          page: 1,
-          limit: 0,
-          total: 0,
-          totalPage: 1,
-        },
-        result: [],
-      };
-    }
-    listTargetUserIds = filteredUsers.map((u) => u._id);
-    filters.userId = { $in: listTargetUserIds };
+  if (companyId) {
+    filters.companyId = new Types.ObjectId(companyId as string);
   }
 
-  // NOTE: Rota filtering has been completely removed as per the new schema.
+  if (filters.userType !== "visitor" && filters.userType !== "service_user") {
+    let listTargetUserIds: Types.ObjectId[] = [];
+    const listUserFilter: Record<string, unknown> = {};
+
+    if (companyId) listUserFilter.company = new Types.ObjectId(companyId as string);
+    if (designationId) listUserFilter.designationId = new Types.ObjectId(designationId as string);
+    if (departmentId) listUserFilter.departmentId = new Types.ObjectId(departmentId as string);
+    if (userId) listUserFilter._id = new Types.ObjectId(userId as string);
+
+    if (companyId || designationId || userId || departmentId) {
+      const filteredUsers = await User.find(listUserFilter).select("_id");
+
+      if (filteredUsers.length === 0) {
+        return {
+          meta: { page: 1, limit: 0, total: 0, totalPage: 1 },
+          result: [],
+        };
+      }
+      listTargetUserIds = filteredUsers.map((u) => u._id);
+      filters.userId = { $in: listTargetUserIds };
+    }
+  }
 
   // =========================================================
-  // 2. Build & Execute Attendance Query
+  // 2. Build Query & Apply Filters (NO PAGINATION YET)
   // =========================================================
   const isUnlimited = limit === "all" || !limit;
   const pageNumber = Number(page || 1);
@@ -101,21 +99,21 @@ const getAttendanceFromDB = async (query: Record<string, unknown>) => {
           { path: "designationId", select: "title" },
           { path: "departmentId", select: "departmentName" },
         ],
+      }).populate({
+         path: "serviceUserId",
+        select: "name room",
       }),
     queryBuilderParams
   )
-    .search(["clockInDate"]) // Changed from "date" to "clockInDate"
+    .search(["clockInDate", "visitorName"])
     .filter(queryBuilderParams)
     .sort()
     .fields();
 
-  if (!isUnlimited) {
-    attendanceQuery.paginate();
-  }
-
   // =========================================================
-  // 3. Handle Date Filters (Using clockInDate)
+  // 3. Handle Date Filters 
   // =========================================================
+  // Must apply dates BEFORE getting the total count!
   if (month && year) {
     const startString = `${year}-${month}-01`;
     const endOfMonthString = moment(startString, "YYYY-MM-DD")
@@ -134,14 +132,27 @@ const getAttendanceFromDB = async (query: Record<string, unknown>) => {
       .lte(toDate as any);
   }
 
+  // =========================================================
+  // 4. Calculate True Total Count
+  // =========================================================
+  // Get the combined filters from the query builder and custom date additions
+  const currentFilters = attendanceQuery.modelQuery.getFilter();
+  const total = await Attendance.countDocuments(currentFilters);
+
+  // =========================================================
+  // 5. Apply Pagination and Execute
+  // =========================================================
+  if (!isUnlimited) {
+    attendanceQuery.paginate();
+  }
+
   const result = await attendanceQuery.modelQuery;
-  const total = result.length; // Note: For standard pagination, consider running a separate countDocuments() query.
 
   return {
     meta: {
       page: pageNumber,
       limit: isUnlimited ? total : limitNumber,
-      total: total, 
+      total: total, // Now represents the actual DB count
       totalPage: isUnlimited ? 1 : Math.ceil(total / (limitNumber || 1)),
     },
     result,
@@ -267,7 +278,6 @@ const getCompanyEmployeesLatestAttendance = async (query: Record<string, unknown
   };
 };
 
-
 export const getCompanyServiceUsersLatestAttendance = async (query: Record<string, unknown>) => {
   const { companyId, page = 1, limit = 10, searchTerm } = query;
 
@@ -276,19 +286,21 @@ export const getCompanyServiceUsersLatestAttendance = async (query: Record<strin
   }
 
   // 1. Build ServiceUser Match Query
-  const serviceUserMatch: any = { company: new Types.ObjectId(companyId as string) };
+  // FIX: Changed `company` to `companyId`
+  const serviceUserMatch: any = { companyId: new Types.ObjectId(companyId as string) };
   
   if (searchTerm) {
+    // FIX: Changed firstName/lastName to `name`, added phone just in case
     serviceUserMatch.$or = [
-      { firstName: { $regex: searchTerm, $options: "i" } },
-      { lastName: { $regex: searchTerm, $options: "i" } },
-      { email: { $regex: searchTerm, $options: "i" } }
+      { name: { $regex: searchTerm, $options: "i" } },
+      { email: { $regex: searchTerm, $options: "i" } },
+      { phone: { $regex: searchTerm, $options: "i" } }
     ];
   }
 
   // 2. Fetch ALL matching ServiceUsers
   const serviceUsers = await ServiceUser.find(serviceUserMatch)
-    .select("firstName lastName email phone profileImage") // Adjust selected fields based on your ServiceUser schema
+    .select("name email phone room") 
     .lean();
 
   if (!serviceUsers.length) {
@@ -364,7 +376,7 @@ export const getCompanyServiceUsersLatestAttendance = async (query: Record<strin
   };
 };
 
-export const getCompanyVisitorsLatestAttendance = async (query: Record<string, unknown>) => {
+ const getCompanyVisitorsLatestAttendance = async (query: Record<string, unknown>) => {
   const { companyId, page = 1, limit = 10, searchTerm } = query;
 
   if (!companyId) {
@@ -416,11 +428,11 @@ export const getCompanyVisitorsLatestAttendance = async (query: Record<string, u
 
 
 
-export const createAttendanceIntoDB = async (
+const createAttendanceIntoDB = async (
   payload: Partial<TAttendance> & { actionType?: 'clock_in' | 'clock_out' }
 ) => {
   const {
-    userId,
+    userId, // Frontend sends the ID here for both employees and service users
     serviceUserId,
     visitorName,
     visitorPhone,
@@ -428,6 +440,7 @@ export const createAttendanceIntoDB = async (
     deviceId,
     location,
     source,
+    visitReason,
     clockType,
     notes,
     actionType,
@@ -439,12 +452,18 @@ export const createAttendanceIntoDB = async (
     throw new AppError(httpStatus.BAD_REQUEST, "Company ID is required.");
   }
 
-  // Validate identifiers
-  if (userType === 'employee' && !userId) {
+  // --- THE FIX: Map identifiers correctly based on userType ---
+  // If userType is service_user, map the incoming userId to resolvedServiceUserId
+  const resolvedServiceUserId = serviceUserId || (userType === 'service_user' ? userId : undefined);
+  // Only keep userId for employees
+  const resolvedUserId = userType === 'employee' ? userId : undefined;
+
+  // 2. Validate identifiers using the resolved IDs
+  if (userType === 'employee' && !resolvedUserId) {
     throw new AppError(httpStatus.BAD_REQUEST, "Employee ID is required.");
   }
 
-  if (userType === 'service_user' && !serviceUserId) {
+  if (userType === 'service_user' && !resolvedServiceUserId) {
     throw new AppError(httpStatus.BAD_REQUEST, "Service User ID is required.");
   }
 
@@ -467,11 +486,11 @@ export const createAttendanceIntoDB = async (
   };
 
   if (userType === 'employee') {
-    matchQuery.userId = userId;
+    matchQuery.userId = resolvedUserId;
   }
 
   if (userType === 'service_user') {
-    matchQuery.serviceUserId = serviceUserId;
+    matchQuery.serviceUserId = resolvedServiceUserId;
   }
 
   if (userType === 'visitor') {
@@ -534,12 +553,13 @@ export const createAttendanceIntoDB = async (
   }
 
   const attendanceRecord = await Attendance.create({
-    userId,
-    serviceUserId,
+    userId: resolvedUserId,               // Will be undefined for service_user
+    serviceUserId: resolvedServiceUserId, // Will correctly hold the ID for service_user
     visitorName: visitorName?.trim(),
     visitorPhone,
     userType,
     companyId,
+    visitReason,
     clockIn: currentTimeOnly,
     clockInDate: todayDateStr,
     status: "clockin",
@@ -580,5 +600,7 @@ export const AttendanceServices = {
   getSingleAttendanceFromDB,
   createAttendanceIntoDB,
   updateAttendanceIntoDB,
-  getCompanyEmployeesLatestAttendance
+  getCompanyEmployeesLatestAttendance,
+  getCompanyVisitorsLatestAttendance,
+  getCompanyServiceUsersLatestAttendance
 };

@@ -15,7 +15,15 @@ router.get(
   "/employee-status",
   AttendanceControllers.getCompanyEmployeesLatestAttendance
 );
+router.get(
+  "/service-user-status",
+  AttendanceControllers.getCompanyServiceUsersLatestAttendance
+);
 
+router.get(
+  "/visitor-status",
+  AttendanceControllers.getCompanyVisitorsLatestAttendance
+);
 router.get(
   "/:id",
 //   auth("admin", "user", "director", "company", "creator"),

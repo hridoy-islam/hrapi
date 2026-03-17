@@ -61,12 +61,34 @@ const getCompanyEmployeesLatestAttendance = catchAsync(async (req, res) => {
   });
 });
 
+
+const getCompanyServiceUsersLatestAttendance = catchAsync(async (req, res) => {
+  const result = await AttendanceServices.getCompanyServiceUsersLatestAttendance(req.query);
+  sendResponse(res, {
+    statusCode: httpStatus.OK,
+    success: true,
+    message: "Company service users latest attendance retrieved successfully",
+    data: result,
+  });
+});
+
+const getCompanyVisitorsLatestAttendance = catchAsync(async (req, res) => {
+  const result = await AttendanceServices.getCompanyVisitorsLatestAttendance(req.query);
+  sendResponse(res, {
+    statusCode: httpStatus.OK,
+    success: true,
+    message: "Company visitors latest attendance retrieved successfully",
+    data: result,
+  });
+});
 export const AttendanceControllers = {
     createAttendance,
     getAllAttendance,
     getSingleAttendance,
     
     updateAttendance,
-    getCompanyEmployeesLatestAttendance
+    getCompanyEmployeesLatestAttendance,
+    getCompanyServiceUsersLatestAttendance,
+    getCompanyVisitorsLatestAttendance
 };
 
