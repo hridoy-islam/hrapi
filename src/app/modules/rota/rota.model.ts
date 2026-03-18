@@ -1,20 +1,7 @@
 import { Schema, model } from "mongoose";
 import { TRota } from "./rota.interface";
 
-/* Attendance Log Schema */
-const AttendanceLogSchema = new Schema(
-  {
-    clockIn: {
-      type: String,
-    },
-    clockOut: {
-      type: String,
-    },
-  },
-  {
-    timestamps: true,
-  },
-);
+
 
 const RotaSchema = new Schema<TRota>(
   {
@@ -71,13 +58,11 @@ const RotaSchema = new Schema<TRota>(
 
     status: {
       type: String,
-      enum: ["clockin", "clockout", "completed", "absent"],
+      enum: ["pending", "publish", "completed"],
+      default:'pending'
     },
 
-    attendanceLogs: {
-      type: [AttendanceLogSchema],
-      default: [],
-    },
+   
   },
   {
     timestamps: true,

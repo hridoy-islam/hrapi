@@ -428,14 +428,163 @@ export const getCompanyServiceUsersLatestAttendance = async (query: Record<strin
 
 
 
+// const createAttendanceIntoDB = async (
+//   payload: Partial<TAttendance> & { actionType?: 'clock_in' | 'clock_out' }
+// ) => {
+//   const {
+//     userId, // Frontend sends the ID here for both employees and service users
+//     serviceUserId,
+//     visitorName,
+//     visitorPhone,
+//     userType = 'employee',
+//     deviceId,
+//     location,
+//     source,
+//     visitReason,
+//     clockType,
+//     notes,
+//     actionType,
+//     companyId
+//   } = payload;
+
+//   // 1. Validate companyId
+//   if (!companyId) {
+//     throw new AppError(httpStatus.BAD_REQUEST, "Company ID is required.");
+//   }
+
+//   // --- THE FIX: Map identifiers correctly based on userType ---
+//   // If userType is service_user, map the incoming userId to resolvedServiceUserId
+//   const resolvedServiceUserId = serviceUserId || (userType === 'service_user' ? userId : undefined);
+//   // Only keep userId for employees
+//   const resolvedUserId = userType === 'employee' ? userId : undefined;
+
+//   // 2. Validate identifiers using the resolved IDs
+//   if (userType === 'employee' && !resolvedUserId) {
+//     throw new AppError(httpStatus.BAD_REQUEST, "Employee ID is required.");
+//   }
+
+//   if (userType === 'service_user' && !resolvedServiceUserId) {
+//     throw new AppError(httpStatus.BAD_REQUEST, "Service User ID is required.");
+//   }
+
+//   if (userType === 'visitor' && !visitorName) {
+//     throw new AppError(httpStatus.BAD_REQUEST, "Visitor Name is required.");
+//   }
+
+//   const now = moment();
+//   const todayDateStr = now.format("YYYY-MM-DD");
+//   const currentTimeOnly = now.format("HH:mm");
+
+//   // =====================================================
+//   // FIND ACTIVE SESSION
+//   // =====================================================
+
+//   const matchQuery: any = {
+//     status: "clockin",
+//     userType,
+//     companyId
+//   };
+
+//   if (userType === 'employee') {
+//     matchQuery.userId = resolvedUserId;
+//   }
+
+//   if (userType === 'service_user') {
+//     matchQuery.serviceUserId = resolvedServiceUserId;
+//   }
+
+//   if (userType === 'visitor') {
+//     matchQuery.visitorName = {
+//       $regex: `^${(visitorName as any).trim()}$`,
+//       $options: "i"   // case-insensitive
+//     };
+//   }
+
+//   const activeAttendance = await Attendance
+//     .findOne(matchQuery)
+//     .sort({ createdAt: -1 });
+
+//   // Prevent double clock in
+//   if (activeAttendance && actionType === 'clock_in') {
+//     throw new AppError(httpStatus.BAD_REQUEST, "You are already clocked in.");
+//   }
+
+//   // =====================================================
+//   // CLOCK OUT
+//   // =====================================================
+
+//   if (activeAttendance) {
+
+//     const clockInMoment = moment(
+//       `${activeAttendance.clockInDate} ${activeAttendance.clockIn}`,
+//       "YYYY-MM-DD HH:mm"
+//     );
+
+//     const durationInMinutes = now.diff(clockInMoment, "minutes");
+
+//     activeAttendance.clockOut = currentTimeOnly;
+//     activeAttendance.clockOutDate = todayDateStr;
+//     activeAttendance.status = "clockout";
+
+//     activeAttendance.totalDuration =
+//       durationInMinutes > 0 ? durationInMinutes : 0;
+
+//     if (location) activeAttendance.location = location;
+//     if (notes) activeAttendance.notes = notes;
+
+//     await activeAttendance.save();
+
+//     return {
+//       action: "clock_out",
+//       message: "Successfully clocked out.",
+//       data: activeAttendance,
+//     };
+//   }
+
+//   // =====================================================
+//   // NO ACTIVE SESSION -> CLOCK IN
+//   // =====================================================
+
+//   if (!activeAttendance && actionType === 'clock_out') {
+//     throw new AppError(
+//       httpStatus.BAD_REQUEST,
+//       "No active Clock In session found to clock out from."
+//     );
+//   }
+
+//   const attendanceRecord = await Attendance.create({
+//     userId: resolvedUserId,               // Will be undefined for service_user
+//     serviceUserId: resolvedServiceUserId, // Will correctly hold the ID for service_user
+//     visitorName: visitorName?.trim(),
+//     visitorPhone,
+//     userType,
+//     companyId,
+//     visitReason,
+//     clockIn: currentTimeOnly,
+//     clockInDate: todayDateStr,
+//     status: "clockin",
+//     source: source || "accessControl",
+//     clockType: clockType || "qr",
+//     deviceId,
+//     location,
+//     notes,
+//   });
+
+//   return {
+//     action: "clock_in",
+//     message: "Successfully clocked in.",
+//     data: attendanceRecord,
+//   };
+// };
+
+
 const createAttendanceIntoDB = async (
   payload: Partial<TAttendance> & { actionType?: 'clock_in' | 'clock_out' }
 ) => {
   const {
-    userId, // Frontend sends the ID here for both employees and service users
+    userId,
     serviceUserId,
     visitorName,
-    visitorPhone,
     userType = 'employee',
     deviceId,
     location,
@@ -452,13 +601,11 @@ const createAttendanceIntoDB = async (
     throw new AppError(httpStatus.BAD_REQUEST, "Company ID is required.");
   }
 
-  // --- THE FIX: Map identifiers correctly based on userType ---
-  // If userType is service_user, map the incoming userId to resolvedServiceUserId
+  // --- Map identifiers correctly based on userType ---
   const resolvedServiceUserId = serviceUserId || (userType === 'service_user' ? userId : undefined);
-  // Only keep userId for employees
   const resolvedUserId = userType === 'employee' ? userId : undefined;
 
-  // 2. Validate identifiers using the resolved IDs
+  // 2. Validate identifiers
   if (userType === 'employee' && !resolvedUserId) {
     throw new AppError(httpStatus.BAD_REQUEST, "Employee ID is required.");
   }
@@ -469,6 +616,13 @@ const createAttendanceIntoDB = async (
 
   if (userType === 'visitor' && !visitorName) {
     throw new AppError(httpStatus.BAD_REQUEST, "Visitor Name is required.");
+  }
+
+  if (userType === 'visitor' && !actionType) {
+    throw new AppError(
+      httpStatus.BAD_REQUEST,
+      "actionType ('clock_in' or 'clock_out') is strictly required for visitors."
+    );
   }
 
   const now = moment();
@@ -487,16 +641,12 @@ const createAttendanceIntoDB = async (
 
   if (userType === 'employee') {
     matchQuery.userId = resolvedUserId;
-  }
-
-  if (userType === 'service_user') {
+  } else if (userType === 'service_user') {
     matchQuery.serviceUserId = resolvedServiceUserId;
-  }
-
-  if (userType === 'visitor') {
+  } else if (userType === 'visitor') {
     matchQuery.visitorName = {
       $regex: `^${(visitorName as any).trim()}$`,
-      $options: "i"   // case-insensitive
+      $options: "i"
     };
   }
 
@@ -504,16 +654,82 @@ const createAttendanceIntoDB = async (
     .findOne(matchQuery)
     .sort({ createdAt: -1 });
 
-  // Prevent double clock in
-  if (activeAttendance && actionType === 'clock_in') {
-    throw new AppError(httpStatus.BAD_REQUEST, "You are already clocked in.");
+  // =====================================================
+  // DETERMINE ACTION
+  // =====================================================
+
+  let finalAction: 'clock_in' | 'clock_out';
+
+  if (userType === 'visitor') {
+    // Visitors MUST rely on the explicit actionType
+    finalAction = actionType as 'clock_in' | 'clock_out';
+
+  } else if (userType === 'employee') {
+    // ✅ Employees: use explicit actionType if provided, otherwise auto-detect
+    if (actionType) {
+      // ✅ Block clock_in if there's already an active (un-clocked-out) session
+      if (actionType === 'clock_in' && activeAttendance) {
+        throw new AppError(
+          httpStatus.BAD_REQUEST,
+          "You are already clocked in."
+        );
+      }
+      finalAction = actionType;
+    } else {
+      // Auto-detect fallback
+      finalAction = activeAttendance ? 'clock_out' : 'clock_in';
+    }
+
+  } else {
+    // Service Users: auto-detect
+    finalAction = activeAttendance ? 'clock_out' : 'clock_in';
   }
 
   // =====================================================
-  // CLOCK OUT
+  // ROUTE: CLOCK IN
   // =====================================================
+  if (finalAction === 'clock_in') {
 
-  if (activeAttendance) {
+    // Prevent double clock-in for employees and service users
+    if (activeAttendance && userType !== 'visitor') {
+      throw new AppError(httpStatus.BAD_REQUEST, "You are already clocked in.");
+    }
+
+    const attendanceRecord = await Attendance.create({
+      userId: resolvedUserId,
+      serviceUserId: resolvedServiceUserId,
+      visitorName: visitorName?.trim(),
+      userType,
+      companyId,
+      visitReason,
+      clockIn: currentTimeOnly,
+      clockInDate: todayDateStr,
+      status: "clockin",
+      source: source || "accessControl",
+      clockType: clockType || "qr",
+      deviceId,
+      location,
+      notes,
+    });
+
+    return {
+      action: "clock_in",
+      message: "Successfully clocked in.",
+      data: attendanceRecord,
+    };
+  }
+
+  // =====================================================
+  // ROUTE: CLOCK OUT
+  // =====================================================
+  if (finalAction === 'clock_out') {
+
+    if (!activeAttendance) {
+      throw new AppError(
+        httpStatus.BAD_REQUEST,
+        "No active Clock In session found to clock out from."
+      );
+    }
 
     const clockInMoment = moment(
       `${activeAttendance.clockInDate} ${activeAttendance.clockIn}`,
@@ -525,9 +741,7 @@ const createAttendanceIntoDB = async (
     activeAttendance.clockOut = currentTimeOnly;
     activeAttendance.clockOutDate = todayDateStr;
     activeAttendance.status = "clockout";
-
-    activeAttendance.totalDuration =
-      durationInMinutes > 0 ? durationInMinutes : 0;
+    activeAttendance.totalDuration = durationInMinutes > 0 ? durationInMinutes : 0;
 
     if (location) activeAttendance.location = location;
     if (notes) activeAttendance.notes = notes;
@@ -540,43 +754,7 @@ const createAttendanceIntoDB = async (
       data: activeAttendance,
     };
   }
-
-  // =====================================================
-  // NO ACTIVE SESSION -> CLOCK IN
-  // =====================================================
-
-  if (!activeAttendance && actionType === 'clock_out') {
-    throw new AppError(
-      httpStatus.BAD_REQUEST,
-      "No active Clock In session found to clock out from."
-    );
-  }
-
-  const attendanceRecord = await Attendance.create({
-    userId: resolvedUserId,               // Will be undefined for service_user
-    serviceUserId: resolvedServiceUserId, // Will correctly hold the ID for service_user
-    visitorName: visitorName?.trim(),
-    visitorPhone,
-    userType,
-    companyId,
-    visitReason,
-    clockIn: currentTimeOnly,
-    clockInDate: todayDateStr,
-    status: "clockin",
-    source: source || "accessControl",
-    clockType: clockType || "qr",
-    deviceId,
-    location,
-    notes,
-  });
-
-  return {
-    action: "clock_in",
-    message: "Successfully clocked in.",
-    data: attendanceRecord,
-  };
 };
-
 const updateAttendanceIntoDB = async (
   id: string,
   payload: Partial<TAttendance>

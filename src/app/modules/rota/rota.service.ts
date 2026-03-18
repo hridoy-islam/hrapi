@@ -88,60 +88,13 @@ const getUpcomingRotaFromDB = async (query: Record<string, unknown>) => {
   const currentTime = moment().format("HH:mm");
   const employeeId = query.employeeId as string;
 
-  // =========================================================================
-  // STEP 1: Process Auto-Clockout for Previous 20 Rotas (if employeeId exists)
-  // =========================================================================
-  if (employeeId) {
-    // Fetch the last 20 past rotas for this employee
-    const pastRotas = await Rota.find({
-      employeeId,
-      startDate: { $lt: today },
-    })
-      .sort({ startDate: -1 })
-      .limit(20);
-
-    const pastBulkOps: any[] = [];
-
-    for (const rota of pastRotas) {
-      if (!rota.attendanceLogs || rota.attendanceLogs.length === 0) continue;
-
-      const logs = rota.attendanceLogs;
-      const latestLog = logs[logs.length - 1];
-
-      // If clocked in but missing a clockOut
-      if (
-        latestLog.clockIn &&
-        (!latestLog.clockOut || latestLog.clockOut === "")
-      ) {
-        // Since these are past dates, they definitely should have ended.
-        // Auto set the clockOut to the shift's endTime
-        latestLog.clockOut = rota.endTime || ""; // Fallback just in case
-
-        pastBulkOps.push({
-          updateOne: {
-            filter: { _id: (rota as any)._id },
-            update: {
-              $set: {
-                attendanceLogs: logs,
-                status: "completed", // Automatically close the shift
-              },
-            },
-          },
-        });
-      }
-    }
-
-    // Execute bulk update for past rotas efficiently
-    if (pastBulkOps.length > 0) {
-      await Rota.bulkWrite(pastBulkOps);
-    }
-  }
 
   // =========================================================================
-  // STEP 2: Fetch Upcoming Rotas using QueryBuilder
+  // Fetch Upcoming Rotas using QueryBuilder
   // =========================================================================
   const dateFilter = {
     startDate: { $gte: today },
+    status: "publish",
   };
 
   const rotaQuery = new QueryBuilder(
@@ -157,54 +110,7 @@ const getUpcomingRotaFromDB = async (query: Record<string, unknown>) => {
   const meta = await rotaQuery.countTotal();
   const result = await rotaQuery.modelQuery;
 
-  // =========================================================================
-  // STEP 3: Process Auto-Clockout for Today's Fetched Rotas
-  // =========================================================================
-  if (employeeId && result.length > 0) {
-    const upcomingBulkOps: any[] = [];
-
-    for (const rota of result) {
-      if (!rota.attendanceLogs || rota.attendanceLogs.length === 0) continue;
-
-      const logs = rota.attendanceLogs;
-      const latestLog = logs[logs.length - 1];
-
-      if (
-        latestLog.clockIn &&
-        (!latestLog.clockOut || latestLog.clockOut === "")
-      ) {
-        // SAFETY CHECK: Only auto clock-out if today's shift has actually ENDED.
-        // We don't want to auto clock-out a shift they are currently working!
-        const isShiftEndedToday =
-          rota.startDate === today &&
-          rota.endTime &&
-          rota.endTime <= currentTime;
-
-        if (isShiftEndedToday) {
-          latestLog.clockOut = rota.endTime;
-
-          upcomingBulkOps.push({
-            updateOne: {
-              filter: { _id: (rota as any)._id },
-              update: {
-                $set: {
-                  attendanceLogs: logs,
-                  status: "completed",
-                },
-              },
-            },
-          });
-
-          rota.status = "completed";
-        }
-      }
-    }
-
-    // Execute bulk update for today's newly closed rotas
-    if (upcomingBulkOps.length > 0) {
-      await Rota.bulkWrite(upcomingBulkOps);
-    }
-  }
+  
 
   return {
     meta,
