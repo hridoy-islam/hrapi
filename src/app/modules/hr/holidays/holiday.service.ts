@@ -6,7 +6,7 @@ import { HolidaySearchableFields } from "./holiday.constant";
 import AppError from "../../../errors/AppError";
 import QueryBuilder from "../../../builder/QueryBuilder";
 import { User } from "../../user/user.model";
-import moment from "moment";
+import moment from '../../../utils/moment-setup';
 import { Attendance } from "../../attendance/attendance.model";
 import { Types } from "mongoose";
 import { Leave } from "../leave/leave.model";

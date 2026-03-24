@@ -715,11 +715,10 @@ const createAttendanceIntoDB = async (
     );
   }
 
-  // Removed UTC to use the local server/moment timezone
   const now = moment();
-  const todayDateStr = now.format("YYYY-MM-DD");
+  const currentIsoTime = now.toISOString(); 
+const todayDateStr = now.format("YYYY-MM-DD");
   const currentTimeOnly = now.format("HH:mm");
-
   // =====================================================
   // 2. FIND ACTIVE SESSION
   // =====================================================
@@ -839,18 +838,18 @@ const createAttendanceIntoDB = async (
         );
       }
 
-      // ── CLOCK-IN TIME WINDOW CHECK (clock-out is NOT subject to this) ──
+      // ── CLOCK-IN TIME WINDOW CHECK ──
       const validRotas = rotasWithTimes.filter((rota) => {
-        // Removed UTC
+        // Build ISO compliant strings for parsing shift times
         const shiftStart = moment(
-          `${todayDateStr} ${rota.startTime}`,
-          "YYYY-MM-DD HH:mm",
-          true,
+          `${todayDateStr}T${rota.startTime}:00`, 
+          moment.ISO_8601,
+          true
         );
         const shiftEnd = moment(
-          `${todayDateStr} ${rota.endTime}`,
-          "YYYY-MM-DD HH:mm",
-          true,
+          `${todayDateStr}T${rota.endTime}:00`, 
+          moment.ISO_8601,
+          true
         );
 
         // Handle overnight shifts (e.g. 22:00 → 06:00)
@@ -862,7 +861,6 @@ const createAttendanceIntoDB = async (
         const startWindow = shiftStart.clone().startOf("day");
 
         // Window stays open until the very end of the shift's ending day (23:59:59)
-        // (This automatically handles overnight shifts by giving them until 23:59 of the next day)
         const endWindow = shiftEnd.clone().endOf("day");
 
         return now.isBetween(startWindow, endWindow, null, "[]");
@@ -878,15 +876,9 @@ const createAttendanceIntoDB = async (
 
       if (validRotas.length > 1) {
         validRotas.sort((a, b) => {
-          // Removed UTC
-          const aStart = moment(
-            `${todayDateStr} ${a.startTime}`,
-            "YYYY-MM-DD HH:mm",
-          );
-          const bStart = moment(
-            `${todayDateStr} ${b.startTime}`,
-            "YYYY-MM-DD HH:mm",
-          );
+          const aStart = moment(`${todayDateStr}T${a.startTime}:00`, moment.ISO_8601);
+          const bStart = moment(`${todayDateStr}T${b.startTime}:00`, moment.ISO_8601);
+          
           // Prefer the rota whose start is nearest (past or future) to now
           return (
             Math.abs(now.diff(aStart, "minutes")) -
@@ -901,7 +893,7 @@ const createAttendanceIntoDB = async (
       shiftName = selectedRota.shiftName || "shift";
     }
 
-    // ── CREATE THE ATTENDANCE RECORD ─────────────────────────────────────
+    // ── CREATE THE ATTENDANCE RECORD (USING ISO TIMESTAMPS) ──────────────
     const attendanceRecord = await Attendance.create({
       userId: resolvedUserId,
       serviceUserId: resolvedServiceUserId,
@@ -911,7 +903,7 @@ const createAttendanceIntoDB = async (
       visitReason,
       rotaId: matchedRotaId,
       date: shiftAssignedDate,
-      clockIn: currentTimeOnly,
+      clockIn:  currentTimeOnly,
       clockInDate: todayDateStr,
       status: "clockin",
       source: source || "accessControl",
@@ -942,19 +934,16 @@ const createAttendanceIntoDB = async (
       );
     }
 
-    // Removed UTC
-    const clockInMoment = moment(
-      `${activeAttendance.clockInDate} ${activeAttendance.clockIn}`,
-      "YYYY-MM-DD HH:mm",
-    );
-
+    // Because clockIn is now saved as an ISO string, we can parse it directly 
+    // without manual concatenation of dates and times
+    const clockInMoment = moment(activeAttendance.clockIn, moment.ISO_8601);
     const durationInMinutes = now.diff(clockInMoment, "minutes");
 
-    activeAttendance.clockOut = currentTimeOnly;
-    activeAttendance.clockOutDate = todayDateStr;
+    
+    activeAttendance.clockOut = currentTimeOnly; 
+    activeAttendance.clockOutDate = todayDateStr; 
     activeAttendance.status = "clockout";
-    activeAttendance.totalDuration =
-      durationInMinutes > 0 ? durationInMinutes : 0;
+    activeAttendance.totalDuration = durationInMinutes > 0 ? durationInMinutes : 0;
 
     if (location) activeAttendance.location = location;
     if (notes) activeAttendance.notes = notes;

@@ -5,7 +5,7 @@ import { QACheck } from "./QACheck.model";
 import { TQACheck } from "./QACheck.interface";
 import { QACheckSearchableFields } from "./QACheck.constant";
 import { User } from "../user/user.model";
-import moment from "moment";
+import moment from '../../utils/moment-setup';
 import { ScheduleCheck } from "../scheduleCheck/scheduleCheck.model";
 
 const getAllQACheckFromDB = async (query: Record<string, unknown>) => {

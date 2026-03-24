@@ -4,7 +4,7 @@ import AppError from "../../errors/AppError";
 import { Induction } from "./induction.model";
 import { TInduction } from "./induction.interface";
 import { InductionSearchableFields } from "./induction.constant";
-import moment from "moment";
+import moment from '../../utils/moment-setup';
 
 const getAllInductionFromDB = async (query: Record<string, unknown>) => {
   const InductionQuery = new QueryBuilder(Induction.find().populate("logs.updatedBy", "firstName lastName initial name"), query)

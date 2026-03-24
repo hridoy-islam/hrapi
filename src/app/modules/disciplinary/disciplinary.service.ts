@@ -4,7 +4,7 @@ import AppError from "../../errors/AppError";
 import { Disciplinary } from "./disciplinary.model";
 import { TDisciplinary } from "./disciplinary.interface";
 import { DisciplinarySearchableFields } from "./disciplinary.constant";
-import moment from "moment";
+import moment from '../../utils/moment-setup';
 
 const getAllDisciplinaryFromDB = async (query: Record<string, unknown>) => {
   const DisciplinaryQuery = new QueryBuilder(Disciplinary.find().populate("logs.updatedBy", "firstName lastName initial name"), query)

@@ -7,7 +7,7 @@ import AppError from "../../../errors/AppError";
 import QueryBuilder from "../../../builder/QueryBuilder";
 import { User } from "../../user/user.model";
 import { Holiday } from "../holidays/holiday.model";
-import moment from "moment";
+import moment from '../../../utils/moment-setup';
 
 const getAllLeaveFromDB = async (query: Record<string, unknown>) => {
   const userQuery = new QueryBuilder(

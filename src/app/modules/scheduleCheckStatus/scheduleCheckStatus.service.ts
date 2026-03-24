@@ -1,5 +1,5 @@
 import httpStatus from "http-status";
-import moment from "moment";
+import moment from '../../utils/moment-setup';
 import { User } from "../user/user.model";
 import { ScheduleCheck } from "../scheduleCheck/scheduleCheck.model";
 import { Passport } from "../passport/passport.model";

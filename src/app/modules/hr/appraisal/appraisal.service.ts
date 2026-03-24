@@ -5,7 +5,7 @@ import QueryBuilder from "../../../builder/QueryBuilder";
 import { AppraisalSearchableFields } from "./appraisal.constant";
 import { Appraisal } from "./appraisal.model";
 import { TAppraisal } from "./appraisal.interface";
-import moment from "moment";
+import moment from '../../../utils/moment-setup';
 
 const getAllAppraisalFromDB = async (query: Record<string, unknown>) => {
   const userQuery = new QueryBuilder(

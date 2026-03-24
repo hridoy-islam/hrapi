@@ -5,7 +5,7 @@ import QueryBuilder from "../../../builder/QueryBuilder";
 import { RightToWorkSearchableFields } from "./rightToWork.constant";
 import { RightToWork } from "./rightToWork.model";
 import { TRightToWork } from "./rightToWork.interface";
-import moment from "moment";
+import moment from '../../../utils/moment-setup';
 
 const getAllRightToWorkFromDB = async (query: Record<string, unknown>) => {
   const userQuery = new QueryBuilder(

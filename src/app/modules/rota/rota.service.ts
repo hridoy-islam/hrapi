@@ -5,10 +5,11 @@ import QueryBuilder from "../../builder/QueryBuilder";
 import { Rota } from "./rota.model";
 import { TRota } from "./rota.interface";
 import { RotaSearchableFields } from "./rota.constant";
-import moment from "moment";
 import { EmployeeRate } from "../hr/employeeRate/employeeRate.model";
 import { User } from "../user/user.model";
+import moment from 'moment-timezone';
 
+moment.tz.setDefault('Europe/London');
 
 const getAllRotaFromDB = async (query: Record<string, unknown>) => {
   const { startDate, endDate, ...restQuery } = query;

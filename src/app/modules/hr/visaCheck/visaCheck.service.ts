@@ -5,7 +5,7 @@ import QueryBuilder from "../../../builder/QueryBuilder";
 import { VisaCheckSearchableFields } from "./visaCheck.constant";
 import { VisaCheck } from "./visaCheck.model";
 import { TVisaCheck } from "./visaCheck.interface";
-import moment from "moment";
+import moment from '../../../utils/moment-setup';
 
 const getAllVisaCheckFromDB = async (query: Record<string, unknown>) => {
   const userQuery = new QueryBuilder(

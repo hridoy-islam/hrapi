@@ -314,7 +314,7 @@
 
 import httpStatus from "http-status";
 import AppError from "../../../errors/AppError";
-import moment from "moment";
+import moment from '../../../utils/moment-setup';
 import { Payroll } from "./payroll.model";
 import { TPayroll } from "./payroll.interface";
 import { BankHoliday } from "../bank-holiday/bank-holiday.model";

@@ -3,7 +3,7 @@ import httpStatus from "http-status";
 import AppError from "../../../errors/AppError";
 import QueryBuilder from "../../../builder/QueryBuilder";
 
-import moment from "moment";
+import moment from '../../../utils/moment-setup';
 import { RequestDocumentSearchableFields } from "./requestDocument.constant";
 import { RequestDocument } from "./requestDocument.model";
 import { TRequestDocument } from "./requestDocument.interface";

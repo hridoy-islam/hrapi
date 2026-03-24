@@ -5,7 +5,7 @@ import QueryBuilder from "../../../builder/QueryBuilder";
 import { ImmigrationStatusSearchableFields } from "./immigrationStatus.constant";
 import { ImmigrationStatus } from "./immigrationStatus.model";
 import { TImmigrationStatus } from "./immigrationStatus.interface";
-import moment from "moment";
+import moment from '../../../utils/moment-setup';
 
 const getAllImmigrationStatusFromDB = async (query: Record<string, unknown>) => {
   const userQuery = new QueryBuilder(

@@ -6,8 +6,7 @@ import { TSupervision } from "./supervision.interface";
 import { SupervisionSearchableFields } from "./supervision.constant";
 import { User } from "../user/user.model";
 import { ScheduleCheck } from "../scheduleCheck/scheduleCheck.model";
-import moment from "moment";
-
+import moment from '../../utils/moment-setup';
 const getAllSupervisionFromDB = async (query: Record<string, unknown>) => {
   const SupervisionQuery = new QueryBuilder(Supervision.find().populate("logs.updatedBy", "firstName lastName initial name"), query)
     .search(SupervisionSearchableFields)

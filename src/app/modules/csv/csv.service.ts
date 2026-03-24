@@ -2,7 +2,7 @@ import AppError from "../../errors/AppError";
 import mongoose from "mongoose";
 import httpStatus from "http-status";
 import QueryBuilder from "../../builder/QueryBuilder";
-import moment from "moment";
+import moment from '../../utils/moment-setup';
 
 import { TCSV } from "./csv.interface";
 import CSV from "./csv.model";

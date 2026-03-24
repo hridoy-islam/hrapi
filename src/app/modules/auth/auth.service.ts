@@ -12,7 +12,7 @@ import { Secret } from "jsonwebtoken";
 import config from "../../config";
 import catchAsync from "../../utils/catchAsync";
 import sendResponse from "../../utils/sendResponse";
-import moment from "moment";
+import moment from '../../utils/moment-setup';
 import { RightToWork } from "../hr/rightToWork/rightToWork.model";
 
 function generateOTP() {

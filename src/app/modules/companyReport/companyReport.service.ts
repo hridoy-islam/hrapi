@@ -6,7 +6,7 @@ import { TCompanyReport } from "./companyReport.interface";
 import { CompanyReportSearchableFields } from "./companyReport.constant";
 import AppError from "../../errors/AppError";
 import QueryBuilder from "../../builder/QueryBuilder";
-import moment from "moment";
+import moment from '../../utils/moment-setup';
 
 
 const getAllCompanyReportFromDB = async (query: Record<string, unknown>) => {

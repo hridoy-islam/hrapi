@@ -5,7 +5,7 @@ import { SpotCheck } from "./spotCheck.model";
 import { TSpotCheck } from "./spotCheck.interface";
 import { SpotCheckSearchableFields } from "./spotCheck.constant";
 import { User } from "../user/user.model";
-import moment from "moment";
+import moment from '../../utils/moment-setup';
 import { ScheduleCheck } from "../scheduleCheck/scheduleCheck.model";
 
 const getAllSpotCheckFromDB = async (query: Record<string, unknown>) => {
