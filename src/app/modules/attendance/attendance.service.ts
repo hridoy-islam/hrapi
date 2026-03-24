@@ -15,7 +15,7 @@ const UK_TIMEZONE = "Europe/London";
 
 // Helper: Get Full ISO String (e.g., 2024-01-25T14:30:00+00:00)
 const getFullISOString = (date: Date = new Date()) => {
-  return moment(date).tz(UK_TIMEZONE).format(); 
+  return moment(date).tz(UK_TIMEZONE).format();
 };
 
 // Helper: Extract Time String from ISO (HH:mm:ss)
@@ -23,9 +23,8 @@ const getTimeFromISO = (isoString: string) => {
   return moment(isoString).format("HH:mm:ss");
 };
 
-
-
 const getDatePart = () => moment().format("YYYY-MM-DD");
+
 const getAttendanceFromDB = async (query: Record<string, unknown>) => {
   const {
     month,
@@ -41,7 +40,7 @@ const getAttendanceFromDB = async (query: Record<string, unknown>) => {
     sort,
     fields,
     searchTerm,
-    ...filters 
+    ...filters
   } = query;
 
   // =========================================================
@@ -55,9 +54,14 @@ const getAttendanceFromDB = async (query: Record<string, unknown>) => {
     let listTargetUserIds: Types.ObjectId[] = [];
     const listUserFilter: Record<string, unknown> = {};
 
-    if (companyId) listUserFilter.company = new Types.ObjectId(companyId as string);
-    if (designationId) listUserFilter.designationId = new Types.ObjectId(designationId as string);
-    if (departmentId) listUserFilter.departmentId = new Types.ObjectId(departmentId as string);
+    if (companyId)
+      listUserFilter.company = new Types.ObjectId(companyId as string);
+    if (designationId)
+      listUserFilter.designationId = new Types.ObjectId(
+        designationId as string,
+      );
+    if (departmentId)
+      listUserFilter.departmentId = new Types.ObjectId(departmentId as string);
     if (userId) listUserFilter._id = new Types.ObjectId(userId as string);
 
     if (companyId || designationId || userId || departmentId) {
@@ -71,6 +75,20 @@ const getAttendanceFromDB = async (query: Record<string, unknown>) => {
       }
       listTargetUserIds = filteredUsers.map((u) => u._id);
       filters.userId = { $in: listTargetUserIds };
+    }
+
+    if (departmentId) {
+      // Find all Rotas that belong to this department
+      const matchedRotas = await Rota.find({
+        departmentId: new Types.ObjectId(departmentId as string),
+      }).select("_id");
+
+      const matchedRotaIds = matchedRotas.map((r: any) => r._id);
+
+      // Add these valid Rota IDs to our main attendance filter
+      // If a specific userId was passed, `filters.userId` is already set above,
+      // creating a natural "AND" condition in MongoDB.
+      filters.rotaId = { $in: matchedRotaIds };
     }
   }
 
@@ -94,16 +112,26 @@ const getAttendanceFromDB = async (query: Record<string, unknown>) => {
     Attendance.find()
       .populate({
         path: "userId",
-        select: "name firstName lastName email phone designationId departmentId employeeId",
+        select:
+          "name firstName lastName email phone designationId departmentId employeeId",
         populate: [
           { path: "designationId", select: "title" },
           { path: "departmentId", select: "departmentName" },
         ],
-      }).populate({
-         path: "serviceUserId",
+      })
+      .populate({
+        path: "serviceUserId",
         select: "name room",
+      })
+      .populate("rotaId")
+      .populate({
+        path: "rotaId",
+        populate: {
+          path: "departmentId",
+          select: "departmentName",
+        },
       }),
-    queryBuilderParams
+    queryBuilderParams,
   )
     .search(["clockInDate", "visitorName"])
     .filter(queryBuilderParams)
@@ -111,7 +139,7 @@ const getAttendanceFromDB = async (query: Record<string, unknown>) => {
     .fields();
 
   // =========================================================
-  // 3. Handle Date Filters 
+  // 3. Handle Date Filters
   // =========================================================
   // Must apply dates BEFORE getting the total count!
   if (month && year) {
@@ -123,8 +151,7 @@ const getAttendanceFromDB = async (query: Record<string, unknown>) => {
     attendanceQuery.modelQuery
       .where("clockInDate")
       .gte(startString as any)
-      .lte(endOfMonthString as any); 
-
+      .lte(endOfMonthString as any);
   } else if (fromDate && toDate) {
     attendanceQuery.modelQuery
       .where("clockInDate")
@@ -162,7 +189,8 @@ const getSingleAttendanceFromDB = async (id: string) => {
   const result = await Attendance.findById(id)
     .populate({
       path: "userId",
-      select: "name firstName lastName email phone designationId employeeId departmentId",
+      select:
+        "name firstName lastName email phone designationId employeeId departmentId",
       populate: [
         { path: "designationId", select: "title" },
         { path: "departmentId", select: "departmentName" },
@@ -179,7 +207,9 @@ const getSingleAttendanceFromDB = async (id: string) => {
   return result;
 };
 
-const getCompanyEmployeesLatestAttendance = async (query: Record<string, unknown>) => {
+const getCompanyEmployeesLatestAttendance = async (
+  query: Record<string, unknown>,
+) => {
   const { companyId, page = 1, limit = 10, searchTerm } = query;
 
   if (!companyId) {
@@ -187,19 +217,24 @@ const getCompanyEmployeesLatestAttendance = async (query: Record<string, unknown
   }
 
   // 1. Build User Match Query
-  const userMatch: any = { company: new Types.ObjectId(companyId as string), role: 'employee' };
-  
+  const userMatch: any = {
+    company: new Types.ObjectId(companyId as string),
+    role: "employee",
+  };
+
   if (searchTerm) {
     userMatch.$or = [
       { name: { $regex: searchTerm, $options: "i" } },
       { email: { $regex: searchTerm, $options: "i" } },
-      { employeeId: { $regex: searchTerm, $options: "i" } }
+      { employeeId: { $regex: searchTerm, $options: "i" } },
     ];
   }
 
   // 2. Fetch ALL matching users (Do not apply skip/limit here yet)
   const users = await User.find(userMatch)
-    .select("name firstName lastName email phone designationId departmentId employeeId profileImage")
+    .select(
+      "name firstName lastName email phone designationId departmentId employeeId profileImage",
+    )
     .populate({ path: "designationId", select: "title" })
     .populate({ path: "departmentId", select: "departmentName" })
     .lean(); // Use .lean() to get raw JS objects for faster processing
@@ -244,7 +279,7 @@ const getCompanyEmployeesLatestAttendance = async (query: Record<string, unknown
   // 4. Merge Users with Attendance Data AND filter for 'clockin' only
   const clockedInUsers = users.reduce((acc, user) => {
     const attendanceInfo = attendanceMap.get(user._id.toString());
-    
+
     // Check if the user's latest status is exactly "clockin"
     if (attendanceInfo && attendanceInfo.latestStatus === "clockin") {
       (acc as any).push({
@@ -259,26 +294,30 @@ const getCompanyEmployeesLatestAttendance = async (query: Record<string, unknown
   const pageNumber = Number(page);
   const limitNumber = limit === "all" ? 0 : Number(limit);
   const skip = (pageNumber - 1) * limitNumber;
-  
+
   const totalClockedIn = clockedInUsers.length;
-  
+
   // Slice the array for the current page
-  const paginatedResult = limitNumber === 0 
-    ? clockedInUsers 
-    : clockedInUsers.slice(skip, skip + limitNumber);
+  const paginatedResult =
+    limitNumber === 0
+      ? clockedInUsers
+      : clockedInUsers.slice(skip, skip + limitNumber);
 
   return {
     meta: {
       page: pageNumber,
       limit: limitNumber === 0 ? totalClockedIn : limitNumber,
       total: totalClockedIn,
-      totalPage: limitNumber === 0 ? 1 : Math.ceil(totalClockedIn / limitNumber),
+      totalPage:
+        limitNumber === 0 ? 1 : Math.ceil(totalClockedIn / limitNumber),
     },
     result: paginatedResult,
   };
 };
 
-export const getCompanyServiceUsersLatestAttendance = async (query: Record<string, unknown>) => {
+export const getCompanyServiceUsersLatestAttendance = async (
+  query: Record<string, unknown>,
+) => {
   const { companyId, page = 1, limit = 10, searchTerm } = query;
 
   if (!companyId) {
@@ -287,20 +326,22 @@ export const getCompanyServiceUsersLatestAttendance = async (query: Record<strin
 
   // 1. Build ServiceUser Match Query
   // FIX: Changed `company` to `companyId`
-  const serviceUserMatch: any = { companyId: new Types.ObjectId(companyId as string) };
-  
+  const serviceUserMatch: any = {
+    companyId: new Types.ObjectId(companyId as string),
+  };
+
   if (searchTerm) {
     // FIX: Changed firstName/lastName to `name`, added phone just in case
     serviceUserMatch.$or = [
       { name: { $regex: searchTerm, $options: "i" } },
       { email: { $regex: searchTerm, $options: "i" } },
-      { phone: { $regex: searchTerm, $options: "i" } }
+      { phone: { $regex: searchTerm, $options: "i" } },
     ];
   }
 
   // 2. Fetch ALL matching ServiceUsers
   const serviceUsers = await ServiceUser.find(serviceUserMatch)
-    .select("name email phone room") 
+    .select("name email phone room")
     .lean();
 
   if (!serviceUsers.length) {
@@ -315,15 +356,15 @@ export const getCompanyServiceUsersLatestAttendance = async (query: Record<strin
     };
   }
 
-  const suIds = serviceUsers.map((su:any) => su._id);
+  const suIds = serviceUsers.map((su: any) => su._id);
 
   // 3. Aggregate Latest Attendance for these Service Users
   const latestAttendances = await Attendance.aggregate([
     { $match: { serviceUserId: { $in: suIds }, userType: "service_user" } },
-    { $sort: { createdAt: -1 } }, 
+    { $sort: { createdAt: -1 } },
     {
       $group: {
-        _id: "$serviceUserId", 
+        _id: "$serviceUserId",
         latestStatus: { $first: "$status" },
         clockIn: { $first: "$clockIn" },
         clockInDate: { $first: "$clockInDate" },
@@ -343,7 +384,7 @@ export const getCompanyServiceUsersLatestAttendance = async (query: Record<strin
   // 4. Merge Data AND filter for 'clockin' only
   const clockedInServiceUsers = serviceUsers.reduce((acc: any[], user) => {
     const attendanceInfo = attendanceMap.get(user._id.toString());
-    
+
     // Check if the service user's latest status is exactly "clockin"
     if (attendanceInfo && attendanceInfo.latestStatus === "clockin") {
       acc.push({
@@ -358,25 +399,29 @@ export const getCompanyServiceUsersLatestAttendance = async (query: Record<strin
   const pageNumber = Number(page);
   const limitNumber = limit === "all" ? 0 : Number(limit);
   const skip = (pageNumber - 1) * limitNumber;
-  
+
   const totalClockedIn = clockedInServiceUsers.length;
-  
-  const paginatedResult = limitNumber === 0 
-    ? clockedInServiceUsers 
-    : clockedInServiceUsers.slice(skip, skip + limitNumber);
+
+  const paginatedResult =
+    limitNumber === 0
+      ? clockedInServiceUsers
+      : clockedInServiceUsers.slice(skip, skip + limitNumber);
 
   return {
     meta: {
       page: pageNumber,
       limit: limitNumber === 0 ? totalClockedIn : limitNumber,
       total: totalClockedIn,
-      totalPage: limitNumber === 0 ? 1 : Math.ceil(totalClockedIn / limitNumber),
+      totalPage:
+        limitNumber === 0 ? 1 : Math.ceil(totalClockedIn / limitNumber),
     },
     result: paginatedResult,
   };
 };
 
- const getCompanyVisitorsLatestAttendance = async (query: Record<string, unknown>) => {
+const getCompanyVisitorsLatestAttendance = async (
+  query: Record<string, unknown>,
+) => {
   const { companyId, page = 1, limit = 10, searchTerm } = query;
 
   if (!companyId) {
@@ -391,7 +436,7 @@ export const getCompanyServiceUsersLatestAttendance = async (query: Record<strin
   const matchStage: any = {
     companyId: new Types.ObjectId(companyId as string),
     userType: "visitor",
-    status: "clockin" // We only want visitors actively inside the premises
+    status: "clockin", // We only want visitors actively inside the premises
   };
 
   // 2. Add Search functionality for embedded visitor fields
@@ -407,8 +452,10 @@ export const getCompanyServiceUsersLatestAttendance = async (query: Record<strin
   const totalVisitors = await Attendance.countDocuments(matchStage);
 
   // 4. Fetch Paginated Results
-  let visitorsQuery = Attendance.find(matchStage).sort({ createdAt: -1 }).lean();
-  
+  let visitorsQuery = Attendance.find(matchStage)
+    .sort({ createdAt: -1 })
+    .lean();
+
   if (limitNumber > 0) {
     visitorsQuery = visitorsQuery.skip(skip).limit(limitNumber);
   }
@@ -426,16 +473,13 @@ export const getCompanyServiceUsersLatestAttendance = async (query: Record<strin
   };
 };
 
-
-
 // const createAttendanceIntoDB = async (
 //   payload: Partial<TAttendance> & { actionType?: 'clock_in' | 'clock_out' }
 // ) => {
 //   const {
-//     userId, // Frontend sends the ID here for both employees and service users
+//     userId,
 //     serviceUserId,
 //     visitorName,
-//     visitorPhone,
 //     userType = 'employee',
 //     deviceId,
 //     location,
@@ -452,13 +496,11 @@ export const getCompanyServiceUsersLatestAttendance = async (query: Record<strin
 //     throw new AppError(httpStatus.BAD_REQUEST, "Company ID is required.");
 //   }
 
-//   // --- THE FIX: Map identifiers correctly based on userType ---
-//   // If userType is service_user, map the incoming userId to resolvedServiceUserId
+//   // --- Map identifiers correctly based on userType ---
 //   const resolvedServiceUserId = serviceUserId || (userType === 'service_user' ? userId : undefined);
-//   // Only keep userId for employees
 //   const resolvedUserId = userType === 'employee' ? userId : undefined;
 
-//   // 2. Validate identifiers using the resolved IDs
+//   // 2. Validate identifiers
 //   if (userType === 'employee' && !resolvedUserId) {
 //     throw new AppError(httpStatus.BAD_REQUEST, "Employee ID is required.");
 //   }
@@ -469,6 +511,13 @@ export const getCompanyServiceUsersLatestAttendance = async (query: Record<strin
 
 //   if (userType === 'visitor' && !visitorName) {
 //     throw new AppError(httpStatus.BAD_REQUEST, "Visitor Name is required.");
+//   }
+
+//   if (userType === 'visitor' && !actionType) {
+//     throw new AppError(
+//       httpStatus.BAD_REQUEST,
+//       "actionType ('clock_in' or 'clock_out') is strictly required for visitors."
+//     );
 //   }
 
 //   const now = moment();
@@ -487,16 +536,12 @@ export const getCompanyServiceUsersLatestAttendance = async (query: Record<strin
 
 //   if (userType === 'employee') {
 //     matchQuery.userId = resolvedUserId;
-//   }
-
-//   if (userType === 'service_user') {
+//   } else if (userType === 'service_user') {
 //     matchQuery.serviceUserId = resolvedServiceUserId;
-//   }
-
-//   if (userType === 'visitor') {
+//   } else if (userType === 'visitor') {
 //     matchQuery.visitorName = {
 //       $regex: `^${(visitorName as any).trim()}$`,
-//       $options: "i"   // case-insensitive
+//       $options: "i"
 //     };
 //   }
 
@@ -504,16 +549,82 @@ export const getCompanyServiceUsersLatestAttendance = async (query: Record<strin
 //     .findOne(matchQuery)
 //     .sort({ createdAt: -1 });
 
-//   // Prevent double clock in
-//   if (activeAttendance && actionType === 'clock_in') {
-//     throw new AppError(httpStatus.BAD_REQUEST, "You are already clocked in.");
+//   // =====================================================
+//   // DETERMINE ACTION
+//   // =====================================================
+
+//   let finalAction: 'clock_in' | 'clock_out';
+
+//   if (userType === 'visitor') {
+//     // Visitors MUST rely on the explicit actionType
+//     finalAction = actionType as 'clock_in' | 'clock_out';
+
+//   } else if (userType === 'employee') {
+//     // ✅ Employees: use explicit actionType if provided, otherwise auto-detect
+//     if (actionType) {
+//       // ✅ Block clock_in if there's already an active (un-clocked-out) session
+//       if (actionType === 'clock_in' && activeAttendance) {
+//         throw new AppError(
+//           httpStatus.BAD_REQUEST,
+//           "You are already clocked in."
+//         );
+//       }
+//       finalAction = actionType;
+//     } else {
+//       // Auto-detect fallback
+//       finalAction = activeAttendance ? 'clock_out' : 'clock_in';
+//     }
+
+//   } else {
+//     // Service Users: auto-detect
+//     finalAction = activeAttendance ? 'clock_out' : 'clock_in';
 //   }
 
 //   // =====================================================
-//   // CLOCK OUT
+//   // ROUTE: CLOCK IN
 //   // =====================================================
+//   if (finalAction === 'clock_in') {
 
-//   if (activeAttendance) {
+//     // Prevent double clock-in for employees and service users
+//     if (activeAttendance && userType !== 'visitor') {
+//       throw new AppError(httpStatus.BAD_REQUEST, "You are already clocked in.");
+//     }
+
+//     const attendanceRecord = await Attendance.create({
+//       userId: resolvedUserId,
+//       serviceUserId: resolvedServiceUserId,
+//       visitorName: visitorName?.trim(),
+//       userType,
+//       companyId,
+//       visitReason,
+//       clockIn: currentTimeOnly,
+//       clockInDate: todayDateStr,
+//       status: "clockin",
+//       source: source || "accessControl",
+//       clockType: clockType || "qr",
+//       deviceId,
+//       location,
+//       notes,
+//     });
+
+//     return {
+//       action: "clock_in",
+//       message: "Successfully clocked in.",
+//       data: attendanceRecord,
+//     };
+//   }
+
+//   // =====================================================
+//   // ROUTE: CLOCK OUT
+//   // =====================================================
+//   if (finalAction === 'clock_out') {
+
+//     if (!activeAttendance) {
+//       throw new AppError(
+//         httpStatus.BAD_REQUEST,
+//         "No active Clock In session found to clock out from."
+//       );
+//     }
 
 //     const clockInMoment = moment(
 //       `${activeAttendance.clockInDate} ${activeAttendance.clockIn}`,
@@ -525,9 +636,7 @@ export const getCompanyServiceUsersLatestAttendance = async (query: Record<strin
 //     activeAttendance.clockOut = currentTimeOnly;
 //     activeAttendance.clockOutDate = todayDateStr;
 //     activeAttendance.status = "clockout";
-
-//     activeAttendance.totalDuration =
-//       durationInMinutes > 0 ? durationInMinutes : 0;
+//     activeAttendance.totalDuration = durationInMinutes > 0 ? durationInMinutes : 0;
 
 //     if (location) activeAttendance.location = location;
 //     if (notes) activeAttendance.notes = notes;
@@ -540,52 +649,16 @@ export const getCompanyServiceUsersLatestAttendance = async (query: Record<strin
 //       data: activeAttendance,
 //     };
 //   }
-
-//   // =====================================================
-//   // NO ACTIVE SESSION -> CLOCK IN
-//   // =====================================================
-
-//   if (!activeAttendance && actionType === 'clock_out') {
-//     throw new AppError(
-//       httpStatus.BAD_REQUEST,
-//       "No active Clock In session found to clock out from."
-//     );
-//   }
-
-//   const attendanceRecord = await Attendance.create({
-//     userId: resolvedUserId,               // Will be undefined for service_user
-//     serviceUserId: resolvedServiceUserId, // Will correctly hold the ID for service_user
-//     visitorName: visitorName?.trim(),
-//     visitorPhone,
-//     userType,
-//     companyId,
-//     visitReason,
-//     clockIn: currentTimeOnly,
-//     clockInDate: todayDateStr,
-//     status: "clockin",
-//     source: source || "accessControl",
-//     clockType: clockType || "qr",
-//     deviceId,
-//     location,
-//     notes,
-//   });
-
-//   return {
-//     action: "clock_in",
-//     message: "Successfully clocked in.",
-//     data: attendanceRecord,
-//   };
 // };
 
-
 const createAttendanceIntoDB = async (
-  payload: Partial<TAttendance> & { actionType?: 'clock_in' | 'clock_out' }
+  payload: Partial<TAttendance> & { actionType?: "clock_in" | "clock_out" },
 ) => {
   const {
     userId,
     serviceUserId,
     visitorName,
-    userType = 'employee',
+    userType = "employee",
     deviceId,
     location,
     source,
@@ -593,35 +666,38 @@ const createAttendanceIntoDB = async (
     clockType,
     notes,
     actionType,
-    companyId
+    companyId,
   } = payload;
 
-  // 1. Validate companyId
+  // =====================================================
+  // 1. VALIDATIONS & SETUP
+  // =====================================================
   if (!companyId) {
     throw new AppError(httpStatus.BAD_REQUEST, "Company ID is required.");
   }
 
-  // --- Map identifiers correctly based on userType ---
-  const resolvedServiceUserId = serviceUserId || (userType === 'service_user' ? userId : undefined);
-  const resolvedUserId = userType === 'employee' ? userId : undefined;
+  // Map identifiers correctly based on userType
+  const resolvedServiceUserId =
+    serviceUserId || (userType === "service_user" ? userId : undefined);
+  const resolvedUserId = userType === "employee" ? userId : undefined;
 
-  // 2. Validate identifiers
-  if (userType === 'employee' && !resolvedUserId) {
+  // Validate identifiers
+  if (userType === "employee" && !resolvedUserId) {
     throw new AppError(httpStatus.BAD_REQUEST, "Employee ID is required.");
   }
 
-  if (userType === 'service_user' && !resolvedServiceUserId) {
+  if (userType === "service_user" && !resolvedServiceUserId) {
     throw new AppError(httpStatus.BAD_REQUEST, "Service User ID is required.");
   }
 
-  if (userType === 'visitor' && !visitorName) {
+  if (userType === "visitor" && !visitorName) {
     throw new AppError(httpStatus.BAD_REQUEST, "Visitor Name is required.");
   }
 
-  if (userType === 'visitor' && !actionType) {
+  if (userType === "visitor" && !actionType) {
     throw new AppError(
       httpStatus.BAD_REQUEST,
-      "actionType ('clock_in' or 'clock_out') is strictly required for visitors."
+      "actionType ('clock_in' or 'clock_out') is strictly required for visitors.",
     );
   }
 
@@ -630,71 +706,188 @@ const createAttendanceIntoDB = async (
   const currentTimeOnly = now.format("HH:mm");
 
   // =====================================================
-  // FIND ACTIVE SESSION
+  // 2. FIND ACTIVE SESSION
   // =====================================================
-
   const matchQuery: any = {
     status: "clockin",
     userType,
-    companyId
+    companyId,
   };
 
-  if (userType === 'employee') {
+  if (userType === "employee") {
     matchQuery.userId = resolvedUserId;
-  } else if (userType === 'service_user') {
+  } else if (userType === "service_user") {
     matchQuery.serviceUserId = resolvedServiceUserId;
-  } else if (userType === 'visitor') {
+  } else if (userType === "visitor") {
     matchQuery.visitorName = {
       $regex: `^${(visitorName as any).trim()}$`,
-      $options: "i"
+      $options: "i",
     };
   }
 
-  const activeAttendance = await Attendance
-    .findOne(matchQuery)
-    .sort({ createdAt: -1 });
+  const activeAttendance = await Attendance.findOne(matchQuery).sort({
+    createdAt: -1,
+  });
 
   // =====================================================
-  // DETERMINE ACTION
+  // 3. DETERMINE ACTION (CLOCK IN OR OUT)
   // =====================================================
+  let finalAction: "clock_in" | "clock_out";
 
-  let finalAction: 'clock_in' | 'clock_out';
-
-  if (userType === 'visitor') {
+  if (userType === "visitor") {
     // Visitors MUST rely on the explicit actionType
-    finalAction = actionType as 'clock_in' | 'clock_out';
-
-  } else if (userType === 'employee') {
-    // ✅ Employees: use explicit actionType if provided, otherwise auto-detect
+    finalAction = actionType as "clock_in" | "clock_out";
+  } else if (userType === "employee") {
+    // Employees: use explicit actionType if provided, otherwise auto-detect
     if (actionType) {
-      // ✅ Block clock_in if there's already an active (un-clocked-out) session
-      if (actionType === 'clock_in' && activeAttendance) {
+      if (actionType === "clock_in" && activeAttendance) {
         throw new AppError(
           httpStatus.BAD_REQUEST,
-          "You are already clocked in."
+          "You are already clocked in.",
         );
       }
       finalAction = actionType;
     } else {
-      // Auto-detect fallback
-      finalAction = activeAttendance ? 'clock_out' : 'clock_in';
+      finalAction = activeAttendance ? "clock_out" : "clock_in";
     }
-
   } else {
     // Service Users: auto-detect
-    finalAction = activeAttendance ? 'clock_out' : 'clock_in';
+    finalAction = activeAttendance ? "clock_out" : "clock_in";
   }
 
   // =====================================================
-  // ROUTE: CLOCK IN
+  // 4. ROUTE: CLOCK IN
   // =====================================================
-  if (finalAction === 'clock_in') {
-
+  if (finalAction === "clock_in") {
     // Prevent double clock-in for employees and service users
-    if (activeAttendance && userType !== 'visitor') {
+    if (activeAttendance && userType !== "visitor") {
       throw new AppError(httpStatus.BAD_REQUEST, "You are already clocked in.");
     }
 
+    let matchedRotaId: any = undefined;
+    let shiftAssignedDate = todayDateStr;
+    let shiftName = "unscheduled shift";
+
+    // =====================================================
+    // 🛑 ROTA SELECTION LOGIC FOR EMPLOYEES (STRICT) 🛑
+    // =====================================================
+    if (userType === "employee") {
+      // Fetch ALL rotas for this employee that cover today
+      const todayRotas = await Rota.find({
+        employeeId: resolvedUserId,
+        companyId,
+        status: "publish",
+        startDate: { $lte: todayDateStr },
+        endDate: { $gte: todayDateStr },
+      });
+
+      // No rota at all for today → hard error
+      if (!todayRotas || todayRotas.length === 0) {
+        throw new AppError(
+          httpStatus.BAD_REQUEST,
+          "No shift assigned today. Please contact admin.",
+        );
+      }
+
+      // Check if ALL of today's rotas indicate the employee is on leave
+      const leavRotas = todayRotas.filter(
+        (rota) => rota.leaveType && rota.leaveType.trim() !== "",
+      );
+
+      if (leavRotas.length === todayRotas.length) {
+        // Every rota for today is a leave rota → employee is on leave
+        const leaveLabel = leavRotas[0].leaveType;
+        throw new AppError(
+          httpStatus.BAD_REQUEST,
+          `You’re on leave today (${leaveLabel}), so clock in isn’t available.`,
+        );
+      }
+
+      // Filter out leave rotas — only work with active (non-leave) rotas
+      const workRotas = todayRotas.filter(
+        (rota) => !rota.leaveType || rota.leaveType.trim() === "",
+      );
+
+      if (workRotas.length === 0) {
+        throw new AppError(httpStatus.BAD_REQUEST, "No Shift found for today.");
+      }
+
+      // Validate each rota has required time fields
+      const rotasWithTimes = workRotas.filter(
+        (rota) => rota.startTime && rota.endTime,
+      );
+
+      if (rotasWithTimes.length === 0) {
+        throw new AppError(
+          httpStatus.BAD_REQUEST,
+          "Your assigned rota for today has no start/end time configured.",
+        );
+      }
+
+      // ── CLOCK-IN TIME WINDOW CHECK (clock-out is NOT subject to this) ──
+      //   Employee may clock in starting 1 hour BEFORE shift startTime.
+      //   No upper bound — once the window opens, employee can clock in at any time.
+      const validRotas = rotasWithTimes.filter((rota) => {
+        const shiftStart = moment(
+          `${todayDateStr} ${rota.startTime}`,
+          "YYYY-MM-DD HH:mm",
+        );
+        let shiftEnd = moment(
+          `${todayDateStr} ${rota.endTime}`,
+          "YYYY-MM-DD HH:mm",
+        );
+
+        // Handle overnight shifts (e.g. 22:00 → 06:00)
+        if (shiftEnd.isBefore(shiftStart)) shiftEnd.add(1, "day");
+
+        // Window: opens 1 hour before start, closes exactly at shift end
+        const startWindow = shiftStart.clone().subtract(1, "hours");
+
+        return now.isBetween(startWindow, shiftEnd, null, "[]");
+      });
+
+      // Guard: no rota window is currently open
+      if (validRotas.length === 0) {
+        const rotaSummary = rotasWithTimes
+          .map((r) => `"${r.shiftName || "shift"}" (${r.startTime} – ${r.endTime})`)
+          .join(", ");
+
+        throw new AppError(
+          httpStatus.BAD_REQUEST,
+          `No Shift found for today.`,
+        );
+      }
+
+      // ── AUTO-SELECT ROTA ──────────────────────────────────────────────
+      // Single valid rota → assign directly, no ambiguity
+      // Multiple valid rotas → pick the one whose startTime is closest to now
+      let selectedRota = validRotas[0];
+
+      if (validRotas.length > 1) {
+        validRotas.sort((a, b) => {
+          const aStart = moment(
+            `${todayDateStr} ${a.startTime}`,
+            "YYYY-MM-DD HH:mm",
+          );
+          const bStart = moment(
+            `${todayDateStr} ${b.startTime}`,
+            "YYYY-MM-DD HH:mm",
+          );
+          // Prefer the rota whose start is nearest (past or future) to now
+          return (
+            Math.abs(now.diff(aStart, "minutes")) -
+            Math.abs(now.diff(bStart, "minutes"))
+          );
+        });
+        selectedRota = validRotas[0];
+      }
+
+      matchedRotaId = selectedRota._id;
+      shiftAssignedDate = selectedRota.startDate;
+      shiftName = selectedRota.shiftName || "shift";
+    }
+
+    // ── CREATE THE ATTENDANCE RECORD ─────────────────────────────────────
     const attendanceRecord = await Attendance.create({
       userId: resolvedUserId,
       serviceUserId: resolvedServiceUserId,
@@ -702,6 +895,8 @@ const createAttendanceIntoDB = async (
       userType,
       companyId,
       visitReason,
+      rotaId: matchedRotaId, // undefined for non-employees / visitors
+      date: shiftAssignedDate,
       clockIn: currentTimeOnly,
       clockInDate: todayDateStr,
       status: "clockin",
@@ -714,26 +909,28 @@ const createAttendanceIntoDB = async (
 
     return {
       action: "clock_in",
-      message: "Successfully clocked in.",
+      message:
+        userType === "employee"
+          ? `Successfully clocked in to ${shiftName}.`
+          : "Successfully clocked in.",
       data: attendanceRecord,
     };
   }
 
   // =====================================================
-  // ROUTE: CLOCK OUT
+  // 5. ROUTE: CLOCK OUT
   // =====================================================
-  if (finalAction === 'clock_out') {
-
+  if (finalAction === "clock_out") {
     if (!activeAttendance) {
       throw new AppError(
         httpStatus.BAD_REQUEST,
-        "No active Clock In session found to clock out from."
+        "No active session found. Please clock in first.",
       );
     }
 
     const clockInMoment = moment(
       `${activeAttendance.clockInDate} ${activeAttendance.clockIn}`,
-      "YYYY-MM-DD HH:mm"
+      "YYYY-MM-DD HH:mm",
     );
 
     const durationInMinutes = now.diff(clockInMoment, "minutes");
@@ -741,7 +938,8 @@ const createAttendanceIntoDB = async (
     activeAttendance.clockOut = currentTimeOnly;
     activeAttendance.clockOutDate = todayDateStr;
     activeAttendance.status = "clockout";
-    activeAttendance.totalDuration = durationInMinutes > 0 ? durationInMinutes : 0;
+    activeAttendance.totalDuration =
+      durationInMinutes > 0 ? durationInMinutes : 0;
 
     if (location) activeAttendance.location = location;
     if (notes) activeAttendance.notes = notes;
@@ -755,9 +953,10 @@ const createAttendanceIntoDB = async (
     };
   }
 };
+
 const updateAttendanceIntoDB = async (
   id: string,
-  payload: Partial<TAttendance>
+  payload: Partial<TAttendance>,
 ) => {
   const attendance = await Attendance.findById(id);
 
@@ -780,5 +979,5 @@ export const AttendanceServices = {
   updateAttendanceIntoDB,
   getCompanyEmployeesLatestAttendance,
   getCompanyVisitorsLatestAttendance,
-  getCompanyServiceUsersLatestAttendance
+  getCompanyServiceUsersLatestAttendance,
 };

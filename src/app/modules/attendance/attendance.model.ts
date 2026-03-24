@@ -13,6 +13,10 @@ const attendanceSchema = new Schema<TAttendance>(
       type: Schema.Types.ObjectId,
       ref: "ServiceUser",
     },
+    rotaId: {
+      type: Schema.Types.ObjectId,
+      ref: "Rota",
+    },
     // Replaced visitorId with string fields for ad-hoc visitors
     visitorName: {
       type: String,

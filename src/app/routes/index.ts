@@ -40,6 +40,7 @@ import { QACheckRoutes } from "../modules/qaCheck/QACheck.route";
 import { CSVRouter } from "../modules/csv/csv.route";
 import { RotaRoutes } from "../modules/rota/rota.router";
 import { ServiceUserRoutes } from "../modules/serviceUser/serviceUser.router";
+import { SignatureDocRoutes } from "../modules/signatureDoc/signatureDoc.router";
 
 const router = Router();
 
@@ -209,6 +210,10 @@ const moduleRoutes = [
   {
     path: "/serviceuser",
     route: ServiceUserRoutes,
+  },
+  {
+    path: "/signature-documents",
+    route: SignatureDocRoutes,
   },
 ];
 

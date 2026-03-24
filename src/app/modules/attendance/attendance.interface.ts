@@ -6,6 +6,7 @@ export interface TAttendance {
   // User References
   userId?: Types.ObjectId;
   serviceUserId?: Types.ObjectId;
+  rotaId?: Types.ObjectId;
 
   // Visitor Fields
   visitorName?: string;
