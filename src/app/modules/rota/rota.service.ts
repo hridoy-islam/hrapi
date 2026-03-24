@@ -412,7 +412,7 @@ const copyRotaIntoDB = async (payload: {
     }
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unused-vars
-    const { _id, createdAt, updatedAt, __v, ...restRotaData } = rota as any;
+    const { _id,status, createdAt, updatedAt, __v, ...restRotaData } = rota as any;
 
     rotasToCreate.push({
       ...restRotaData,
