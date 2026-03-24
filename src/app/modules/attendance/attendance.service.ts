@@ -51,15 +51,15 @@ const getAttendanceFromDB = async (query: Record<string, unknown>) => {
     filters.companyId = new Types.ObjectId(companyId as string);
   }
 
- if (isApproved !== undefined) {
+  if (isApproved !== undefined) {
     const isApprovedBool = isApproved === "true" || isApproved === true;
-    
+
     if (isApprovedBool) {
       // If true, strictly match records where isApprove is true
-      filters.isApproved = true; 
+      filters.isApproved = true;
     } else {
       // If false, match records where isApprove is explicitly false OR doesn't exist at all
-      filters.isApproved = { $ne: true }; 
+      filters.isApproved = { $ne: true };
     }
   }
 
@@ -198,8 +198,6 @@ const getAttendanceFromDB = async (query: Record<string, unknown>) => {
     result,
   };
 };
-
-
 
 const getSingleAttendanceFromDB = async (id: string) => {
   const result = await Attendance.findById(id)
@@ -856,20 +854,23 @@ const createAttendanceIntoDB = async (
         );
 
         // Handle overnight shifts (e.g. 22:00 → 06:00)
-        if (shiftEnd.isBefore(shiftStart)) shiftEnd.add(1, "day");
+        if (shiftEnd.isBefore(shiftStart)) {
+          shiftEnd.add(1, "day");
+        }
 
-        // Window: opens 1 hour before start, closes exactly at shift end
-        const startWindow = shiftStart.clone().subtract(1, "hours");
+        // Window opens at the very beginning of the day (00:00:00)
+        const startWindow = shiftStart.clone().startOf("day");
 
-        return now.isBetween(startWindow, shiftEnd, null, "[]");
+        // Window stays open until the very end of the shift's ending day (23:59:59)
+        // (This automatically handles overnight shifts by giving them until 23:59 of the next day)
+        const endWindow = shiftEnd.clone().endOf("day");
+
+        return now.isBetween(startWindow, endWindow, null, "[]");
       });
 
       // Guard: no rota window is currently open
       if (validRotas.length === 0) {
-        throw new AppError(
-          httpStatus.BAD_REQUEST,
-          `No Shift found for today.`,
-        );
+        throw new AppError(httpStatus.BAD_REQUEST, `No Shift found for today.`);
       }
 
       // ── AUTO-SELECT ROTA ──────────────────────────────────────────────
@@ -878,8 +879,14 @@ const createAttendanceIntoDB = async (
       if (validRotas.length > 1) {
         validRotas.sort((a, b) => {
           // Removed UTC
-          const aStart = moment(`${todayDateStr} ${a.startTime}`, "YYYY-MM-DD HH:mm");
-          const bStart = moment(`${todayDateStr} ${b.startTime}`, "YYYY-MM-DD HH:mm");
+          const aStart = moment(
+            `${todayDateStr} ${a.startTime}`,
+            "YYYY-MM-DD HH:mm",
+          );
+          const bStart = moment(
+            `${todayDateStr} ${b.startTime}`,
+            "YYYY-MM-DD HH:mm",
+          );
           // Prefer the rota whose start is nearest (past or future) to now
           return (
             Math.abs(now.diff(aStart, "minutes")) -
@@ -973,7 +980,7 @@ const updateAttendanceIntoDB = async (
   }
 
   if (payload.clockOut || payload.clockOutDate) {
-    payload.status = "clockout"; 
+    payload.status = "clockout";
   }
 
   const result = await Attendance.findByIdAndUpdate(id, payload, {
