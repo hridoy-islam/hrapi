@@ -63,6 +63,10 @@ const attendanceSchema = new Schema<TAttendance>(
       type: Schema.Types.ObjectId,
       ref: "User",
     },
+    isApproved:{
+      type:Boolean,
+      default: false
+    }
   },
   {
     timestamps: true,

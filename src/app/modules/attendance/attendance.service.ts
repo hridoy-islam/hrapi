@@ -40,6 +40,7 @@ const getAttendanceFromDB = async (query: Record<string, unknown>) => {
     sort,
     fields,
     searchTerm,
+    isApproved,
     ...filters
   } = query;
 
@@ -48,6 +49,18 @@ const getAttendanceFromDB = async (query: Record<string, unknown>) => {
   // =========================================================
   if (companyId) {
     filters.companyId = new Types.ObjectId(companyId as string);
+  }
+
+ if (isApproved !== undefined) {
+    const isApprovedBool = isApproved === "true" || isApproved === true;
+    
+    if (isApprovedBool) {
+      // If true, strictly match records where isApprove is true
+      filters.isApproved = true; 
+    } else {
+      // If false, match records where isApprove is explicitly false OR doesn't exist at all
+      filters.isApproved = { $ne: true }; 
+    }
   }
 
   if (filters.userType !== "visitor" && filters.userType !== "service_user") {
@@ -185,6 +198,9 @@ const getAttendanceFromDB = async (query: Record<string, unknown>) => {
     result,
   };
 };
+
+
+
 const getSingleAttendanceFromDB = async (id: string) => {
   const result = await Attendance.findById(id)
     .populate({
@@ -954,6 +970,10 @@ const updateAttendanceIntoDB = async (
 
   if (!attendance) {
     throw new AppError(httpStatus.NOT_FOUND, "Attendance not found");
+  }
+
+  if (payload.clockOut || payload.clockOutDate) {
+    payload.status = "clockout"; 
   }
 
   const result = await Attendance.findByIdAndUpdate(id, payload, {
