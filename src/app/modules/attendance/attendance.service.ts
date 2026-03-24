@@ -701,6 +701,7 @@ const createAttendanceIntoDB = async (
     );
   }
 
+  // Removed UTC to use the local server/moment timezone
   const now = moment();
   const todayDateStr = now.format("YYYY-MM-DD");
   const currentTimeOnly = now.format("HH:mm");
@@ -825,16 +826,17 @@ const createAttendanceIntoDB = async (
       }
 
       // ── CLOCK-IN TIME WINDOW CHECK (clock-out is NOT subject to this) ──
-      //   Employee may clock in starting 1 hour BEFORE shift startTime.
-      //   No upper bound — once the window opens, employee can clock in at any time.
       const validRotas = rotasWithTimes.filter((rota) => {
+        // Removed UTC
         const shiftStart = moment(
           `${todayDateStr} ${rota.startTime}`,
           "YYYY-MM-DD HH:mm",
+          true,
         );
-        let shiftEnd = moment(
+        const shiftEnd = moment(
           `${todayDateStr} ${rota.endTime}`,
           "YYYY-MM-DD HH:mm",
+          true,
         );
 
         // Handle overnight shifts (e.g. 22:00 → 06:00)
@@ -848,10 +850,6 @@ const createAttendanceIntoDB = async (
 
       // Guard: no rota window is currently open
       if (validRotas.length === 0) {
-        const rotaSummary = rotasWithTimes
-          .map((r) => `"${r.shiftName || "shift"}" (${r.startTime} – ${r.endTime})`)
-          .join(", ");
-
         throw new AppError(
           httpStatus.BAD_REQUEST,
           `No Shift found for today.`,
@@ -859,20 +857,13 @@ const createAttendanceIntoDB = async (
       }
 
       // ── AUTO-SELECT ROTA ──────────────────────────────────────────────
-      // Single valid rota → assign directly, no ambiguity
-      // Multiple valid rotas → pick the one whose startTime is closest to now
       let selectedRota = validRotas[0];
 
       if (validRotas.length > 1) {
         validRotas.sort((a, b) => {
-          const aStart = moment(
-            `${todayDateStr} ${a.startTime}`,
-            "YYYY-MM-DD HH:mm",
-          );
-          const bStart = moment(
-            `${todayDateStr} ${b.startTime}`,
-            "YYYY-MM-DD HH:mm",
-          );
+          // Removed UTC
+          const aStart = moment(`${todayDateStr} ${a.startTime}`, "YYYY-MM-DD HH:mm");
+          const bStart = moment(`${todayDateStr} ${b.startTime}`, "YYYY-MM-DD HH:mm");
           // Prefer the rota whose start is nearest (past or future) to now
           return (
             Math.abs(now.diff(aStart, "minutes")) -
@@ -895,7 +886,7 @@ const createAttendanceIntoDB = async (
       userType,
       companyId,
       visitReason,
-      rotaId: matchedRotaId, // undefined for non-employees / visitors
+      rotaId: matchedRotaId,
       date: shiftAssignedDate,
       clockIn: currentTimeOnly,
       clockInDate: todayDateStr,
@@ -928,6 +919,7 @@ const createAttendanceIntoDB = async (
       );
     }
 
+    // Removed UTC
     const clockInMoment = moment(
       `${activeAttendance.clockInDate} ${activeAttendance.clockIn}`,
       "YYYY-MM-DD HH:mm",
