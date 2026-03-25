@@ -903,8 +903,8 @@ const todayDateStr = now.format("YYYY-MM-DD");
       visitReason,
       rotaId: matchedRotaId,
       date: shiftAssignedDate,
-      clockIn:  currentTimeOnly,
-      clockInDate: todayDateStr,
+      clockIn:  currentIsoTime,
+      clockInDate: currentIsoTime,
       status: "clockin",
       source: source || "accessControl",
       clockType: clockType || "qr",
@@ -940,8 +940,8 @@ const todayDateStr = now.format("YYYY-MM-DD");
     const durationInMinutes = now.diff(clockInMoment, "minutes");
 
     
-    activeAttendance.clockOut = currentTimeOnly; 
-    activeAttendance.clockOutDate = todayDateStr; 
+    activeAttendance.clockOut = currentIsoTime; 
+    activeAttendance.clockOutDate = currentIsoTime; 
     activeAttendance.status = "clockout";
     activeAttendance.totalDuration = durationInMinutes > 0 ? durationInMinutes : 0;
 
