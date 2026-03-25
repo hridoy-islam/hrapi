@@ -323,7 +323,7 @@ const getCompanyEmployeesLatestAttendance = async (
   };
 };
 
-export const getCompanyServiceUsersLatestAttendance = async (
+const getCompanyServiceUsersLatestAttendance = async (
   query: Record<string, unknown>,
 ) => {
   const { companyId, page = 1, limit = 10, searchTerm } = query;
@@ -333,13 +333,11 @@ export const getCompanyServiceUsersLatestAttendance = async (
   }
 
   // 1. Build ServiceUser Match Query
-  // FIX: Changed `company` to `companyId`
   const serviceUserMatch: any = {
     companyId: new Types.ObjectId(companyId as string),
   };
 
   if (searchTerm) {
-    // FIX: Changed firstName/lastName to `name`, added phone just in case
     serviceUserMatch.$or = [
       { name: { $regex: searchTerm, $options: "i" } },
       { email: { $regex: searchTerm, $options: "i" } },
@@ -383,45 +381,46 @@ export const getCompanyServiceUsersLatestAttendance = async (
     },
   ]);
 
-  // Create a lookup map
+  // 4. Create a lookup map
   const attendanceMap = new Map();
   latestAttendances.forEach((record) => {
     attendanceMap.set(record._id.toString(), record);
   });
 
-  // 4. Merge Data AND filter for 'clockin' only
-  const clockedInServiceUsers = serviceUsers.reduce((acc: any[], user) => {
+  // 5. Merge Data - include ALL service users with active/inactive status
+  const allServiceUsers = serviceUsers.map((user: any) => {
     const attendanceInfo = attendanceMap.get(user._id.toString());
 
-    // Check if the service user's latest status is exactly "clockin"
-    if (attendanceInfo && attendanceInfo.latestStatus === "clockin") {
-      acc.push({
-        ...user,
-        latestAttendance: attendanceInfo,
-      });
+    let status = "inactive"; // default if no attendance record
+    if (attendanceInfo) {
+      status = attendanceInfo.latestStatus === "clockin" ? "active" : "inactive";
     }
-    return acc;
-  }, []);
 
-  // 5. Apply Pagination
+    return {
+      ...user,
+      status,
+      latestAttendance: attendanceInfo || null,
+    };
+  });
+
+  // 6. Apply Pagination
   const pageNumber = Number(page);
   const limitNumber = limit === "all" ? 0 : Number(limit);
   const skip = (pageNumber - 1) * limitNumber;
 
-  const totalClockedIn = clockedInServiceUsers.length;
+  const total = allServiceUsers.length;
 
   const paginatedResult =
     limitNumber === 0
-      ? clockedInServiceUsers
-      : clockedInServiceUsers.slice(skip, skip + limitNumber);
+      ? allServiceUsers
+      : allServiceUsers.slice(skip, skip + limitNumber);
 
   return {
     meta: {
       page: pageNumber,
-      limit: limitNumber === 0 ? totalClockedIn : limitNumber,
-      total: totalClockedIn,
-      totalPage:
-        limitNumber === 0 ? 1 : Math.ceil(totalClockedIn / limitNumber),
+      limit: limitNumber === 0 ? total : limitNumber,
+      total,
+      totalPage: limitNumber === 0 ? 1 : Math.ceil(total / limitNumber),
     },
     result: paginatedResult,
   };
