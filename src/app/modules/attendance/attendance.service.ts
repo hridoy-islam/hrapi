@@ -53,12 +53,9 @@ const getAttendanceFromDB = async (query: Record<string, unknown>) => {
 
   if (isApproved !== undefined) {
     const isApprovedBool = isApproved === "true" || isApproved === true;
-
     if (isApprovedBool) {
-      // If true, strictly match records where isApprove is true
       filters.isApproved = true;
     } else {
-      // If false, match records where isApprove is explicitly false OR doesn't exist at all
       filters.isApproved = { $ne: true };
     }
   }
@@ -70,9 +67,7 @@ const getAttendanceFromDB = async (query: Record<string, unknown>) => {
     if (companyId)
       listUserFilter.company = new Types.ObjectId(companyId as string);
     if (designationId)
-      listUserFilter.designationId = new Types.ObjectId(
-        designationId as string,
-      );
+      listUserFilter.designationId = new Types.ObjectId(designationId as string);
     if (departmentId)
       listUserFilter.departmentId = new Types.ObjectId(departmentId as string);
     if (userId) listUserFilter._id = new Types.ObjectId(userId as string);
@@ -91,16 +86,11 @@ const getAttendanceFromDB = async (query: Record<string, unknown>) => {
     }
 
     if (departmentId) {
-      // Find all Rotas that belong to this department
       const matchedRotas = await Rota.find({
         departmentId: new Types.ObjectId(departmentId as string),
       }).select("_id");
 
       const matchedRotaIds = matchedRotas.map((r: any) => r._id);
-
-      // Add these valid Rota IDs to our main attendance filter
-      // If a specific userId was passed, `filters.userId` is already set above,
-      // creating a natural "AND" condition in MongoDB.
       filters.rotaId = { $in: matchedRotaIds };
     }
   }
@@ -125,8 +115,7 @@ const getAttendanceFromDB = async (query: Record<string, unknown>) => {
     Attendance.find()
       .populate({
         path: "userId",
-        select:
-          "name firstName lastName email phone designationId departmentId employeeId",
+        select: "name firstName lastName email phone designationId departmentId employeeId",
         populate: [
           { path: "designationId", select: "title" },
           { path: "departmentId", select: "departmentName" },
@@ -152,30 +141,35 @@ const getAttendanceFromDB = async (query: Record<string, unknown>) => {
     .fields();
 
   // =========================================================
-  // 3. Handle Date Filters
+  // 3. Handle Date Filters (UPDATED FOR ISO STRINGS)
   // =========================================================
-  // Must apply dates BEFORE getting the total count!
   if (month && year) {
-    const startString = `${year}-${month}-01`;
-    const endOfMonthString = moment(startString, "YYYY-MM-DD")
+    // Force the boundaries to cover the entire start and end days
+    const startString = moment(`${year}-${month}-01`, "YYYY-MM-DD")
+      .startOf("month")
+      .format("YYYY-MM-DDTHH:mm:ss.SSS[Z]");
+    const endOfMonthString = moment(`${year}-${month}-01`, "YYYY-MM-DD")
       .endOf("month")
-      .format("YYYY-MM-DD");
+      .format("YYYY-MM-DDTHH:mm:ss.SSS[Z]");
 
     attendanceQuery.modelQuery
       .where("clockInDate")
       .gte(startString as any)
       .lte(endOfMonthString as any);
   } else if (fromDate && toDate) {
+    // Append time to properly encapsulate the full date range
+    const startISO = `${fromDate}T00:00:00.000Z`;
+    const endISO = `${toDate}T23:59:59.999Z`;
+
     attendanceQuery.modelQuery
       .where("clockInDate")
-      .gte(fromDate as any)
-      .lte(toDate as any);
+      .gte(startISO as any)
+      .lte(endISO as any);
   }
 
   // =========================================================
   // 4. Calculate True Total Count
   // =========================================================
-  // Get the combined filters from the query builder and custom date additions
   const currentFilters = attendanceQuery.modelQuery.getFilter();
   const total = await Attendance.countDocuments(currentFilters);
 
@@ -192,7 +186,7 @@ const getAttendanceFromDB = async (query: Record<string, unknown>) => {
     meta: {
       page: pageNumber,
       limit: isUnlimited ? total : limitNumber,
-      total: total, // Now represents the actual DB count
+      total: total,
       totalPage: isUnlimited ? 1 : Math.ceil(total / (limitNumber || 1)),
     },
     result,
