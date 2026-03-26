@@ -14,35 +14,42 @@ import { Leave } from "../leave/leave.model";
 const HOURS_PER_DAY = 8;
 
 
-const calculateHolidayHours = async (userId:any) => {
-  // Get the current year using Moment
-  const currentYear = moment().year();
-  const startOfYear = moment().startOf('year').toDate();
-  const endOfYear = moment().endOf('year').toDate();
+const calculateHolidayHours = async (userId: any) => {
+  // 1. Define the Time Range (Formatting to match your DB's ISO format)
+  const startOfYear = moment().startOf('year').toISOString();
+  const endOfYear = moment().endOf('year').toISOString();
 
-  // Get all attendance records for the user in the current year
+  // 2. Fetch Records 
   const attendances = await Attendance.find({
     userId,
-    clockIn: { $gte: startOfYear, $lte: endOfYear },
-    clockOut: { $exists: true, $ne: null } // Only records with clockOut
+    isApproved: true, // <-- NEW: Only calculate for approved shifts
+    clockInDate: { $gte: startOfYear, $lte: endOfYear },
+    clockOut: { $exists: true, $ne: null } // Ensure they actually clocked out
   });
 
-  // Calculate total worked hours in milliseconds
   let totalDurationMs = 0;
-  
+
+  // 3. Calculate Duration using the EXACT TIME fields
   attendances.forEach(attendance => {
-    const clockIn = moment((attendance as any).clockIn);
-    const clockOut = moment((attendance as any).clockOut);
-    totalDurationMs += clockOut.diff(clockIn); // Difference in milliseconds
+    // We use clockIn and clockOut here because they contain the actual hours/minutes
+    const clockInTime = moment(attendance.clockIn);
+    const clockOutTime = moment(attendance.clockOut);
+
+    if (clockInTime.isValid() && clockOutTime.isValid()) {
+      const diff = clockOutTime.diff(clockInTime);
+      
+      // Add to total, ensuring we don't accidentally add negative time if data is messy
+      totalDurationMs += diff > 0 ? diff : 0; 
+    }
   });
 
-  // Convert milliseconds to hours
+  // 4. Convert and Accrue
   const totalHoursWorked = totalDurationMs / (1000 * 60 * 60);
   
-  // Calculate holiday hours (11.2% of total hours worked)
-  const holidayHours = totalHoursWorked * 0.112;
+  // The 12.07% multiplier, rounded to 2 decimal places
+  const holidayHours = Number((totalHoursWorked * 0.1207).toFixed(2));
 
-  // Update user's holiday totalHours field
+  // 5. Update User Record
   await User.findByIdAndUpdate(userId, { 
     $set: { 'holiday.totalHours': holidayHours } 
   });
@@ -87,7 +94,112 @@ export const generateAnnualHolidayForAllUsers = async () => {
   console.log(`✅ Holiday records generated for year ${year}`);
 };
 
+// const getAllHolidayFromDB = async (query: Record<string, unknown>) => {
+//   const userQuery = new QueryBuilder(Holiday.find(), query)
+//     .search(HolidaySearchableFields)
+//     .filter(query)
+//     .sort()
+//     .paginate()
+//     .fields();
+
+//   const meta = await userQuery.countTotal();
+//   let result = await userQuery.modelQuery;
+
+//   const userId = query.userId as string | undefined;
+//   const year = (query.year as string) || getHolidayYearRange();
+
+//   if (userId) {
+//     try {
+//       // Step 1: Find the user
+//       const user = await User.findById(userId);
+//       if (!user) {
+//         throw new Error(`User with ID ${userId} not found`);
+//       }
+
+//       // Step 2: Get or create holiday record
+//       let holidayRecord = await Holiday.findOne({ userId, year });
+
+//       if (!holidayRecord) {
+//         const contractHours = Number(user.contractHours) || 0;
+//         const holidayAllowance = contractHours * 5.6;
+
+//         holidayRecord = await Holiday.create({
+//           userId: user._id,
+//           year,
+//           holidayAllowance,
+//           holidayAccured: 0,
+//           usedHours: 0,
+//           requestedHours: 0,
+//           remainingHours: holidayAllowance,
+//           unpaidLeaveTaken: 0,
+//           unpaidLeaveRequest: 0,
+//           hoursPerDay: 8,
+//         });
+
+//       }
+
+//       // Step 3: Recalculate holidayAccured (your custom logic)
+//       const calculatedAccruedHours = await calculateHolidayHours(userId);
+//       const contractHours = Number(user.contractHours) || 0;
+//       const holidayAllowance = contractHours * 5.6;
+
+//       // ✅ Step 4: Calculate usedHours from approved paid leaves
+
+//       const approvedLeaves = await Leave.find({
+//         userId: new Types.ObjectId(userId),
+//         holidayYear: { $regex: new RegExp(year.split('-').join('|'), 'i') }, // Flexible year match
+//         status: { $in: ['approved', 'Approved', 'APPROVED'] }, // Case-tolerant
+//         leaveType: { $in: ['paid', null, ''] }, // Include if not set or paid
+//       });
+
+
+//       let usedHours = 0;
+//       approvedLeaves.forEach((leave, idx) => {
+//         const hours = leave.totalHours || 0;
+//         usedHours += hours;
+//       });
+
+//       // ✅ Step 5: Calculate requestedHours from pending paid leaves
+//       const pendingLeaves = await Leave.find({
+//         userId: new Types.ObjectId(userId),
+//         holidayYear: { $regex: new RegExp(year.split('-').join('|'), 'i') },
+//         status: 'pending',
+//         leaveType: { $in: ['paid', null, ''] },
+//       });
+
+//       const requestedHours = pendingLeaves.reduce((sum, l) => sum + (l.totalHours || 0), 0);
+
+
+//       // ✅ Step 6: Update Holiday record
+//       const updatedHoliday = await Holiday.findOneAndUpdate(
+//         { userId, year },
+//         {
+//           $set: {
+//             holidayAllowance,
+//             holidayAccured: calculatedAccruedHours,
+//             usedHours,
+//             requestedHours,
+//             remainingHours: holidayAllowance - usedHours,
+//           },
+//         },
+//         { new: true, upsert: false }
+//       );
+
+
+//       // Step 7: Refetch result
+//       result = await Holiday.find({ userId, year });
+//     } catch (error) {
+//       console.error('❌ Error in getAllHolidayFromDB:', error);
+//     }
+//   }
+
+//   return { meta, result };
+// };
+
+
+
 const getAllHolidayFromDB = async (query: Record<string, unknown>) => {
+  // 1. Setup the standard QueryBuilder for listing holidays
   const userQuery = new QueryBuilder(Holiday.find(), query)
     .search(HolidaySearchableFields)
     .filter(query)
@@ -101,93 +213,119 @@ const getAllHolidayFromDB = async (query: Record<string, unknown>) => {
   const userId = query.userId as string | undefined;
   const year = (query.year as string) || getHolidayYearRange();
 
+  // 2. If a specific userId is queried, recalculate their exact balances
   if (userId) {
     try {
-      // Step 1: Find the user
+      // Step A: Find the user
       const user = await User.findById(userId);
       if (!user) {
         throw new Error(`User with ID ${userId} not found`);
       }
 
-      // Step 2: Get or create holiday record
+      // Step B: Get or create the initial holiday record
       let holidayRecord = await Holiday.findOne({ userId, year });
-
+      
       if (!holidayRecord) {
+        // Only calculate allowance if the record DOES NOT exist
         const contractHours = Number(user.contractHours) || 0;
-        const holidayAllowance = contractHours * 5.6;
-
+        const initialHolidayAllowance = Math.floor(contractHours * 5.6);        
         holidayRecord = await Holiday.create({
           userId: user._id,
           year,
-          holidayAllowance,
+          holidayAllowance: initialHolidayAllowance,
           holidayAccured: 0,
           usedHours: 0,
+          bookedHours: 0,
           requestedHours: 0,
-          remainingHours: holidayAllowance,
+          remainingHours: initialHolidayAllowance,
           unpaidLeaveTaken: 0,
+          unpaidBookedHours: 0,
           unpaidLeaveRequest: 0,
           hoursPerDay: 8,
         });
-
       }
 
-      // Step 3: Recalculate holidayAccured (your custom logic)
+      // Step C: Recalculate holidayAccured based on actual attendance
       const calculatedAccruedHours = await calculateHolidayHours(userId);
-      const contractHours = Number(user.contractHours) || 0;
-      const holidayAllowance = contractHours * 5.6;
 
-      // ✅ Step 4: Calculate usedHours from approved paid leaves
-
-      const approvedLeaves = await Leave.find({
+      // Step D: Fetch ALL leaves for this user in this holiday year
+      const allLeaves = await Leave.find({
         userId: new Types.ObjectId(userId),
-        holidayYear: { $regex: new RegExp(year.split('-').join('|'), 'i') }, // Flexible year match
-        status: { $in: ['approved', 'Approved', 'APPROVED'] }, // Case-tolerant
-        leaveType: { $in: ['paid', null, ''] }, // Include if not set or paid
+        holidayYear: { $regex: new RegExp(year.split('-').join('|'), 'i') } // Flexible year match
       });
 
-
+      // Step E: Initialize fresh counters
       let usedHours = 0;
-      approvedLeaves.forEach((leave, idx) => {
-        const hours = leave.totalHours || 0;
-        usedHours += hours;
+      let bookedHours = 0;
+      let requestedHours = 0;
+      
+      let unpaidLeaveTaken = 0;
+      let unpaidBookedHours = 0;
+      let unpaidLeaveRequest = 0;
+
+      const now = moment();
+
+      // Step F: Iterate through every leave directly using totalHours
+      allLeaves.forEach(leave => {
+        const isApproved = leave.status.toLowerCase() === 'approved';
+        const isPending = leave.status.toLowerCase() === 'pending';
+        
+        const finalHours = leave.totalHours || 0;
+        const isPaid = leave.holidayType === 'holiday';
+        
+        // UPDATE: A leave is considered fully "taken" (used) when its end date has passed.
+        const isPast = moment(leave.endDate).isBefore(now, 'day');
+
+        if (finalHours <= 0) return;
+
+        if (isPending) {
+          if (isPaid) requestedHours += finalHours;
+          else unpaidLeaveRequest += finalHours;
+        } 
+        else if (isApproved) {
+          if (isPaid) {
+            // If Paid leave:
+            // Past (completed) goes to usedHours. Future/Ongoing goes to bookedHours.
+            if (isPast) usedHours += finalHours;
+            else bookedHours += finalHours;
+          } else {
+            // If Unpaid leave:
+            // Past (completed) goes to unpaidLeaveTaken. Future/Ongoing goes to unpaidBookedHours.
+            if (isPast) unpaidLeaveTaken += finalHours;
+            else unpaidBookedHours += finalHours;
+          }
+        }
       });
 
-      // ✅ Step 5: Calculate requestedHours from pending paid leaves
-      const pendingLeaves = await Leave.find({
-        userId: new Types.ObjectId(userId),
-        holidayYear: { $regex: new RegExp(year.split('-').join('|'), 'i') },
-        status: 'pending',
-        leaveType: { $in: ['paid', null, ''] },
-      });
-
-      const requestedHours = pendingLeaves.reduce((sum, l) => sum + (l.totalHours || 0), 0);
-
-
-      // ✅ Step 6: Update Holiday record
-      const updatedHoliday = await Holiday.findOneAndUpdate(
+      // Step G: Update the Holiday record with the perfectly calculated totals
+      await Holiday.findOneAndUpdate(
         { userId, year },
         {
           $set: {
-            holidayAllowance,
-            holidayAccured: calculatedAccruedHours,
+            holidayAccured: calculatedAccruedHours - (usedHours + bookedHours),
             usedHours,
+            bookedHours,
             requestedHours,
-            remainingHours: holidayAllowance - usedHours,
+            unpaidLeaveTaken,
+            unpaidBookedHours,
+            unpaidLeaveRequest,
+            remainingHours: calculatedAccruedHours - (usedHours + bookedHours),
           },
         },
         { new: true, upsert: false }
       );
 
-
-      // Step 7: Refetch result
+      // Step H: Refetch the single user's record so the API returns the freshest data
       result = await Holiday.find({ userId, year });
+      
     } catch (error) {
-      console.error('❌ Error in getAllHolidayFromDB:', error);
+      console.error('Error recalculating holiday stats in getAllHolidayFromDB:', error);
     }
   }
 
   return { meta, result };
 };
+
 const getSingleHolidayFromDB = async (id: string) => {
   const result = await Holiday.findById(id);
   return result;

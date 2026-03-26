@@ -10,18 +10,32 @@ const LeaveSchema = new Schema(
     companyId: { type: Types.ObjectId, ref: "User", required: true },
     startDate: { type: Date, required: true },
     endDate: { type: Date, required: true },
-    reason: { type: String,  },
+    reason: { type: String },
     status: {
       type: String,
       enum: ["pending", "approved", "rejected"],
       default: "pending",
     },
-    holidayType: { type: String },
-    totalDays: { type: Number }, // calculated
-    totalHours: { type: Number }, // calculated
-    leaveType:{type: String, enum: ["paid", "unpaid"]},
+    holidayType: {
+      type: String,
+      enum: ["holiday", "absence", "sick", "family"],
+      required: true
+    },
+    totalDays: { type: Number }, 
+    totalHours: { type: Number }, 
+    leaveDays: [
+      {
+        leaveDate: {
+          type: Date,
+        },
+        leaveType: {
+          type: String,
+          enum: ["paid", "unpaid", "dayoff"],
+        },
+      },
+    ],
   },
-  { timestamps: true }
+  { timestamps: true },
 );
 
 export const Leave = model("Leave", LeaveSchema);

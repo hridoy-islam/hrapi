@@ -1,4 +1,4 @@
 
   
-  export const LeaveSearchableFields = ["noticeType", "noticeDate", "status", "noticeDescription"];
+  export const LeaveSearchableFields = ["userId","startDate","endDate","status"];
   

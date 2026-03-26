@@ -8,9 +8,11 @@ const HolidaySchema: Schema = new Schema(
     holidayAllowance: { type: Number, default: 0 },
     holidayAccured: { type: Number, default: 0 },
     usedHours: { type: Number, default: 0 },
+    bookedHours: { type: Number, default: 0 },
     requestedHours: { type: Number, default: 0 },
     remainingHours: { type: Number, default: 0 },
     unpaidLeaveTaken: { type: Number, default: 0 },
+    unpaidBookedHours: { type: Number, default: 0 },
     unpaidLeaveRequest: { type: Number, default: 0 },
 
     hoursPerDay: { type: Number, default: 8 },
