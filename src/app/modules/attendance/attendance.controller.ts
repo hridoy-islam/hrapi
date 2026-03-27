@@ -29,7 +29,16 @@ const getSingleAttendance = catchAsync(async (req, res) => {
 
 const updateAttendance = catchAsync(async (req, res) => {
   const { id } = req.params;
-  const result = await AttendanceServices.updateAttendanceIntoDB(id, req.body);
+  
+  const { actionUserId, ...payload } = req.body;
+
+  // Pass id, payload, and actionUserId to the service
+  const result = await AttendanceServices.updateAttendanceIntoDB(
+    id, 
+    payload, 
+    actionUserId
+  );
+
   sendResponse(res, {
     statusCode: httpStatus.OK,
     success: true,
@@ -37,7 +46,6 @@ const updateAttendance = catchAsync(async (req, res) => {
     data: result,
   });
 });
-
 
 
 const createAttendance = catchAsync(async (req, res) => {

@@ -2,6 +2,7 @@ export const USER_ROLE = {
   user: "user",
   admin: "admin",
   company: "company",
+  companyAdmin: "companyAdmin",
   creator: "creator",
   director: "director",
   employee: "employee",

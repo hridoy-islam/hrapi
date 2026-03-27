@@ -7,23 +7,23 @@ import auth from "../../middlewares/auth";
 const router = express.Router();
 router.get(
   "/",
-  auth("admin", "company"),
+  auth("admin", "company","companyAdmin"),
   ScheduleCheckControllers.getAllScheduleCheck
 );
 router.get(
   "/:id",
-  auth("admin", "company"),
+  auth("admin", "company","companyAdmin"),
 ScheduleCheckControllers.getSingleScheduleCheck
 );
 router.post(
   "/",
-  auth("admin", "company"),
+  auth("admin", "company","companyAdmin"),
 ScheduleCheckControllers.createScheduleCheck
 );
 
 router.patch(
   "/:id",
-  auth("admin", "company"),
+  auth("admin", "company","companyAdmin"),
 ScheduleCheckControllers.updateScheduleCheck
 );
 

@@ -951,21 +951,92 @@ const todayDateStr = now.format("YYYY-MM-DD");
   }
 };
 
-const updateAttendanceIntoDB = async (
+// const updateAttendanceIntoDB = async (
+//   id: string,
+//   payload: Partial<TAttendance>,
+// ) => {
+//   const attendance = await Attendance.findById(id);
+
+//   if (!attendance) {
+//     throw new AppError(httpStatus.NOT_FOUND, "Attendance not found");
+//   }
+
+//   if (payload.clockOut || payload.clockOutDate) {
+//     payload.status = "clockout";
+//   }
+
+//   const result = await Attendance.findByIdAndUpdate(id, payload, {
+//     new: true,
+//     runValidators: true,
+//   });
+
+//   return result;
+// };
+
+
+export const updateAttendanceIntoDB = async (
   id: string,
   payload: Partial<TAttendance>,
+  actionUserId: string // Pass the ID of the user performing this update (e.g., from req.user)
 ) => {
+  // 1. Fetch the existing attendance record
   const attendance = await Attendance.findById(id);
 
   if (!attendance) {
     throw new AppError(httpStatus.NOT_FOUND, "Attendance not found");
   }
 
+  // 2. Fetch the user performing the action to get their name
+  const actionUser = await User.findById(actionUserId);
+  if (!actionUser) {
+    throw new AppError(httpStatus.NOT_FOUND, "Action user not found");
+  }
+
+  // Format the user's name (checks for 'name' first, falls back to firstName + lastName)
+  const userName = actionUser.name || `${actionUser.firstName} ${actionUser.lastName}`.trim();
+
+  
+  const newHistoryEntries = [];
+
+  // 3. Condition 1: Check if 'isApproved' is being updated to true
+  if (payload.isApproved === true && attendance.isApproved !== true) {
+    newHistoryEntries.push({
+      message: `${userName} Approved the attendance at `,
+      userId: actionUserId,
+    });
+  }
+
+  // 4. Condition 2: Check if any clocking fields are being updated (reconciled)
+  const isReconciled =
+    (payload.clockIn && payload.clockIn !== attendance.clockIn) ||
+    (payload.clockInDate && payload.clockInDate !== attendance.clockInDate) ||
+    (payload.clockOut && payload.clockOut !== attendance.clockOut) ||
+    (payload.clockOutDate && payload.clockOutDate !== attendance.clockOutDate);
+
+  if (isReconciled) {
+    newHistoryEntries.push({
+      message: `${userName} reconcile the attenance at `,
+      userId: actionUserId, // The user making the reconciliation
+    });
+  }
+
+  // 5. Check clockOut status logic
   if (payload.clockOut || payload.clockOutDate) {
     payload.status = "clockout";
   }
 
-  const result = await Attendance.findByIdAndUpdate(id, payload, {
+  // 6. Build the update query dynamically
+  const updateQuery: any = {
+    $set: payload,
+  };
+
+  // If we generated any history messages, push them to the history array
+  if (newHistoryEntries.length > 0) {
+    updateQuery.$push = { history: { $each: newHistoryEntries } };
+  }
+
+  // 7. Execute the update
+  const result = await Attendance.findByIdAndUpdate(id, updateQuery, {
     new: true,
     runValidators: true,
   });

@@ -7,29 +7,29 @@ import auth from "../../middlewares/auth";
 const router = express.Router();
 router.get(
   "/",
-  auth("admin", "company", "creator", "user", "director"),
+  auth("admin", "company", "creator", "user", "director","companyAdmin"),
   SignatureDocControllers.getAllSignatureDoc
 );
 router.get(
   "/:id",
-  auth("admin", "user", "director", "company", "creator"),
+  auth("admin", "user", "director", "company", "creator","companyAdmin"),
 SignatureDocControllers.getSingleSignatureDoc
 );
 router.post(
   "/",
-  auth("admin", "user", "director", "company", "creator"),
+  auth("admin", "user", "director", "company", "creator","companyAdmin"),
 SignatureDocControllers.createSignatureDoc
 );
 
 router.patch(
   "/:id",
-  auth("admin", "user", "creator", "company", "director"),
+  auth("admin", "user", "creator", "company", "director","companyAdmin"),
 SignatureDocControllers.updateSignatureDoc
 );
 
 router.delete(
   "/:id",
-  auth("admin", "user", "creator", "company", "director"),
+  auth("admin", "user", "creator", "company", "director","companyAdmin"),
   SignatureDocControllers.deleteSignatureDoc
 );
 

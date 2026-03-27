@@ -18,16 +18,7 @@ const designationSchema = new Schema<TDesignation>(
       required: true,
       ref: "User",
     },
-    permissions: {
-      type: Map,
-      of: new mongoose.Schema({
-        canView: { type: Boolean, default: false },
-        canCreate: { type: Boolean, default: false },
-        canEdit: { type: Boolean, default: false },
-        canDelete: { type: Boolean, default: false },
-      }),
-      
-    }
+    
   },
   {
     timestamps: true,

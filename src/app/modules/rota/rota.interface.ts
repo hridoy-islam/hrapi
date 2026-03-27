@@ -13,5 +13,6 @@ export interface TRota {
   color: string;
   departmentId: Types.ObjectId;
   status: string;
-  attendanceLogs:any
+  attendanceLogs:any;
+  history:any
 }

@@ -19,16 +19,16 @@ router.get(
 
 router.patch(
   "/:id",
-  auth("admin", "user", "creator", "company", "director"),
+  auth("admin", "user", "creator", "company", "director","companyAdmin"),
   UserControllers.updateUser
 );
 
-router.patch('/addmember/:id/', auth('admin',  'creator', 'company', 'director'),UserControllers.assignUser);
+router.patch('/addmember/:id/', auth('admin',  'creator', 'company', 'director','companyAdmin'),UserControllers.assignUser);
 
 
 router.get(
   "/company/:userId",
-  auth("admin", "company", "creator", "user", "director"),
+  auth("admin", "company", "creator", "user", "director","companyAdmin"),
   UserControllers.getCompanyUser
 );
 

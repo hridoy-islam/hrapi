@@ -7,29 +7,29 @@ import auth from "../../middlewares/auth";
 const router = express.Router();
 router.get(
   "/",
-  auth("admin", "company", "creator", "user", "director"),
+  auth("admin", "company", "creator", "user", "director","companyAdmin"),
   CompanyBranchControllers.getAllCompanyBranch
 );
 router.get(
   "/:id",
-  auth("admin", "user", "director", "company", "creator"),
+  auth("admin", "user", "director", "company", "creator","companyAdmin"),
 CompanyBranchControllers.getSingleCompanyBranch
 );
 router.post(
   "/",
-  auth("admin", "user", "director", "company", "creator"),
+  auth("admin", "user", "director", "company", "creator","companyAdmin"),
 CompanyBranchControllers.createCompanyBranch
 );
 
 router.patch(
   "/:id",
-  auth("admin", "user", "creator", "company", "director"),
+  auth("admin", "user", "creator", "company", "director","companyAdmin"),
 CompanyBranchControllers.updateCompanyBranch
 );
 
 router.delete(
   "/:id",
-  auth("admin", "user", "creator", "company", "director"),
+  auth("admin", "user", "creator", "company", "director","companyAdmin"),
   CompanyBranchControllers.deleteCompanyBranch
 );
 

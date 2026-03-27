@@ -3,6 +3,22 @@ import { Schema, model } from "mongoose";
 import { TAttendance } from "./attendance.interface";
 import { string } from "zod";
 
+const historySchema = new Schema(
+  {
+    message: {
+      type: String,
+    },
+    userId: {
+      type: Schema.Types.ObjectId,
+      ref: "User",
+      required: true,
+    },
+  },
+  {
+    timestamps: true,
+  },
+);
+
 const attendanceSchema = new Schema<TAttendance>(
   {
     userId: {
@@ -24,8 +40,8 @@ const attendanceSchema = new Schema<TAttendance>(
     visitorPhone: {
       type: String,
     },
-    visitReason:{
-      type:String
+    visitReason: {
+      type: String,
     },
     userType: {
       type: String,
@@ -63,10 +79,11 @@ const attendanceSchema = new Schema<TAttendance>(
       type: Schema.Types.ObjectId,
       ref: "User",
     },
-    isApproved:{
-      type:Boolean,
-      default: false
-    }
+    isApproved: {
+      type: Boolean,
+      default: false,
+    },
+    history: [historySchema],
   },
   {
     timestamps: true,

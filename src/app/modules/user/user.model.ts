@@ -112,6 +112,24 @@ const departmentIndexSchema = new Schema({
   },
 });
 
+const ModulePermissionsSchema = new Schema({
+  access: { type: Boolean, default:true },
+  
+}, { _id: false });
+
+const CompanyPermissionsSchema = new Schema({
+  rota: { type: ModulePermissionsSchema},
+  vacancy: { type: ModulePermissionsSchema },
+  employee: { type: ModulePermissionsSchema },
+  leave: { type: ModulePermissionsSchema },
+  serviceUser: { type: ModulePermissionsSchema },
+  notice: { type: ModulePermissionsSchema },
+  payroll: { type: ModulePermissionsSchema },
+  attendance: { type: ModulePermissionsSchema },
+  setting: { type: ModulePermissionsSchema },
+ 
+}, { _id: false });
+
 const userSchema = new Schema<TUser, UserModel>(
   {
     name: { type: String },
@@ -129,7 +147,7 @@ const userSchema = new Schema<TUser, UserModel>(
     },
     role: {
       type: String,
-      enum: ["user", "admin", "company", "employee","attendance"],
+      enum: ["user", "admin", "company", "employee","attendance","companyAdmin"],
       default: "user",
     },
     image: {
@@ -144,6 +162,7 @@ const userSchema = new Schema<TUser, UserModel>(
       type: Schema.Types.ObjectId,
       ref: "User",
     },
+    companyAccess:{type:CompanyPermissionsSchema},
     colleagues: [
       {
         type: Schema.Types.ObjectId,
@@ -383,6 +402,23 @@ userSchema.pre("save", async function (next) {
       user.password,
       Number(config.bcrypt_salt_rounds)
     );
+  }
+  if (user.role === "companyAdmin") {
+    if (!user.companyAccess) {
+      user.companyAccess = {
+        rota: { access: true },
+        vacancy: { access: true },
+        employee: { access: true },
+        leave: { access: true },
+        serviceUser: { access: true },
+        notice: { access: true },
+        payroll: { access: true },
+        attendance: { access: true },
+        setting: { access: true },
+      };
+    }
+  } else {
+    user.companyAccess = undefined;
   }
   next();
 });

@@ -1,7 +1,21 @@
 import { Schema, model } from "mongoose";
 import { TRota } from "./rota.interface";
 
-
+const historySchema = new Schema(
+  {
+    message: {
+      type: String,
+    },
+    userId: {
+      type: Schema.Types.ObjectId,
+      ref: "User",
+      required: true,
+    },
+  },
+  {
+    timestamps: true,
+  },
+);
 
 const RotaSchema = new Schema<TRota>(
   {
@@ -59,10 +73,10 @@ const RotaSchema = new Schema<TRota>(
     status: {
       type: String,
       enum: ["pending", "publish", "completed"],
-      default:'pending'
+      default: "pending",
     },
 
-   
+    history: [historySchema],
   },
   {
     timestamps: true,

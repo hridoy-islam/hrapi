@@ -7,12 +7,12 @@ import auth from "../../middlewares/auth";
 const router = express.Router();
 router.get(
   "/",
-  auth("admin", "company"),
+  auth("admin", "company","companyAdmin"),
   CompanyReportControllers.getAllCompanyReport
 );
 router.get(
   "/:id",
-  auth("admin", "company"),
+  auth("admin", "company","companyAdmin"),
 CompanyReportControllers.getSingleCompanyReport
 );
 router.post(

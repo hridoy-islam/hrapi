@@ -41,4 +41,5 @@ export interface TAttendance {
 
   createdAt?: Date;
   updatedAt?: Date;
+  history?:any
 }

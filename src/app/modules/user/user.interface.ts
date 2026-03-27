@@ -41,9 +41,10 @@ export interface TUser {
   _id: Types.ObjectId;
   name: string;
   email: string;
+  companyAccess:any;
   password: string;
   themeColor?: string;
-  role: "user" | "admin" | "company" | "creator" | "director";
+  role: string;
   status: "block" | "active";
   company?: Types.ObjectId;
   colleagues?: Types.ObjectId[];
