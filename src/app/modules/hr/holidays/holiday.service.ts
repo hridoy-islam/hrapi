@@ -285,9 +285,9 @@ function getHolidayYearRange(): string {
 
 const getAllHolidayFromDB = async (query: Record<string, unknown>) => {
   const userQuery = new QueryBuilder(Holiday.find().populate({
-  path: "userId",
-  select: "firstName lastName email name",
-}), query)
+    path: "userId",
+    select: "firstName lastName email name",
+  }), query)
     .search(HolidaySearchableFields)
     .filter(query)
     .sort()
@@ -311,6 +311,9 @@ const getAllHolidayFromDB = async (query: Record<string, unknown>) => {
       }).select('_id contractHours name firstName lastName email image');
 
       if (!employees.length) return { meta, result: [] };
+
+      // 1. Map the employee IDs for filtering later
+      const employeeIds = employees.map(emp => emp._id);
 
       const recalculatedResults = await Promise.all(
         employees.map(async (employee) => {
@@ -342,8 +345,13 @@ const getAllHolidayFromDB = async (query: Record<string, unknown>) => {
         })
       );
 
-result = await Holiday.find({ year })
-  .populate("userId", "firstName lastName email name")    } catch (error) {
+      // 🔥 FIX: Add userId: { $in: employeeIds } to scope it to ONLY this company
+      result = await Holiday.find({ 
+        year, 
+        userId: { $in: employeeIds } 
+      }).populate("userId", "firstName lastName email name");
+
+    } catch (error) {
       console.error('Error recalculating holiday stats for company:', error);
     }
 
@@ -382,8 +390,9 @@ result = await Holiday.find({ year })
       // ✅ Recalculate scoped to THIS year only
       await recalculateUserHoliday(userId, year);
 
-result = await Holiday.find({ userId, year })
-  .populate("userId", "firstName lastName email name");    } catch (error) {
+      result = await Holiday.find({ userId, year })
+        .populate("userId", "firstName lastName email name"); 
+    } catch (error) {
       console.error('Error recalculating holiday stats for user:', error);
     }
   }
