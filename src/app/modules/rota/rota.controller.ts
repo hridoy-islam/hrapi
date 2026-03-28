@@ -1,12 +1,9 @@
 import { RequestHandler } from "express";
-;
 import httpStatus from "http-status";
-
 
 import catchAsync from "../../utils/catchAsync";
 import sendResponse from "../../utils/sendResponse";
 import { RotaServices } from "./rota.service";
-
 
 const getAllRota: RequestHandler = catchAsync(async (req, res) => {
   const result = await RotaServices.getAllRotaFromDB(req.query);
@@ -48,10 +45,11 @@ const getSingleRota = catchAsync(async (req, res) => {
   });
 });
 
-
 const updateRota = catchAsync(async (req, res) => {
   const { id } = req.params;
-  const result = await RotaServices.updateRotaIntoDB(id, req.body);
+
+  const { actionUserId, ...payload } = req.body;
+  const result = await RotaServices.updateRotaIntoDB(id, payload, actionUserId);
   sendResponse(res, {
     statusCode: httpStatus.OK,
     success: true,
@@ -61,8 +59,7 @@ const updateRota = catchAsync(async (req, res) => {
 });
 
 const createRota = catchAsync(async (req, res) => {
-  
-  const result = await RotaServices.createRotaIntoDB( req.body);
+  const result = await RotaServices.createRotaIntoDB(req.body);
   sendResponse(res, {
     statusCode: httpStatus.OK,
     success: true,
@@ -81,8 +78,6 @@ const deleteRota = catchAsync(async (req, res) => {
     data: result,
   });
 });
-
-
 
 const copyRota = catchAsync(async (req, res) => {
   const result = await RotaServices.copyRotaIntoDB(req.body);
@@ -104,8 +99,6 @@ const bulkAssignRota = catchAsync(async (req, res) => {
   });
 });
 
-
-
 export const RotaControllers = {
   getAllRota,
   getSingleRota,
@@ -117,4 +110,3 @@ export const RotaControllers = {
   getUpcomingRota,
   getAttendance,
 };
-

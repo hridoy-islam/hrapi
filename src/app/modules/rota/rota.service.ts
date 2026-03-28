@@ -12,27 +12,29 @@ import moment from 'moment-timezone';
 moment.tz.setDefault('Europe/London');
 
 const getAllRotaFromDB = async (query: Record<string, unknown>) => {
-  const { startDate, endDate, ...restQuery } = query;
+  const { startDate, endDate, attendanceDate, ...restQuery } = query;
 
   const dateFilter: Record<string, any> = {};
-  
-  if (startDate || endDate) {
+
+  // ✅ PRIORITY: attendanceDate exact match
+  if (attendanceDate) {
+    dateFilter.startDate = attendanceDate; 
+  } 
+  // ✅ Otherwise fallback to range filter
+  else if (startDate || endDate) {
     dateFilter.startDate = {};
     if (startDate) dateFilter.startDate.$gte = startDate;
     if (endDate) dateFilter.startDate.$lte = endDate;
   }
 
-  const userQuery = new QueryBuilder(Rota.find(dateFilter), restQuery)
+  const userQuery = new QueryBuilder(Rota.find(dateFilter).populate("departmentId"), restQuery)
     .search(RotaSearchableFields)
-    .filter(restQuery) 
+    .filter(restQuery)
     .sort()
     .paginate()
     .fields();
 
   const meta = await userQuery.countTotal();
-  
-
-  // const result = await userQuery.modelQuery.populate('shiftId').populate('employeeId');
   const result = await userQuery.modelQuery;
 
   return {
@@ -65,22 +67,95 @@ const createRotaIntoDB = async (payload: TRota) => {
   };
 
 
-const updateRotaIntoDB = async (id: string, payload: Partial<TRota>) => {
+// const updateRotaIntoDB = async (id: string, payload: Partial<TRota>) => {
+//   const rota = await Rota.findById(id);
+
+//   if (!rota) {
+//     throw new AppError(httpStatus.NOT_FOUND, "Rota not found");
+//   }
+
+  
+//   // Update only the selected user
+//   const result = await Rota.findByIdAndUpdate(id, payload, {
+//     new: true,
+//     runValidators: true,
+//   });
+
+//   return result;
+// };
+
+
+
+export const updateRotaIntoDB = async (
+  id: string,
+  payload: Partial<TRota>,
+  actionUserId: string 
+) => {
+  // 1. Fetch the existing rota record
   const rota = await Rota.findById(id);
 
   if (!rota) {
     throw new AppError(httpStatus.NOT_FOUND, "Rota not found");
   }
 
-  
-  // Update only the selected user
-  const result = await Rota.findByIdAndUpdate(id, payload, {
+  // 2. Fetch the user performing the action to get their name
+  const actionUser = await User.findById(actionUserId);
+  if (!actionUser) {
+    throw new AppError(httpStatus.NOT_FOUND, "Action user not found");
+  }
+
+  // Format the user's name (checks for 'name' first, falls back to firstName + lastName)
+  const userName = actionUser.name || `${actionUser.firstName} ${actionUser.lastName}`.trim();
+
+  const newHistoryEntries = [];
+
+  // 3. Condition 1: Check if 'status' is being updated to 'publish'
+  if (payload.status === "publish" && rota.status !== "publish") {
+    newHistoryEntries.push({
+      message: `${userName} Published the rota at`,
+      userId: actionUserId,
+    });
+  }
+
+
+
+  // 4. Condition 2: Check if any core shift fields are being updated
+  const isShiftUpdated =
+    (payload.startTime !== undefined && payload.startTime !== rota.startTime) ||
+    (payload.endTime !== undefined && payload.endTime !== rota.endTime) ||
+    (payload.startDate !== undefined && payload.startDate !== rota.startDate) ||
+    (payload.endDate !== undefined && payload.endDate !== rota.endDate) ||
+    (payload.shiftName !== undefined && payload.shiftName !== rota.shiftName) ||
+    (payload.leaveType !== undefined && payload.leaveType !== rota.leaveType) ||
+    (payload.color !== undefined && payload.color !== rota.color) ||
+    (payload.employeeId !== undefined && payload.employeeId.toString() !== rota.employeeId.toString());
+
+  if (isShiftUpdated) {
+    newHistoryEntries.push({
+      message: `${userName} updated the rota details at`,
+      userId: actionUserId, 
+    });
+  }
+
+  // 5. Build the update query dynamically
+  const updateQuery: any = {
+    $set: payload,
+  };
+
+  // If we generated any history messages, push them to the history array
+  if (newHistoryEntries.length > 0) {
+    updateQuery.$push = { history: { $each: newHistoryEntries } };
+  }
+
+  // 6. Execute the update
+  const result = await Rota.findByIdAndUpdate(id, updateQuery, {
     new: true,
     runValidators: true,
   });
 
   return result;
 };
+
 
 const getUpcomingRotaFromDB = async (query: Record<string, unknown>) => {
   const { ...restQuery } = query;
@@ -413,7 +488,7 @@ const copyRotaIntoDB = async (payload: {
     }
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unused-vars
-    const { _id,status, createdAt, updatedAt, __v, ...restRotaData } = rota as any;
+    const { _id,status, createdAt,history, updatedAt, __v, ...restRotaData } = rota as any;
 
     rotasToCreate.push({
       ...restRotaData,

@@ -5,7 +5,9 @@ const HolidaySchema: Schema = new Schema(
   {
     userId: { type: Schema.Types.ObjectId, ref: "User", required: true },
     year: { type: String, required: true },
-    holidayAllowance: { type: Number, default: 0 },
+    carryForward: { type: Number, default: 0 },
+    holidayEntitlement: { type: Number, default: 210 },
+    holidayAllowance: { type: Number, default:  210 },
     holidayAccured: { type: Number, default: 0 },
     usedHours: { type: Number, default: 0 },
     bookedHours: { type: Number, default: 0 },

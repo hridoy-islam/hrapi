@@ -6,6 +6,8 @@ export interface THoliday extends Document {
   year: string; 
 
   holidayAllowance: number;
+  holidayEntitlement: number;
+  carryForward: number;
   holidayAccured: number;
 
   usedHours: number;

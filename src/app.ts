@@ -10,7 +10,6 @@ import notFound from "./app/middlewares/notFound";
 import router from "./app/routes";
 import cron from "node-cron";
 
-import { generateAnnualHolidayForAllUsers } from "./app/modules/hr/holidays/holiday.service";
 const app: Application = express();
 const Pusher = require("pusher");
 
@@ -62,10 +61,6 @@ app.use(
   })
 );
 
-cron.schedule("0 0 1 1 *", async () => {
-  console.log("🎉 Starting to generate holiday records for all users...");
-  await generateAnnualHolidayForAllUsers();
-});
 
 
 // application routes

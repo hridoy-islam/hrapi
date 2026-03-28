@@ -480,14 +480,15 @@ const getCompanyVisitorsLatestAttendance = async (
   };
 };
 
+
 // const createAttendanceIntoDB = async (
-//   payload: Partial<TAttendance> & { actionType?: 'clock_in' | 'clock_out' }
+//   payload: Partial<TAttendance> & { actionType?: "clock_in" | "clock_out" },
 // ) => {
 //   const {
 //     userId,
 //     serviceUserId,
 //     visitorName,
-//     userType = 'employee',
+//     userType = "employee",
 //     deviceId,
 //     location,
 //     source,
@@ -495,108 +496,190 @@ const getCompanyVisitorsLatestAttendance = async (
 //     clockType,
 //     notes,
 //     actionType,
-//     companyId
+//     companyId,
 //   } = payload;
 
-//   // 1. Validate companyId
+//   // =====================================================
+//   // 1. VALIDATIONS & SETUP
+//   // =====================================================
 //   if (!companyId) {
 //     throw new AppError(httpStatus.BAD_REQUEST, "Company ID is required.");
 //   }
 
-//   // --- Map identifiers correctly based on userType ---
-//   const resolvedServiceUserId = serviceUserId || (userType === 'service_user' ? userId : undefined);
-//   const resolvedUserId = userType === 'employee' ? userId : undefined;
+//   // Map identifiers correctly based on userType
+//   const resolvedServiceUserId =
+//     serviceUserId || (userType === "service_user" ? userId : undefined);
+//   const resolvedUserId = userType === "employee" ? userId : undefined;
 
-//   // 2. Validate identifiers
-//   if (userType === 'employee' && !resolvedUserId) {
+//   // Validate identifiers
+//   if (userType === "employee" && !resolvedUserId) {
 //     throw new AppError(httpStatus.BAD_REQUEST, "Employee ID is required.");
 //   }
 
-//   if (userType === 'service_user' && !resolvedServiceUserId) {
+//   if (userType === "service_user" && !resolvedServiceUserId) {
 //     throw new AppError(httpStatus.BAD_REQUEST, "Service User ID is required.");
 //   }
 
-//   if (userType === 'visitor' && !visitorName) {
+//   if (userType === "visitor" && !visitorName) {
 //     throw new AppError(httpStatus.BAD_REQUEST, "Visitor Name is required.");
 //   }
 
-//   if (userType === 'visitor' && !actionType) {
+//   if (userType === "visitor" && !actionType) {
 //     throw new AppError(
 //       httpStatus.BAD_REQUEST,
-//       "actionType ('clock_in' or 'clock_out') is strictly required for visitors."
+//       "actionType ('clock_in' or 'clock_out') is strictly required for visitors.",
 //     );
 //   }
 
 //   const now = moment();
-//   const todayDateStr = now.format("YYYY-MM-DD");
+//   const currentIsoTime = now.toISOString(); 
+// const todayDateStr = now.format("YYYY-MM-DD");
 //   const currentTimeOnly = now.format("HH:mm");
-
 //   // =====================================================
-//   // FIND ACTIVE SESSION
+//   // 2. FIND ACTIVE SESSION
 //   // =====================================================
-
 //   const matchQuery: any = {
 //     status: "clockin",
 //     userType,
-//     companyId
+//     companyId,
 //   };
 
-//   if (userType === 'employee') {
+//   if (userType === "employee") {
 //     matchQuery.userId = resolvedUserId;
-//   } else if (userType === 'service_user') {
+//   } else if (userType === "service_user") {
 //     matchQuery.serviceUserId = resolvedServiceUserId;
-//   } else if (userType === 'visitor') {
+//   } else if (userType === "visitor") {
 //     matchQuery.visitorName = {
 //       $regex: `^${(visitorName as any).trim()}$`,
-//       $options: "i"
+//       $options: "i",
 //     };
 //   }
 
-//   const activeAttendance = await Attendance
-//     .findOne(matchQuery)
-//     .sort({ createdAt: -1 });
+//   const activeAttendance = await Attendance.findOne(matchQuery).sort({
+//     createdAt: -1,
+//   });
 
 //   // =====================================================
-//   // DETERMINE ACTION
+//   // 3. DETERMINE ACTION (CLOCK IN OR OUT)
 //   // =====================================================
+//   let finalAction: "clock_in" | "clock_out";
 
-//   let finalAction: 'clock_in' | 'clock_out';
-
-//   if (userType === 'visitor') {
+//   if (userType === "visitor") {
 //     // Visitors MUST rely on the explicit actionType
-//     finalAction = actionType as 'clock_in' | 'clock_out';
-
-//   } else if (userType === 'employee') {
-//     // ✅ Employees: use explicit actionType if provided, otherwise auto-detect
+//     finalAction = actionType as "clock_in" | "clock_out";
+//   } else if (userType === "employee") {
+//     // Employees: use explicit actionType if provided, otherwise auto-detect
 //     if (actionType) {
-//       // ✅ Block clock_in if there's already an active (un-clocked-out) session
-//       if (actionType === 'clock_in' && activeAttendance) {
+//       if (actionType === "clock_in" && activeAttendance) {
 //         throw new AppError(
 //           httpStatus.BAD_REQUEST,
-//           "You are already clocked in."
+//           "You are already clocked in.",
 //         );
 //       }
 //       finalAction = actionType;
 //     } else {
-//       // Auto-detect fallback
-//       finalAction = activeAttendance ? 'clock_out' : 'clock_in';
+//       finalAction = activeAttendance ? "clock_out" : "clock_in";
 //     }
-
 //   } else {
 //     // Service Users: auto-detect
-//     finalAction = activeAttendance ? 'clock_out' : 'clock_in';
+//     finalAction = activeAttendance ? "clock_out" : "clock_in";
 //   }
 
 //   // =====================================================
-//   // ROUTE: CLOCK IN
+//   // 4. ROUTE: CLOCK IN
 //   // =====================================================
-//   if (finalAction === 'clock_in') {
-
+//   if (finalAction === "clock_in") {
 //     // Prevent double clock-in for employees and service users
-//     if (activeAttendance && userType !== 'visitor') {
+//     if (activeAttendance && userType !== "visitor") {
 //       throw new AppError(httpStatus.BAD_REQUEST, "You are already clocked in.");
 //     }
 
+//     let matchedRotaId: any = undefined;
+//     let shiftAssignedDate = todayDateStr;
+//     let shiftName = "unscheduled shift";
+
+//     // =====================================================
+//     // 🛑 ROTA SELECTION LOGIC FOR EMPLOYEES (STRICT) 🛑
+//     // =====================================================
+//     if (userType === "employee") {
+//   const todayRotas = await Rota.find({
+//     employeeId: resolvedUserId,
+//     companyId,
+//     status: "publish",
+//     startDate: { $lte: todayDateStr },
+//     endDate: { $gte: todayDateStr },
+//   });
+
+//   if (!todayRotas || todayRotas.length === 0) {
+//     // ✅ No rota → still allow attendance
+//     matchedRotaId = undefined;
+//     shiftAssignedDate = todayDateStr;
+//     shiftName = "";
+//   } else {
+//     // 🔽 KEEP ALL YOUR EXISTING LOGIC HERE
+//     const leavRotas = todayRotas.filter(
+//       (rota) => rota.leaveType && rota.leaveType.trim() !== "",
+//     );
+
+//     // if (leavRotas.length === todayRotas.length) {
+//     //   const leaveLabel = leavRotas[0].leaveType;
+//     //   throw new AppError(
+//     //     httpStatus.BAD_REQUEST,
+//     //     `You’re on leave today (${leaveLabel}), so clock in isn’t available.`,
+//     //   );
+//     // }
+
+//     const workRotas = todayRotas.filter(
+//       (rota) => !rota.leaveType || rota.leaveType.trim() === "",
+//     );
+
+//     const rotasWithTimes = workRotas.filter(
+//       (rota) => rota.startTime && rota.endTime,
+//     );
+
+//     const validRotas = rotasWithTimes.filter((rota) => {
+//       const shiftStart = moment(`${todayDateStr}T${rota.startTime}:00`, moment.ISO_8601, true);
+//       const shiftEnd = moment(`${todayDateStr}T${rota.endTime}:00`, moment.ISO_8601, true);
+
+//       if (shiftEnd.isBefore(shiftStart)) {
+//         shiftEnd.add(1, "day");
+//       }
+
+//       const startWindow = shiftStart.clone().startOf("day");
+//       const endWindow = shiftEnd.clone().endOf("day");
+
+//       return now.isBetween(startWindow, endWindow, null, "[]");
+//     });
+
+//     if (validRotas.length === 0) {
+//       // OPTIONAL: instead of blocking, you can also allow here
+//       matchedRotaId = undefined;
+//       shiftAssignedDate = todayDateStr;
+//       shiftName = "unscheduled shift";
+//     } else {
+//       let selectedRota = validRotas[0];
+
+//       if (validRotas.length > 1) {
+//         validRotas.sort((a, b) => {
+//           const aStart = moment(`${todayDateStr}T${a.startTime}:00`);
+//           const bStart = moment(`${todayDateStr}T${b.startTime}:00`);
+
+//           return (
+//             Math.abs(now.diff(aStart, "minutes")) -
+//             Math.abs(now.diff(bStart, "minutes"))
+//           );
+//         });
+//         selectedRota = validRotas[0];
+//       }
+
+//       matchedRotaId = selectedRota._id;
+//       shiftAssignedDate = selectedRota.startDate;
+//       shiftName = selectedRota.shiftName || "shift";
+//     }
+//   }
+// }
+
+//     // ── CREATE THE ATTENDANCE RECORD (USING ISO TIMESTAMPS) ──────────────
 //     const attendanceRecord = await Attendance.create({
 //       userId: resolvedUserId,
 //       serviceUserId: resolvedServiceUserId,
@@ -604,8 +687,10 @@ const getCompanyVisitorsLatestAttendance = async (
 //       userType,
 //       companyId,
 //       visitReason,
-//       clockIn: currentTimeOnly,
-//       clockInDate: todayDateStr,
+//       rotaId: matchedRotaId,
+//       date: shiftAssignedDate,
+//       clockIn:  currentIsoTime,
+//       clockInDate: currentIsoTime,
 //       status: "clockin",
 //       source: source || "accessControl",
 //       clockType: clockType || "qr",
@@ -616,32 +701,33 @@ const getCompanyVisitorsLatestAttendance = async (
 
 //     return {
 //       action: "clock_in",
-//       message: "Successfully clocked in.",
+//       message:
+//         userType === "employee"
+//           ? `Successfully clocked in to ${shiftName}.`
+//           : "Successfully clocked in.",
 //       data: attendanceRecord,
 //     };
 //   }
 
 //   // =====================================================
-//   // ROUTE: CLOCK OUT
+//   // 5. ROUTE: CLOCK OUT
 //   // =====================================================
-//   if (finalAction === 'clock_out') {
-
+//   if (finalAction === "clock_out") {
 //     if (!activeAttendance) {
 //       throw new AppError(
 //         httpStatus.BAD_REQUEST,
-//         "No active Clock In session found to clock out from."
+//         "No active session found. Please clock in first.",
 //       );
 //     }
 
-//     const clockInMoment = moment(
-//       `${activeAttendance.clockInDate} ${activeAttendance.clockIn}`,
-//       "YYYY-MM-DD HH:mm"
-//     );
-
+//     // Because clockIn is now saved as an ISO string, we can parse it directly 
+//     // without manual concatenation of dates and times
+//     const clockInMoment = moment(activeAttendance.clockIn, moment.ISO_8601);
 //     const durationInMinutes = now.diff(clockInMoment, "minutes");
 
-//     activeAttendance.clockOut = currentTimeOnly;
-//     activeAttendance.clockOutDate = todayDateStr;
+    
+//     activeAttendance.clockOut = currentIsoTime; 
+//     activeAttendance.clockOutDate = currentIsoTime; 
 //     activeAttendance.status = "clockout";
 //     activeAttendance.totalDuration = durationInMinutes > 0 ? durationInMinutes : 0;
 
@@ -658,9 +744,32 @@ const getCompanyVisitorsLatestAttendance = async (
 //   }
 // };
 
+// const updateAttendanceIntoDB = async (
+//   id: string,
+//   payload: Partial<TAttendance>,
+// ) => {
+//   const attendance = await Attendance.findById(id);
+
+//   if (!attendance) {
+//     throw new AppError(httpStatus.NOT_FOUND, "Attendance not found");
+//   }
+
+//   if (payload.clockOut || payload.clockOutDate) {
+//     payload.status = "clockout";
+//   }
+
+//   const result = await Attendance.findByIdAndUpdate(id, payload, {
+//     new: true,
+//     runValidators: true,
+//   });
+
+//   return result;
+// };
+
 const createAttendanceIntoDB = async (
   payload: Partial<TAttendance> & { actionType?: "clock_in" | "clock_out" },
 ) => {
+  // Destructure the new manual entry fields (clockIn, clockOut, etc.) from the payload
   const {
     userId,
     serviceUserId,
@@ -674,6 +783,13 @@ const createAttendanceIntoDB = async (
     notes,
     actionType,
     companyId,
+    clockIn,
+    clockInDate,
+    clockOut,
+    clockOutDate,
+    status,
+    rotaId,
+    isApproved
   } = payload;
 
   // =====================================================
@@ -701,17 +817,62 @@ const createAttendanceIntoDB = async (
     throw new AppError(httpStatus.BAD_REQUEST, "Visitor Name is required.");
   }
 
-  if (userType === "visitor" && !actionType) {
+  if (userType === "visitor" && !actionType && clockType !== "manual") {
     throw new AppError(
       httpStatus.BAD_REQUEST,
       "actionType ('clock_in' or 'clock_out') is strictly required for visitors.",
     );
   }
 
+  // =====================================================
+  // 1.5 DIRECT MANUAL ENTRY (BYPASS ROUTE)
+  // =====================================================
+  // If a full manual payload is submitted (e.g. from the Entry/Reconciliation UI)
+  if (clockType === "manual" && status === "clockout" && clockIn && clockOut) {
+    
+    // Calculate accurate duration in minutes
+    const clockInMoment = moment(clockIn, moment.ISO_8601);
+    const clockOutMoment = moment(clockOut, moment.ISO_8601);
+    const durationInMinutes = clockOutMoment.diff(clockInMoment, "minutes");
+
+    const manualAttendance = await Attendance.create({
+      userId: resolvedUserId,
+      serviceUserId: resolvedServiceUserId,
+      visitorName: visitorName?.trim(),
+      userType,
+      companyId,
+      visitReason,
+      rotaId,
+      clockIn,
+      clockInDate,
+      clockOut,
+      clockOutDate,
+      status: "clockout", // explicitly setting to completed/clockout
+      source: source || "desktopApp", // default fallback source if needed
+      clockType: "manual",
+      isApproved: isApproved !== undefined ? isApproved : true, // Takes frontend value or defaults to true
+      totalDuration: durationInMinutes > 0 ? durationInMinutes : 0,
+      deviceId,
+      location,
+      notes,
+    });
+
+    return {
+      action: "manual_entry",
+      message: "Manual attendance logged successfully.",
+      data: manualAttendance,
+    };
+  }
+
+  // =====================================================
+  // STANDARD CLOCK IN / CLOCK OUT FLOW CONTINUES BELOW
+  // =====================================================
+
   const now = moment();
   const currentIsoTime = now.toISOString(); 
-const todayDateStr = now.format("YYYY-MM-DD");
+  const todayDateStr = now.format("YYYY-MM-DD");
   const currentTimeOnly = now.format("HH:mm");
+
   // =====================================================
   // 2. FIND ACTIVE SESSION
   // =====================================================
@@ -779,7 +940,6 @@ const todayDateStr = now.format("YYYY-MM-DD");
     // 🛑 ROTA SELECTION LOGIC FOR EMPLOYEES (STRICT) 🛑
     // =====================================================
     if (userType === "employee") {
-      // Fetch ALL rotas for this employee that cover today
       const todayRotas = await Rota.find({
         employeeId: resolvedUserId,
         companyId,
@@ -788,102 +948,60 @@ const todayDateStr = now.format("YYYY-MM-DD");
         endDate: { $gte: todayDateStr },
       });
 
-      // No rota at all for today → hard error
       if (!todayRotas || todayRotas.length === 0) {
-        throw new AppError(
-          httpStatus.BAD_REQUEST,
-          "No shift assigned today. Please contact admin.",
-        );
-      }
-
-      // Check if ALL of today's rotas indicate the employee is on leave
-      const leavRotas = todayRotas.filter(
-        (rota) => rota.leaveType && rota.leaveType.trim() !== "",
-      );
-
-      if (leavRotas.length === todayRotas.length) {
-        // Every rota for today is a leave rota → employee is on leave
-        const leaveLabel = leavRotas[0].leaveType;
-        throw new AppError(
-          httpStatus.BAD_REQUEST,
-          `You’re on leave today (${leaveLabel}), so clock in isn’t available.`,
-        );
-      }
-
-      // Filter out leave rotas — only work with active (non-leave) rotas
-      const workRotas = todayRotas.filter(
-        (rota) => !rota.leaveType || rota.leaveType.trim() === "",
-      );
-
-      if (workRotas.length === 0) {
-        throw new AppError(httpStatus.BAD_REQUEST, "No Shift found for today.");
-      }
-
-      // Validate each rota has required time fields
-      const rotasWithTimes = workRotas.filter(
-        (rota) => rota.startTime && rota.endTime,
-      );
-
-      if (rotasWithTimes.length === 0) {
-        throw new AppError(
-          httpStatus.BAD_REQUEST,
-          "Your assigned rota for today has no start/end time configured.",
-        );
-      }
-
-      // ── CLOCK-IN TIME WINDOW CHECK ──
-      const validRotas = rotasWithTimes.filter((rota) => {
-        // Build ISO compliant strings for parsing shift times
-        const shiftStart = moment(
-          `${todayDateStr}T${rota.startTime}:00`, 
-          moment.ISO_8601,
-          true
-        );
-        const shiftEnd = moment(
-          `${todayDateStr}T${rota.endTime}:00`, 
-          moment.ISO_8601,
-          true
+        // ✅ No rota → still allow attendance
+        matchedRotaId = undefined;
+        shiftAssignedDate = todayDateStr;
+        shiftName = "";
+      } else {
+        const workRotas = todayRotas.filter(
+          (rota) => !rota.leaveType || rota.leaveType.trim() === "",
         );
 
-        // Handle overnight shifts (e.g. 22:00 → 06:00)
-        if (shiftEnd.isBefore(shiftStart)) {
-          shiftEnd.add(1, "day");
-        }
+        const rotasWithTimes = workRotas.filter(
+          (rota) => rota.startTime && rota.endTime,
+        );
 
-        // Window opens at the very beginning of the day (00:00:00)
-        const startWindow = shiftStart.clone().startOf("day");
+        const validRotas = rotasWithTimes.filter((rota) => {
+          const shiftStart = moment(`${todayDateStr}T${rota.startTime}:00`, moment.ISO_8601, true);
+          const shiftEnd = moment(`${todayDateStr}T${rota.endTime}:00`, moment.ISO_8601, true);
 
-        // Window stays open until the very end of the shift's ending day (23:59:59)
-        const endWindow = shiftEnd.clone().endOf("day");
+          if (shiftEnd.isBefore(shiftStart)) {
+            shiftEnd.add(1, "day");
+          }
 
-        return now.isBetween(startWindow, endWindow, null, "[]");
-      });
+          const startWindow = shiftStart.clone().startOf("day");
+          const endWindow = shiftEnd.clone().endOf("day");
 
-      // Guard: no rota window is currently open
-      if (validRotas.length === 0) {
-        throw new AppError(httpStatus.BAD_REQUEST, `No Shift found for today.`);
-      }
-
-      // ── AUTO-SELECT ROTA ──────────────────────────────────────────────
-      let selectedRota = validRotas[0];
-
-      if (validRotas.length > 1) {
-        validRotas.sort((a, b) => {
-          const aStart = moment(`${todayDateStr}T${a.startTime}:00`, moment.ISO_8601);
-          const bStart = moment(`${todayDateStr}T${b.startTime}:00`, moment.ISO_8601);
-          
-          // Prefer the rota whose start is nearest (past or future) to now
-          return (
-            Math.abs(now.diff(aStart, "minutes")) -
-            Math.abs(now.diff(bStart, "minutes"))
-          );
+          return now.isBetween(startWindow, endWindow, null, "[]");
         });
-        selectedRota = validRotas[0];
-      }
 
-      matchedRotaId = selectedRota._id;
-      shiftAssignedDate = selectedRota.startDate;
-      shiftName = selectedRota.shiftName || "shift";
+        if (validRotas.length === 0) {
+          // OPTIONAL: instead of blocking, you can also allow here
+          matchedRotaId = undefined;
+          shiftAssignedDate = todayDateStr;
+          shiftName = "unscheduled shift";
+        } else {
+          let selectedRota = validRotas[0];
+
+          if (validRotas.length > 1) {
+            validRotas.sort((a, b) => {
+              const aStart = moment(`${todayDateStr}T${a.startTime}:00`);
+              const bStart = moment(`${todayDateStr}T${b.startTime}:00`);
+
+              return (
+                Math.abs(now.diff(aStart, "minutes")) -
+                Math.abs(now.diff(bStart, "minutes"))
+              );
+            });
+            selectedRota = validRotas[0];
+          }
+
+          matchedRotaId = selectedRota._id;
+          shiftAssignedDate = selectedRota.startDate;
+          shiftName = selectedRota.shiftName || "shift";
+        }
+      }
     }
 
     // ── CREATE THE ATTENDANCE RECORD (USING ISO TIMESTAMPS) ──────────────
@@ -896,7 +1014,7 @@ const todayDateStr = now.format("YYYY-MM-DD");
       visitReason,
       rotaId: matchedRotaId,
       date: shiftAssignedDate,
-      clockIn:  currentIsoTime,
+      clockIn: currentIsoTime,
       clockInDate: currentIsoTime,
       status: "clockin",
       source: source || "accessControl",
@@ -931,7 +1049,6 @@ const todayDateStr = now.format("YYYY-MM-DD");
     // without manual concatenation of dates and times
     const clockInMoment = moment(activeAttendance.clockIn, moment.ISO_8601);
     const durationInMinutes = now.diff(clockInMoment, "minutes");
-
     
     activeAttendance.clockOut = currentIsoTime; 
     activeAttendance.clockOutDate = currentIsoTime; 
@@ -950,30 +1067,6 @@ const todayDateStr = now.format("YYYY-MM-DD");
     };
   }
 };
-
-// const updateAttendanceIntoDB = async (
-//   id: string,
-//   payload: Partial<TAttendance>,
-// ) => {
-//   const attendance = await Attendance.findById(id);
-
-//   if (!attendance) {
-//     throw new AppError(httpStatus.NOT_FOUND, "Attendance not found");
-//   }
-
-//   if (payload.clockOut || payload.clockOutDate) {
-//     payload.status = "clockout";
-//   }
-
-//   const result = await Attendance.findByIdAndUpdate(id, payload, {
-//     new: true,
-//     runValidators: true,
-//   });
-
-//   return result;
-// };
-
-
 export const updateAttendanceIntoDB = async (
   id: string,
   payload: Partial<TAttendance>,
