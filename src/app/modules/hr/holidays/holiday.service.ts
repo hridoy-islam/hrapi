@@ -308,7 +308,7 @@ const getAllHolidayFromDB = async (query: Record<string, unknown>) => {
         company: new Types.ObjectId(companyId),
         role: 'employee',
         status: 'active',
-      }).select('_id contractHours firstName lastName email image');
+      }).select('_id contractHours name firstName lastName email image');
 
       if (!employees.length) return { meta, result: [] };
 
