@@ -34,47 +34,64 @@ const getHolidayYearDateRange = (year: string) => {
 const calculateHolidayHours = async (userId: any, year: string) => {
   const { startDate, endDate } = getHolidayYearDateRange(year);
 
+  // ✅ Fetch approved attendances and populate the associated Rota
   const attendances = await Attendance.find({
     userId,
     isApproved: true,
-    clockInDate: { $gte: startDate, $lte: endDate }, // ✅ Scoped to holiday year
-    clockOut: { $exists: true, $ne: null },
-  });
+    clockInDate: { $gte: startDate, $lte: endDate }, // Scoped to holiday year
+  }).populate('rotaId');
 
   let totalDurationMs = 0;
 
   attendances.forEach((attendance) => {
-    const clockInTime = moment(attendance.clockIn);
-    const clockOutTime = moment(attendance.clockOut);
+    const rota = attendance.rotaId as any;
 
-    if (clockInTime.isValid() && clockOutTime.isValid()) {
-      const diff = clockOutTime.diff(clockInTime);
-      totalDurationMs += diff > 0 ? diff : 0;
+    // ✅ Crucial Check: Ensure rota exists AND leaveType is empty or non-existent
+    const isWorkingShift = rota && (!rota.leaveType || rota.leaveType.trim() === '');
+
+    if (isWorkingShift && rota.startDate && rota.startTime && rota.endDate && rota.endTime) {
+      // ✅ Parse the Rota's exact start and end dates/times
+      const startDateTime = moment(
+        `${moment(rota.startDate).format('YYYY-MM-DD')} ${rota.startTime}`,
+        'YYYY-MM-DD HH:mm'
+      );
+
+      const endDateTime = moment(
+        `${moment(rota.endDate).format('YYYY-MM-DD')} ${rota.endTime}`,
+        'YYYY-MM-DD HH:mm'
+      );
+
+      if (startDateTime.isValid() && endDateTime.isValid()) {
+        const diff = endDateTime.diff(startDateTime);
+        totalDurationMs += diff > 0 ? diff : 0;
+      }
     }
   });
 
+  // Calculate total hours worked based on valid working Rota durations
   const totalHoursWorked = totalDurationMs / (1000 * 60 * 60);
-  const holidayHours = Number((totalHoursWorked * 0.1207).toFixed(2));
 
+  // ✅ Calculate Accrued Holiday (Hours * 0.1207)
+  const holidayAccrued = Number((totalHoursWorked * 0.1207).toFixed(2));
+
+  // Keep your existing User update if you still need it on the User schema
   await User.findByIdAndUpdate(userId, {
-    $set: { 'holiday.totalHours': holidayHours },
+    $set: { 'holiday.totalHours': holidayAccrued },
   });
 
-  return holidayHours;
+  return holidayAccrued;
 };
 
 const getLeavesForHolidayYear = async (
   userId: Types.ObjectId | string,
   year: string
 ) => {
-  // ✅ Use exact holidayYear string match instead of loose regex
-  // This ensures "2025-2026" does NOT accidentally match "2024-2025"
+  // Use exact holidayYear string match instead of loose regex
   return await Leave.find({
     userId: new Types.ObjectId(userId.toString()),
     holidayYear: year, // exact match — e.g., "2025-2026"
   });
 };
-
 const bucketLeaveHours = (allLeaves: any[]) => {
   let usedHours = 0;
   let bookedHours = 0;
@@ -124,11 +141,11 @@ const recalculateUserHoliday = async (
 ) => {
   const empId = employeeId.toString();
 
-  // 1. Attendance accrual — now correctly scoped to this holiday year only
-  const calculatedAccruedHours = await calculateHolidayHours(empId, year); // ✅ pass year
+  // 1. Attendance accrual calculated strictly from Working Rotas
+  const calculatedAccruedHours = await calculateHolidayHours(empId, year);
 
   // 2. Leaves — exact year match, not regex
-  const allLeaves = await getLeavesForHolidayYear(empId, year); // ✅ exact match
+  const allLeaves = await getLeavesForHolidayYear(empId, year);
 
   // 3. Bucket into categories
   const {
@@ -146,7 +163,12 @@ const recalculateUserHoliday = async (
   const currentCarryForward = holidayRecord?.carryForward || 0;
   const recalculatedAllowance = Math.floor(currentEntitlement + currentCarryForward);
 
-  // 5. Persist
+  // ✅ 5. New Remaining Hours Formula: Allowance + Accrued - Taken - Booked
+  const remainingHours = Number(
+    (recalculatedAllowance + calculatedAccruedHours - (usedHours + bookedHours)).toFixed(2)
+  );
+
+  // 6. Persist
   const updated = await Holiday.findOneAndUpdate(
     { userId: empId, year },
     {
@@ -159,8 +181,7 @@ const recalculateUserHoliday = async (
         unpaidLeaveTaken,
         unpaidBookedHours,
         unpaidLeaveRequest,
-        // remaining = accrued - (used + booked)
-        remainingHours: calculatedAccruedHours - (usedHours + bookedHours),
+        remainingHours, // ✅ Uses the updated formula
       },
     },
     { new: true, upsert: false }
@@ -168,7 +189,6 @@ const recalculateUserHoliday = async (
 
   return updated;
 };
-
 
 function getHolidayYearRange(): string {
   const now = new Date();
@@ -179,8 +199,14 @@ function getHolidayYearRange(): string {
 
 
 
+
+
+
 // const getAllHolidayFromDB = async (query: Record<string, unknown>) => {
-//   const userQuery = new QueryBuilder(Holiday.find(), query)
+//   const userQuery = new QueryBuilder(Holiday.find().populate({
+//     path: "userId",
+//     select: "firstName lastName email name",
+//   }), query)
 //     .search(HolidaySearchableFields)
 //     .filter(query)
 //     .sort()
@@ -191,90 +217,102 @@ function getHolidayYearRange(): string {
 //   let result = await userQuery.modelQuery;
 
 //   const userId = query.userId as string | undefined;
+//   const companyId = query.companyId as string | undefined;
 //   const year = (query.year as string) || getHolidayYearRange();
 
+//   // ── CASE A: Company-wide ──────────────────────────────────────────────────
+//   if (companyId) {
+//     try {
+//       const employees = await User.find({
+//         company: new Types.ObjectId(companyId),
+//         role: 'employee',
+//         status: 'active',
+//       }).select('_id contractHours name firstName lastName email image');
+
+//       if (!employees.length) return { meta, result: [] };
+
+//       // 1. Map the employee IDs for filtering later
+//       const employeeIds = employees.map(emp => emp._id);
+
+//       const recalculatedResults = await Promise.all(
+//         employees.map(async (employee) => {
+//           // Ensure holiday record exists for this year
+//           const exists = await Holiday.findOne({ userId: employee._id, year });
+//           if (!exists) {
+//             const initialEntitlement = 210;
+//             const initialCarryForward = 0;
+//             await Holiday.create({
+//               userId: employee._id,
+//               year,
+//               holidayEntitlement: initialEntitlement,
+//               carryForward: initialCarryForward,
+//               holidayAllowance: Math.floor(initialEntitlement + initialCarryForward),
+//               holidayAccured: 0,
+//               usedHours: 0,
+//               bookedHours: 0,
+//               requestedHours: 0,
+//               remainingHours: 0,
+//               unpaidLeaveTaken: 0,
+//               unpaidBookedHours: 0,
+//               unpaidLeaveRequest: 0,
+//               hoursPerDay: 8,
+//             });
+//           }
+
+//           // ✅ Recalculate scoped to THIS year only
+//           return await recalculateUserHoliday(employee._id, year);
+//         })
+//       );
+
+//       // 🔥 FIX: Add userId: { $in: employeeIds } to scope it to ONLY this company
+//       result = await Holiday.find({ 
+//         year, 
+//         userId: { $in: employeeIds } 
+//       }).populate("userId", "firstName lastName email name");
+
+//     } catch (error) {
+//       console.error('Error recalculating holiday stats for company:', error);
+//     }
+
+//     return { meta, result };
+//   }
+
+//   // ── CASE B: Single user ───────────────────────────────────────────────────
 //   if (userId) {
 //     try {
-//       // Step 1: Find the user
 //       const user = await User.findById(userId);
-//       if (!user) {
-//         throw new Error(`User with ID ${userId} not found`);
-//       }
+//       if (!user) throw new Error(`User with ID ${userId} not found`);
 
-//       // Step 2: Get or create holiday record
-//       let holidayRecord = await Holiday.findOne({ userId, year });
-
-//       if (!holidayRecord) {
-//         const contractHours = Number(user.contractHours) || 0;
-//         const holidayAllowance = contractHours * 5.6;
-
-//         holidayRecord = await Holiday.create({
+//       // Ensure holiday record exists
+//       const exists = await Holiday.findOne({ userId, year });
+//       if (!exists) {
+//         const initialEntitlement = 210;
+//         const initialCarryForward = 0;
+//         await Holiday.create({
 //           userId: user._id,
 //           year,
-//           holidayAllowance,
+//           holidayEntitlement: initialEntitlement,
+//           carryForward: initialCarryForward,
+//           holidayAllowance: Math.floor(initialEntitlement + initialCarryForward),
 //           holidayAccured: 0,
 //           usedHours: 0,
+//           bookedHours: 0,
 //           requestedHours: 0,
-//           remainingHours: holidayAllowance,
+//           remainingHours: 0,
 //           unpaidLeaveTaken: 0,
+//           unpaidBookedHours: 0,
 //           unpaidLeaveRequest: 0,
 //           hoursPerDay: 8,
 //         });
-
 //       }
 
-//       // Step 3: Recalculate holidayAccured (your custom logic)
-//       const calculatedAccruedHours = await calculateHolidayHours(userId);
-//       const contractHours = Number(user.contractHours) || 0;
-//       const holidayAllowance = contractHours * 5.6;
+//       // ✅ Recalculate scoped to THIS year only
+//       await recalculateUserHoliday(userId, year);
 
-//       // ✅ Step 4: Calculate usedHours from approved paid leaves
-
-//       const approvedLeaves = await Leave.find({
-//         userId: new Types.ObjectId(userId),
-//         holidayYear: { $regex: new RegExp(year.split('-').join('|'), 'i') }, // Flexible year match
-//         status: { $in: ['approved', 'Approved', 'APPROVED'] }, // Case-tolerant
-//         leaveType: { $in: ['paid', null, ''] }, // Include if not set or paid
-//       });
-
-
-//       let usedHours = 0;
-//       approvedLeaves.forEach((leave, idx) => {
-//         const hours = leave.totalHours || 0;
-//         usedHours += hours;
-//       });
-
-//       // ✅ Step 5: Calculate requestedHours from pending paid leaves
-//       const pendingLeaves = await Leave.find({
-//         userId: new Types.ObjectId(userId),
-//         holidayYear: { $regex: new RegExp(year.split('-').join('|'), 'i') },
-//         status: 'pending',
-//         leaveType: { $in: ['paid', null, ''] },
-//       });
-
-//       const requestedHours = pendingLeaves.reduce((sum, l) => sum + (l.totalHours || 0), 0);
-
-
-//       // ✅ Step 6: Update Holiday record
-//       const updatedHoliday = await Holiday.findOneAndUpdate(
-//         { userId, year },
-//         {
-//           $set: {
-//             holidayAllowance,
-//             holidayAccured: calculatedAccruedHours,
-//             usedHours,
-//             requestedHours,
-//             remainingHours: holidayAllowance - usedHours,
-//           },
-//         },
-//         { new: true, upsert: false }
-//       );
-
-
-//       // Step 7: Refetch result
-//       result = await Holiday.find({ userId, year });
+//       result = await Holiday.find({ userId, year })
+//         .populate("userId", "firstName lastName email name"); 
 //     } catch (error) {
-//       console.error('❌ Error in getAllHolidayFromDB:', error);
+//       console.error('Error recalculating holiday stats for user:', error);
 //     }
 //   }
 
@@ -282,13 +320,12 @@ function getHolidayYearRange(): string {
 // };
 
 
-
 const getAllHolidayFromDB = async (query: Record<string, unknown>) => {
   const userQuery = new QueryBuilder(Holiday.find().populate({
     path: "userId",
     select: "firstName lastName email name",
   }), query)
-    .search(HolidaySearchableFields)
+    .search(HolidaySearchableFields) // Ensure this is defined in your environment
     .filter(query)
     .sort()
     .paginate()
@@ -312,10 +349,9 @@ const getAllHolidayFromDB = async (query: Record<string, unknown>) => {
 
       if (!employees.length) return { meta, result: [] };
 
-      // 1. Map the employee IDs for filtering later
       const employeeIds = employees.map(emp => emp._id);
 
-      const recalculatedResults = await Promise.all(
+      await Promise.all(
         employees.map(async (employee) => {
           // Ensure holiday record exists for this year
           const exists = await Holiday.findOne({ userId: employee._id, year });
@@ -340,12 +376,11 @@ const getAllHolidayFromDB = async (query: Record<string, unknown>) => {
             });
           }
 
-          // ✅ Recalculate scoped to THIS year only
+          // Recalculate scoped to THIS year only
           return await recalculateUserHoliday(employee._id, year);
         })
       );
 
-      // 🔥 FIX: Add userId: { $in: employeeIds } to scope it to ONLY this company
       result = await Holiday.find({ 
         year, 
         userId: { $in: employeeIds } 
@@ -387,7 +422,7 @@ const getAllHolidayFromDB = async (query: Record<string, unknown>) => {
         });
       }
 
-      // ✅ Recalculate scoped to THIS year only
+      // Recalculate scoped to THIS year only
       await recalculateUserHoliday(userId, year);
 
       result = await Holiday.find({ userId, year })
@@ -399,6 +434,8 @@ const getAllHolidayFromDB = async (query: Record<string, unknown>) => {
 
   return { meta, result };
 };
+
+
 
 const getSingleHolidayFromDB = async (id: string) => {
   const result = await Holiday.findById(id);
