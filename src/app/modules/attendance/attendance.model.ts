@@ -19,6 +19,31 @@ const historySchema = new Schema(
   },
 );
 
+
+const breakLogSchema = new Schema(
+  {
+    breakStart: { 
+      type: String, 
+    },
+    breakStartDate: { 
+      type: String 
+    },
+    breakEnd: { 
+      type: String 
+    },
+    breakEndDate: { 
+      type: String 
+    },
+
+    duration: {
+      type: Number,
+      default: 0
+    },
+
+  },
+  { timestamps: true }
+);
+
 const attendanceSchema = new Schema<TAttendance>(
   {
     userId: {
@@ -33,7 +58,6 @@ const attendanceSchema = new Schema<TAttendance>(
       type: Schema.Types.ObjectId,
       ref: "Rota",
     },
-    // Replaced visitorId with string fields for ad-hoc visitors
     visitorName: {
       type: String,
     },
@@ -84,6 +108,7 @@ const attendanceSchema = new Schema<TAttendance>(
       default: false,
     },
     history: [historySchema],
+    breakLogs: [breakLogSchema],
   },
   {
     timestamps: true,
