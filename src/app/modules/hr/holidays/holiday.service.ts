@@ -161,11 +161,11 @@ const recalculateUserHoliday = async (
   const holidayRecord = await Holiday.findOne({ userId: empId, year });
   const currentEntitlement = holidayRecord?.holidayEntitlement || 210;
   const currentCarryForward = holidayRecord?.carryForward || 0;
-  const recalculatedAllowance = Math.floor(currentEntitlement + currentCarryForward);
+  const recalculatedAllowance = Number(( calculatedAccruedHours + currentCarryForward).toFixed(2));
 
   // ✅ 5. New Remaining Hours Formula: Allowance + Accrued - Taken - Booked
   const remainingHours = Number(
-    (recalculatedAllowance + calculatedAccruedHours - (usedHours + bookedHours)).toFixed(2)
+    (recalculatedAllowance - (usedHours + bookedHours)).toFixed(2)
   );
 
   // 6. Persist
@@ -363,7 +363,7 @@ const getAllHolidayFromDB = async (query: Record<string, unknown>) => {
               year,
               holidayEntitlement: initialEntitlement,
               carryForward: initialCarryForward,
-              holidayAllowance: Math.floor(initialEntitlement + initialCarryForward),
+              holidayAllowance: Math.floor( initialCarryForward),
               holidayAccured: 0,
               usedHours: 0,
               bookedHours: 0,
@@ -409,7 +409,7 @@ const getAllHolidayFromDB = async (query: Record<string, unknown>) => {
           year,
           holidayEntitlement: initialEntitlement,
           carryForward: initialCarryForward,
-          holidayAllowance: Math.floor(initialEntitlement + initialCarryForward),
+          holidayAllowance: Math.floor( initialCarryForward),
           holidayAccured: 0,
           usedHours: 0,
           bookedHours: 0,
