@@ -133,14 +133,54 @@ const createLeaveIntoDB = async (payload: TLeave) => {
   }
 };
 
-const updateLeaveIntoDB = async (id: string, payload: Partial<TLeave>) => {
+const updateLeaveIntoDB = async (
+  id: string, 
+  payload: Partial<TLeave>,
+  actionUserId: string, // 👈 Passed from your controller (e.g., req.user.id)
+) => {
   const leave = await Leave.findById(id);
 
   if (!leave) {
     throw new AppError(httpStatus.NOT_FOUND, "Leave not found");
   }
+const actionUser = await User.findById(actionUserId);
+  if (!actionUser) {
+    throw new AppError(httpStatus.NOT_FOUND, "Action user not found");
+  }
 
-  const updatedLeave = await Leave.findByIdAndUpdate(id, payload, {
+
+  const userName = actionUser.name || `${actionUser.firstName} ${actionUser.lastName}`.trim();
+
+  // 1. Determine the history log message based on what changed
+  let actionMessage = `${userName} updated the leave request`;
+
+  if (payload.status && payload.status !== leave.status) {
+    if (payload.status === "approved") {
+      actionMessage = `${userName} Approved the leave request`;
+    } else if (payload.status === "rejected") {
+      actionMessage = `${userName} Rejected the leave request`;
+    } else {
+      actionMessage = `${userName} changed the status to ${payload.status}`;
+    }
+  }
+
+  // Format the exact time (you can adjust the date formatting as needed)
+  const exactTime = new Date().toLocaleString();
+
+  // 2. Prepare the update query using $set (for payload) and $push (for history)
+  const updateQuery = {
+    $set: payload,
+    $push: {
+      history: {
+        message: `${actionMessage} at`,
+        userId: actionUserId,
+        createdAt: new Date(), 
+      },
+    },
+  };
+
+  // 3. Perform the update
+  const updatedLeave = await Leave.findByIdAndUpdate(id, updateQuery, {
     new: true,
     runValidators: true,
   });
@@ -149,7 +189,7 @@ const updateLeaveIntoDB = async (id: string, payload: Partial<TLeave>) => {
     throw new AppError(httpStatus.NOT_FOUND, "Leave not found after update");
   }
 
-  // Only update holiday counters if status changes to 'approved' from 'pending'
+  // 4. Only update holiday counters if status changes to 'approved' from 'pending'
   if (leave.status === 'pending' && updatedLeave.status === 'approved') {
     const userHoliday = await Holiday.findOne({
       userId: updatedLeave.userId,
@@ -182,7 +222,6 @@ const updateLeaveIntoDB = async (id: string, payload: Partial<TLeave>) => {
 
   return updatedLeave;
 };
-
 
 
 export const LeaveServices = {

@@ -73,6 +73,50 @@ const UploadDocumentToGCS = async (file: any, payload: any) => {
   }
 };
 
+
+
+const UploadBufferToGCS = async (buffer: Buffer, originalName: string, mimetype: string = "application/pdf") => {
+  try {
+    if (!buffer) throw new AppError(httpStatus.BAD_REQUEST, "No buffer provided");
+
+    const fileName = `${Date.now()}-signed-${originalName}`;
+    const gcsFile = bucket.file(fileName);
+
+    await new Promise((resolve, reject) => {
+      const stream = gcsFile.createWriteStream({
+        metadata: { contentType: mimetype }, 
+      });
+
+      stream.on("error", (err) => {
+        console.error("Error during buffer upload:", err);
+        reject(err);
+      });
+
+      stream.on("finish", async () => {
+        try {
+          // Make the file publicly accessible just like your other function
+          await gcsFile.makePublic();
+          resolve(true);
+        } catch (err) {
+          console.error("Error making the buffer file public:", err);
+          reject(err);
+        }
+      });
+
+      // Send the raw buffer to GCS
+      stream.end(buffer);
+    });
+
+    const fileUrl = `https://storage.googleapis.com/${bucketName}/${fileName}`;
+    return fileUrl;
+
+  } catch (error) {
+    console.error("Buffer upload failed:", error);
+    throw new AppError(httpStatus.INTERNAL_SERVER_ERROR, "Buffer upload failed");
+  }
+};
+
 export const UploadDocumentService = {
   UploadDocumentToGCS,
+  UploadBufferToGCS
 };

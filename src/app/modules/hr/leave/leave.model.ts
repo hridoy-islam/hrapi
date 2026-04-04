@@ -2,6 +2,24 @@
 
 import { Schema, model } from "mongoose";
 import { Types } from "mongoose";
+const historySchema = new Schema(
+  {
+    message: {
+      type: String,
+    },
+    userId: {
+      type: Schema.Types.ObjectId,
+      ref: "User",
+      required: true,
+    },
+    
+  },
+  {
+    timestamps: true,
+  },
+);
+
+
 
 const LeaveSchema = new Schema(
   {
@@ -34,6 +52,8 @@ const LeaveSchema = new Schema(
         },
       },
     ],
+
+    history: [historySchema],
   },
   { timestamps: true },
 );

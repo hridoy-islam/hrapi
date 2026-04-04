@@ -16,6 +16,13 @@ const SignatureDocSchema = new Schema<TSignatureDoc>(
       required: true,
       ref: "User",
     },
+envelopeId: { 
+  type: String, 
+  default: null 
+},
+    signedDocument: {
+      type: String,
+    },
 
     companyId: {
       type: Schema.Types.ObjectId,
@@ -24,7 +31,7 @@ const SignatureDocSchema = new Schema<TSignatureDoc>(
     },
     status:{
       type:String,
-      enum:['pending','completed'],
+      enum:['pending','completed', 'submitted', 'rejected'],
       default:'pending'
     },
     submittedAt:{

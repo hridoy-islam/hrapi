@@ -28,7 +28,8 @@ const getSingleLeave = catchAsync(async (req, res) => {
 
 const updateLeave = catchAsync(async (req, res) => {
   const { id } = req.params;
-  const result = await LeaveServices.updateLeaveIntoDB(id, req.body);
+  const { actionUserId, ...payload } = req.body;
+  const result = await LeaveServices.updateLeaveIntoDB(id, payload, actionUserId);
   sendResponse(res, {
     statusCode: httpStatus.OK,
     success: true,
