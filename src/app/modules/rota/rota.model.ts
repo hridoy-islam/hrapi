@@ -77,6 +77,8 @@ const RotaSchema = new Schema<TRota>(
     },
 
     history: [historySchema],
+    byNotice:{ type: Boolean, default: false },
+    byEmail:{ type: Boolean, default: false },
   },
   {
     timestamps: true,

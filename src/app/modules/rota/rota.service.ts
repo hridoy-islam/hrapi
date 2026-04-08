@@ -7,9 +7,11 @@ import { TRota } from "./rota.interface";
 import { RotaSearchableFields } from "./rota.constant";
 import { EmployeeRate } from "../hr/employeeRate/employeeRate.model";
 import { User } from "../user/user.model";
-import moment from 'moment-timezone';
+import moment from "moment-timezone";
+import { Notice } from "../hr/notice/notice.model";
+import { sendEmailRota } from "../../utils/sendEmailRota";
 
-moment.tz.setDefault('Europe/London');
+moment.tz.setDefault("Europe/London");
 
 const getAllRotaFromDB = async (query: Record<string, unknown>) => {
   const { startDate, endDate, attendanceDate, ...restQuery } = query;
@@ -18,8 +20,8 @@ const getAllRotaFromDB = async (query: Record<string, unknown>) => {
 
   // ✅ PRIORITY: attendanceDate exact match
   if (attendanceDate) {
-    dateFilter.startDate = attendanceDate; 
-  } 
+    dateFilter.startDate = attendanceDate;
+  }
   // ✅ Otherwise fallback to range filter
   else if (startDate || endDate) {
     dateFilter.startDate = {};
@@ -27,7 +29,10 @@ const getAllRotaFromDB = async (query: Record<string, unknown>) => {
     if (endDate) dateFilter.startDate.$lte = endDate;
   }
 
-  const userQuery = new QueryBuilder(Rota.find(dateFilter).populate("departmentId"), restQuery)
+  const userQuery = new QueryBuilder(
+    Rota.find(dateFilter).populate("departmentId"),
+    restQuery,
+  )
     .search(RotaSearchableFields)
     .filter(restQuery)
     .sort()
@@ -48,24 +53,24 @@ const getSingleRotaFromDB = async (id: string) => {
   return result;
 };
 
-
 const createRotaIntoDB = async (payload: TRota) => {
-    try {
-      
-      const result = await Rota.create(payload);
-      return result;
-    } catch (error: any) {
-      console.error("Error in createRotaIntoDB:", error);
-  
-      // Throw the original error or wrap it with additional context
-      if (error instanceof AppError) {
-        throw error;
-      }
-  
-      throw new AppError(httpStatus.INTERNAL_SERVER_ERROR, error.message || "Failed to create Rota");
-    }
-  };
+  try {
+    const result = await Rota.create(payload);
+    return result;
+  } catch (error: any) {
+    console.error("Error in createRotaIntoDB:", error);
 
+    // Throw the original error or wrap it with additional context
+    if (error instanceof AppError) {
+      throw error;
+    }
+
+    throw new AppError(
+      httpStatus.INTERNAL_SERVER_ERROR,
+      error.message || "Failed to create Rota",
+    );
+  }
+};
 
 // const updateRotaIntoDB = async (id: string, payload: Partial<TRota>) => {
 //   const rota = await Rota.findById(id);
@@ -74,7 +79,6 @@ const createRotaIntoDB = async (payload: TRota) => {
 //     throw new AppError(httpStatus.NOT_FOUND, "Rota not found");
 //   }
 
-  
 //   // Update only the selected user
 //   const result = await Rota.findByIdAndUpdate(id, payload, {
 //     new: true,
@@ -84,32 +88,173 @@ const createRotaIntoDB = async (payload: TRota) => {
 //   return result;
 // };
 
+// Key: `${companyId}-${employeeId}-${departmentId}`
+const pendingRotaUpdates: Map<
+  string,
+  {
+    rotas: TRota[];
+    timer: ReturnType<typeof setTimeout>;
+    byNotice: boolean;
+    byEmail: boolean;
+    employeeId: string;
+    companyId: string;
+    departmentId: string;
+    actionUserId: string;
+  }
+> = new Map();
 
+/**
+ * Processes batched rota updates and creates a notice/email.
+ */
+const SHIFT_FIELDS = [
+  "startTime",
+  "endTime",
+  "startDate",
+  "endDate",
+  "leaveType",
+] as const;
 
+// Check if payload has any real shift field change (ignores byEmail/byNotice-only updates)
+const hasShiftChanges = (payload: Partial<TRota>, rota: TRota): boolean => {
+  return (
+    (payload.startTime !== undefined && payload.startTime !== rota.startTime) ||
+    (payload.endTime !== undefined && payload.endTime !== rota.endTime) ||
+    (payload.startDate !== undefined && payload.startDate !== rota.startDate) ||
+    (payload.endDate !== undefined && payload.endDate !== rota.endDate) ||
+    (payload.leaveType !== undefined && payload.leaveType !== rota.leaveType)
+  );
+};
+
+// ─────────────────────────────────────────────
+const processBatchedRotaUpdates = async (batchKey: string) => {
+  const batch = pendingRotaUpdates.get(batchKey);
+  if (!batch) return;
+
+  pendingRotaUpdates.delete(batchKey);
+
+  const {
+    rotas,
+    byNotice,
+    byEmail,
+    employeeId,
+    companyId,
+    departmentId,
+    actionUserId,
+  } = batch;
+
+  // Fetch employee
+  const employee = await User.findById(employeeId);
+  if (!employee) return;
+
+  const employeeName =
+    employee.name || `${employee.firstName} ${employee.lastName}`.trim();
+
+  // Fetch company (from User model using companyId)
+  const company = await User.findById(companyId);
+  if (!company) return;
+
+  const companyName =
+    company.name || `${company.firstName} ${company.lastName}`.trim();
+  const companyImage = company.image || "";
+  const companyAddress = company.address || "";
+  const cityOrTown = company.cityOrTown || "";
+  const stateOrProvince = company.stateOrProvince || "";
+  const country = company.country || "";
+  const postCode = company.postCode || "";
+
+  // ── Build notice description ──
+  const byDate: Record<string, TRota[]> = {};
+  for (const rota of rotas) {
+    const dateKey = rota.startDate;
+    if (!byDate[dateKey]) byDate[dateKey] = [];
+    byDate[dateKey].push(rota);
+  }
+
+  const shiftLines = Object.entries(byDate).map(([date, dateRotas]) => {
+    const formattedDate = moment(date).format("ddd, MMM DD, YYYY");
+
+    const shiftSummaries = [
+      ...new Set(
+        dateRotas.map((r) =>
+          r.leaveType && r.leaveType.trim() !== ""
+            ? r.leaveType
+            : `${r.startTime} - ${r.endTime}`
+        ),
+      ),
+    ];
+
+    // Join with " and " so it says "09:00 - 12:00 and 14:00 - 17:00"
+    const times = shiftSummaries.join(" and ");
+
+    // Build the exact sentence you requested
+    return `Your shift(s) on ${formattedDate} has been updated to ${times}.`;
+  });
+
+  // ── Descriptions ──
+  // .join(" ") puts a space between sentences if there are multiple dates updated.
+  const noticeDescription = `${shiftLines.join(" ")} Please check your rota.`;
+
+  // .join("<br>") puts each date's sentence on a new line in the email.
+  const emailDescription = `${shiftLines.join("<br>")}`;
+  
+  const today = moment().format("ddd, MMM DD, YYYY");
+  const subject = `${companyName} – Shift Change Notification`;
+
+  // ── Create Notice ──
+  if (byNotice) {
+    await Notice.create({
+      noticeType: "general",
+      noticeDescription,
+      noticeSetting: "individual",
+      users: [employeeId],
+      department: [departmentId],
+      noticeBy: actionUserId,
+      companyId,
+      status: "active",
+      noticeDate: new Date(),
+    });
+  }
+
+  // ── Send Email ──
+  if (byEmail && employee.email) {
+    await sendEmailRota({
+      to: employee.email,
+      subject,
+      companyName,
+      companyImage,
+      username: employeeName,
+      description: emailDescription,
+      date: today,
+      address: companyAddress,
+      cityOrTown,
+      stateOrProvince,
+      country,
+      postCode,
+    });
+  }
+};
+
+// ─────────────────────────────────────────────
 export const updateRotaIntoDB = async (
   id: string,
   payload: Partial<TRota>,
-  actionUserId: string 
+  actionUserId: string,
 ) => {
-  // 1. Fetch the existing rota record
+  // 1. Fetch existing rota
   const rota = await Rota.findById(id);
+  if (!rota) throw new AppError(httpStatus.NOT_FOUND, "Rota not found");
 
-  if (!rota) {
-    throw new AppError(httpStatus.NOT_FOUND, "Rota not found");
-  }
-
-  // 2. Fetch the user performing the action to get their name
+  // 2. Fetch action user
   const actionUser = await User.findById(actionUserId);
-  if (!actionUser) {
+  if (!actionUser)
     throw new AppError(httpStatus.NOT_FOUND, "Action user not found");
-  }
 
-  // Format the user's name (checks for 'name' first, falls back to firstName + lastName)
-  const userName = actionUser.name || `${actionUser.firstName} ${actionUser.lastName}`.trim();
+  const userName =
+    actionUser.name || `${actionUser.firstName} ${actionUser.lastName}`.trim();
 
+  // 3. Build history entries
   const newHistoryEntries = [];
 
-  // 3. Condition 1: Check if 'status' is being updated to 'publish'
   if (payload.status === "publish" && rota.status !== "publish") {
     newHistoryEntries.push({
       message: `${userName} Published the rota at`,
@@ -117,9 +262,6 @@ export const updateRotaIntoDB = async (
     });
   }
 
-
-
-  // 4. Condition 2: Check if any core shift fields are being updated
   const isShiftUpdated =
     (payload.startTime !== undefined && payload.startTime !== rota.startTime) ||
     (payload.endTime !== undefined && payload.endTime !== rota.endTime) ||
@@ -128,34 +270,70 @@ export const updateRotaIntoDB = async (
     (payload.shiftName !== undefined && payload.shiftName !== rota.shiftName) ||
     (payload.leaveType !== undefined && payload.leaveType !== rota.leaveType) ||
     (payload.color !== undefined && payload.color !== rota.color) ||
-    (payload.employeeId !== undefined && payload.employeeId.toString() !== rota.employeeId.toString());
+    (payload.employeeId !== undefined &&
+      payload.employeeId.toString() !== rota.employeeId.toString());
 
   if (isShiftUpdated) {
     newHistoryEntries.push({
       message: `${userName} updated the rota details at`,
-      userId: actionUserId, 
+      userId: actionUserId,
     });
   }
 
-  // 5. Build the update query dynamically
-  const updateQuery: any = {
-    $set: payload,
-  };
-
-  // If we generated any history messages, push them to the history array
+  // 4. Execute DB update
+  const updateQuery: any = { $set: payload };
   if (newHistoryEntries.length > 0) {
     updateQuery.$push = { history: { $each: newHistoryEntries } };
   }
 
-  // 6. Execute the update
   const result = await Rota.findByIdAndUpdate(id, updateQuery, {
     new: true,
     runValidators: true,
   });
 
+  // 5. Batching logic — only trigger if actual shift fields changed
+  //    Ignore if payload only updated byEmail / byNotice flags
+  const shiftChanged = hasShiftChanges(payload, rota);
+
+  const byNotice = result?.byNotice ?? false;
+  const byEmail = result?.byEmail ?? false;
+
+  if (shiftChanged && (byNotice || byEmail) && result) {
+    const companyId = rota.companyId.toString();
+    const employeeId = rota.employeeId.toString();
+    const departmentId = rota.departmentId.toString();
+    const batchKey = `${companyId}-${employeeId}-${departmentId}`;
+
+    const existing = pendingRotaUpdates.get(batchKey);
+
+    if (existing) {
+      existing.rotas.push(result);
+      existing.byNotice = existing.byNotice || byNotice;
+      existing.byEmail = existing.byEmail || byEmail;
+
+      clearTimeout(existing.timer);
+      existing.timer = setTimeout(
+        () => processBatchedRotaUpdates(batchKey),
+        1000,
+      );
+    } else {
+      const timer = setTimeout(() => processBatchedRotaUpdates(batchKey), 1000);
+
+      pendingRotaUpdates.set(batchKey, {
+        rotas: [result],
+        timer,
+        byNotice,
+        byEmail,
+        employeeId,
+        companyId,
+        departmentId,
+        actionUserId,
+      });
+    }
+  }
+
   return result;
 };
-
 
 const getUpcomingRotaFromDB = async (query: Record<string, unknown>) => {
   const { ...restQuery } = query;
@@ -163,7 +341,6 @@ const getUpcomingRotaFromDB = async (query: Record<string, unknown>) => {
   const today = moment().format("YYYY-MM-DD");
   const currentTime = moment().format("HH:mm");
   const employeeId = query.employeeId as string;
-
 
   // =========================================================================
   // Fetch Upcoming Rotas using QueryBuilder
@@ -186,14 +363,11 @@ const getUpcomingRotaFromDB = async (query: Record<string, unknown>) => {
   const meta = await rotaQuery.countTotal();
   const result = await rotaQuery.modelQuery;
 
-  
-
   return {
     meta,
     result,
   };
 };
-
 
 const deleteRotaFromDB = async (id: string) => {
   const rota = await Rota.findById(id);
@@ -207,14 +381,11 @@ const deleteRotaFromDB = async (id: string) => {
   return { message: "Rota deleted successfully" };
 };
 
-
-
-
-// const copyRotaIntoDB = async (payload: { 
-//   companyId: string, 
-//   type: 'week' | 'month', 
-//   sourceStart: string, 
-//   targetStart: string 
+// const copyRotaIntoDB = async (payload: {
+//   companyId: string,
+//   type: 'week' | 'month',
+//   sourceStart: string,
+//   targetStart: string
 // }) => {
 
 //   const { companyId, type, sourceStart, targetStart } = payload;
@@ -332,10 +503,6 @@ const deleteRotaFromDB = async (id: string) => {
 //   };
 // };
 
-
-
-
-
 const copyRotaIntoDB = async (payload: {
   companyId: string;
   type: "week" | "month" | "day";
@@ -345,12 +512,12 @@ const copyRotaIntoDB = async (payload: {
   const { companyId, type, sourceStart, targetStart } = payload;
 
   // Determine the correct moment unit based on the type
-  const timeUnit: moment.unitOfTime.StartOf = 
+  const timeUnit: moment.unitOfTime.StartOf =
     type === "week" ? "week" : type === "month" ? "month" : "day";
 
   const sourceStartMom = moment(sourceStart).startOf(timeUnit);
   const sourceEndMom = moment(sourceStart).endOf(timeUnit);
-  
+
   const targetStartMom = moment(targetStart).startOf(timeUnit);
   const targetEndMom = moment(targetStart).endOf(timeUnit);
 
@@ -366,7 +533,7 @@ const copyRotaIntoDB = async (payload: {
   if (!sourceRotas.length) {
     throw new AppError(
       httpStatus.NOT_FOUND,
-      "No shifts found in the source period to copy."
+      "No shifts found in the source period to copy.",
     );
   }
 
@@ -385,7 +552,7 @@ const copyRotaIntoDB = async (payload: {
   const leaveConflictSet = new Set(
     targetRotas
       .filter((r) => leaveTypes.includes(r.leaveType))
-      .map((r) => `${r.employeeId}_${r.startDate}_${r.departmentId}`)
+      .map((r) => `${r.employeeId}_${r.startDate}_${r.departmentId}`),
   );
 
   // 🔥 Time conflict set
@@ -394,8 +561,8 @@ const copyRotaIntoDB = async (payload: {
       .filter((r) => r.startTime && r.endTime)
       .map(
         (r) =>
-          `${r.employeeId}_${r.startDate}_${r.departmentId}_${r.startTime}_${r.endTime}`
-      )
+          `${r.employeeId}_${r.startDate}_${r.departmentId}_${r.startTime}_${r.endTime}`,
+      ),
   );
 
   // Fetch employee names
@@ -414,7 +581,7 @@ const copyRotaIntoDB = async (payload: {
     employees.map((emp: any) => [
       emp._id.toString(),
       { firstName: emp.firstName, lastName: emp.lastName },
-    ])
+    ]),
   );
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -488,7 +655,8 @@ const copyRotaIntoDB = async (payload: {
     }
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unused-vars
-    const { _id,status, createdAt,history, updatedAt, __v, ...restRotaData } = rota as any;
+    const { _id, status, createdAt, history, updatedAt, __v, ...restRotaData } =
+      rota as any;
 
     rotasToCreate.push({
       ...restRotaData,
@@ -515,9 +683,6 @@ const copyRotaIntoDB = async (payload: {
     result,
   };
 };
-
-
-
 
 const bulkAssignRotaIntoDB = async (payload: {
   companyId: string;
@@ -688,8 +853,6 @@ const bulkAssignRotaIntoDB = async (payload: {
   };
 };
 
-
-
 const createRotaAttendanceIntoDB = async (payload: { rotaId: string }) => {
   // 1. Find the current rota
   const currentRota = await Rota.findById(payload.rotaId);
@@ -766,14 +929,13 @@ const createRotaAttendanceIntoDB = async (payload: { rotaId: string }) => {
   currentRota.status = newStatus as any; // Cast to bypass enum strictness if needed, or ensure it matches schema
 
   await currentRota.save();
- await currentRota.populate({
-   path: "employeeId",
-   select: "firstName lastName",
- });
+  await currentRota.populate({
+    path: "employeeId",
+    select: "firstName lastName",
+  });
 
   return currentRota;
 };
-
 
 export const RotaServices = {
   getAllRotaFromDB,
@@ -786,7 +948,3 @@ export const RotaServices = {
   getUpcomingRotaFromDB,
   createRotaAttendanceIntoDB,
 };
-
-
-
-  

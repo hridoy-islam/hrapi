@@ -11,6 +11,8 @@ router.post(
   SignatureDocControllers.generateTemplate
 );
 
+
+
 // 2. Admin finalizes and sends docs to staff (supports Template or Free-Form)
 router.post(
   '/send',
@@ -20,6 +22,13 @@ router.get(
   '/templates',
   SignatureDocControllers.fetchTemplates
 );
+
+
+router.post(
+  '/forward/:id',
+  SignatureDocControllers.forwardSignatureDoc
+);
+
 
 // 3. Staff signs the document
 router.post(

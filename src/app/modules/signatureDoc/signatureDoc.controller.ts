@@ -118,7 +118,18 @@ const fetchTemplates = catchAsync(async (req, res) => {
 
 const initiateDocuSign = catchAsync(async (req, res) => {
   const { signatureDocId } = req.params;
-  const result = await SignatureDocServices.initiateSigningProcess(signatureDocId);
+  const { signerId,layout } = req.body; // 🚀 Extract the signer ID
+
+  if (!signerId) {
+    return sendResponse(res, {
+      statusCode: httpStatus.BAD_REQUEST,
+      success: false,
+      message: "signerId is required",
+      data: null,
+    });
+  }
+
+  const result = await SignatureDocServices.initiateSigningProcess(signatureDocId, signerId,layout);
   sendResponse(res, {
     statusCode: httpStatus.OK,
     success: true,
@@ -139,6 +150,28 @@ const handleDocuSignWebhook = catchAsync(async (req, res) => {
   });
 });
 
+const forwardSignatureDoc = catchAsync(async (req, res) => {
+  const { id } = req.params;
+  const { approverIds } = req.body; 
+  
+  if (!approverIds || !approverIds.length) {
+     return sendResponse(res, {
+      statusCode: httpStatus.BAD_REQUEST,
+      success: false,
+      message: "At least one approver is required to forward the document",
+      data: null,
+    });
+  }
+
+  const result = await SignatureDocServices.forwardDocumentForApproval(id, approverIds);
+  sendResponse(res, {
+    statusCode: httpStatus.OK,
+    success: true,
+    message: "Document successfully forwarded to authorities",
+    data: result,
+  });
+});
+
 
 export const SignatureDocControllers = {
   getAllSignatureDoc,
@@ -151,4 +184,5 @@ export const SignatureDocControllers = {
   fetchTemplates,
   initiateDocuSign,
   handleDocuSignWebhook,
+  forwardSignatureDoc
 };

@@ -15,4 +15,6 @@ export interface TRota {
   status: string;
   attendanceLogs:any;
   history:any
+  byNotice?: boolean;
+  byEmail?: boolean;
 }
