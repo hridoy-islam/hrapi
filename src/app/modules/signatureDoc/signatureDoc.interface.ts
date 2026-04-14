@@ -8,7 +8,7 @@ export interface TSignatureDoc {
   document:string;
   envelopeId:string;
   approverIds: Types.ObjectId[];
-  signedByApprovers: Types.ObjectId[];
+  signedBy: Types.ObjectId[];
   status:string;
   submittedAt:Date;
   employeeId: Types.ObjectId;

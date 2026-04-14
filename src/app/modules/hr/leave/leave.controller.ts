@@ -49,12 +49,21 @@ const createLeave = catchAsync(async (req, res) => {
   });
 });
 
-
+const getHolidaySummaryByDateRange = catchAsync(async (req, res) => {
+  const result = await LeaveServices.getHolidaySummaryByDateRange(req.query);
+  sendResponse(res, {
+    statusCode: httpStatus.OK,
+    success: true,
+    message: 'Holiday summary fetched successfully',
+    data: result,
+  });
+});
 
 export const LeaveControllers = {
     getAllLeave,
     getSingleLeave,
     updateLeave,
-    createLeave
+    createLeave,
+    getHolidaySummaryByDateRange
 };
 

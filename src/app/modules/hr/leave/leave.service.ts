@@ -7,13 +7,15 @@ import AppError from "../../../errors/AppError";
 import QueryBuilder from "../../../builder/QueryBuilder";
 import { User } from "../../user/user.model";
 import { Holiday } from "../holidays/holiday.model";
-import moment from '../../../utils/moment-setup';
+import moment from "../../../utils/moment-setup";
+import { Types } from "mongoose";
+import { HolidayServices } from "../holidays/holiday.service";
 
 const getAllLeaveFromDB = async (query: Record<string, unknown>) => {
   const { fromDate, toDate, ...restQuery } = query;
 
   const dateFilters: any[] = [];
-  
+
   if (fromDate) {
     dateFilters.push({ endDate: { $gte: new Date(fromDate as string) } });
   }
@@ -28,10 +30,10 @@ const getAllLeaveFromDB = async (query: Record<string, unknown>) => {
 
   const userQuery = new QueryBuilder(
     Leave.find().populate("userId", "name title firstName initial lastName"),
-    restQuery
+    restQuery,
   )
     .search(LeaveSearchableFields)
-    .filter(query) 
+    .filter(query)
     .sort()
     .paginate()
     .fields();
@@ -78,20 +80,22 @@ const getSingleLeaveFromDB = async (id: string) => {
 //   }
 // };
 
-
 const createLeaveIntoDB = async (payload: TLeave) => {
   try {
     const userHoliday = await Holiday.findOne({
       userId: payload.userId,
       year: payload.holidayYear,
     });
-    
+
     const start = moment(payload.startDate);
     const end = moment(payload.endDate);
 
     // 1. Generate leaveDays purely for logging/calendar display
-    let leaveDays = payload.leaveDays && payload.leaveDays.length > 0 ? payload.leaveDays : [];
-    
+    let leaveDays =
+      payload.leaveDays && payload.leaveDays.length > 0
+        ? payload.leaveDays
+        : [];
+
     if (leaveDays.length === 0) {
       let current = start.clone();
       while (current.isSameOrBefore(end, "day")) {
@@ -128,13 +132,13 @@ const createLeaveIntoDB = async (payload: TLeave) => {
     console.error("Error in createLeaveIntoDB:", error);
     throw new AppError(
       httpStatus.INTERNAL_SERVER_ERROR,
-      error.message || "Failed to create Leave"
+      error.message || "Failed to create Leave",
     );
   }
 };
 
 const updateLeaveIntoDB = async (
-  id: string, 
+  id: string,
   payload: Partial<TLeave>,
   actionUserId: string, // 👈 Passed from your controller (e.g., req.user.id)
 ) => {
@@ -143,13 +147,13 @@ const updateLeaveIntoDB = async (
   if (!leave) {
     throw new AppError(httpStatus.NOT_FOUND, "Leave not found");
   }
-const actionUser = await User.findById(actionUserId);
+  const actionUser = await User.findById(actionUserId);
   if (!actionUser) {
     throw new AppError(httpStatus.NOT_FOUND, "Action user not found");
   }
 
-
-  const userName = actionUser.name || `${actionUser.firstName} ${actionUser.lastName}`.trim();
+  const userName =
+    actionUser.name || `${actionUser.firstName} ${actionUser.lastName}`.trim();
 
   // 1. Determine the history log message based on what changed
   let actionMessage = `${userName} updated the leave request`;
@@ -174,7 +178,7 @@ const actionUser = await User.findById(actionUserId);
       history: {
         message: `${actionMessage} at`,
         userId: actionUserId,
-        createdAt: new Date(), 
+        createdAt: new Date(),
       },
     },
   };
@@ -190,32 +194,37 @@ const actionUser = await User.findById(actionUserId);
   }
 
   // 4. Only update holiday counters if status changes to 'approved' from 'pending'
-  if (leave.status === 'pending' && updatedLeave.status === 'approved') {
+  if (leave.status === "pending" && updatedLeave.status === "approved") {
     const userHoliday = await Holiday.findOne({
       userId: updatedLeave.userId,
-      year: updatedLeave.holidayYear, 
+      year: updatedLeave.holidayYear,
     });
 
     if (!userHoliday) {
-      throw new AppError(httpStatus.NOT_FOUND, "Holiday record not found for the year");
+      throw new AppError(
+        httpStatus.NOT_FOUND,
+        "Holiday record not found for the year",
+      );
     }
 
     const finalTotalHours = updatedLeave.totalHours || 0;
-    const isPaid = updatedLeave.holidayType === 'holiday';
+    const isPaid = updatedLeave.holidayType === "holiday";
 
     const paidHours = isPaid ? finalTotalHours : 0;
     const unpaidHours = !isPaid ? finalTotalHours : 0;
-    
+
     // Transfer Paid from Requested -> Booked
     userHoliday.requestedHours -= paidHours;
     userHoliday.bookedHours += paidHours;
-    
+
     // Transfer Unpaid from Requested -> Booked
     userHoliday.unpaidLeaveRequest -= unpaidHours;
     userHoliday.unpaidBookedHours += unpaidHours;
 
     // Update remaining hours based on accrued vs used + booked
-    userHoliday.remainingHours = userHoliday.holidayAccured - (userHoliday.usedHours + userHoliday.bookedHours);
+    userHoliday.remainingHours =
+      userHoliday.holidayAccured -
+      (userHoliday.usedHours + userHoliday.bookedHours);
 
     await userHoliday.save();
   }
@@ -223,10 +232,192 @@ const actionUser = await User.findById(actionUserId);
   return updatedLeave;
 };
 
+const bucketLeaveHours = (allLeaves: any[]) => {
+  let usedHours = 0;
+  let bookedHours = 0;
+  let requestedHours = 0;
+  let unpaidLeaveTaken = 0;
+  let unpaidBookedHours = 0;
+  let unpaidLeaveRequest = 0;
+
+  const now = moment();
+
+  allLeaves.forEach((leave) => {
+    const isApproved = leave.status.toLowerCase() === "approved";
+    const isPending = leave.status.toLowerCase() === "pending";
+    const finalHours = leave.totalHours || 0;
+    const isPaid = leave.holidayType === "holiday";
+    const isPast = moment(leave.endDate).isBefore(now, "day");
+
+    if (finalHours <= 0) return;
+
+    if (isPending) {
+      if (isPaid) requestedHours += finalHours;
+      else unpaidLeaveRequest += finalHours;
+    } else if (isApproved) {
+      if (isPaid) {
+        if (isPast) usedHours += finalHours;
+        else bookedHours += finalHours;
+      } else {
+        if (isPast) unpaidLeaveTaken += finalHours;
+        else unpaidBookedHours += finalHours;
+      }
+    }
+  });
+
+  return {
+    usedHours,
+    bookedHours,
+    requestedHours,
+    unpaidLeaveTaken,
+    unpaidBookedHours,
+    unpaidLeaveRequest,
+  };
+};
+
+const getHolidaySummaryByDateRange = async (query: Record<string, unknown>) => {
+  const { holidayYear, startDate, endDate, companyId, userId } = query;
+
+  if (!holidayYear) {
+    throw new AppError(httpStatus.BAD_REQUEST, "holidayYear is required");
+  }
+  if (!startDate || !endDate) {
+    throw new AppError(
+      httpStatus.BAD_REQUEST,
+      "startDate and endDate are required",
+    );
+  }
+
+  const start = new Date(startDate as string);
+  const end = new Date(endDate as string);
+
+  // ── Build the leave filter ──────────────────────────────────────────────
+  const leaveFilter: Record<string, unknown> = {
+    holidayYear,
+    startDate: { $lte: end },
+    endDate: { $gte: start }, // overlaps the requested window
+  };
+
+  if (companyId)
+    leaveFilter.companyId = new Types.ObjectId(companyId as string);
+  if (userId) leaveFilter.userId = new Types.ObjectId(userId as string);
+
+  // ── Fetch leaves that fall (even partially) within the window ───────────
+  const leaves = await Leave.find(leaveFilter).populate(
+    "userId",
+    "firstName lastName name email",
+  );
+
+  // ── Pull matching Holiday records ───────────────────────────────────────
+  const holidayFilter: Record<string, unknown> = { year: holidayYear };
+  if (userId) holidayFilter.userId = new Types.ObjectId(userId as string);
+  if (companyId) {
+    const employees = await User.find({
+      company: new Types.ObjectId(companyId as string),
+      role: "employee",
+      status: "active",
+    }).select("_id");
+    holidayFilter.userId = { $in: employees.map((e) => e._id) };
+  }
+
+  let holidayRecords = await Holiday.find(holidayFilter).populate(
+    "userId",
+    "firstName lastName name email",
+  );
+
+  // ── FALLBACK: Trigger Creation if No Data Found ─────────────────────────
+  if (holidayRecords.length === 0 && (companyId || userId)) {
+    console.log(
+      `No holiday records found for year ${holidayYear}. Triggering generation...`,
+    );
+
+    // Call the generation service with the requested params
+    await HolidayServices.getAllHolidayFromDB({
+      companyId: companyId as string,
+      year: holidayYear as string,
+      limit: "all",
+    });
+
+    // Re-fetch the newly generated records from the database
+    holidayRecords = await Holiday.find(holidayFilter).populate(
+      "userId",
+      "firstName lastName name email",
+    );
+  }
+
+  // ── Attach per-employee leave breakdown & OVERRIDE Data ─────────────────
+  const result = holidayRecords.map((record) => {
+    // Safety check in case the generated record's userId isn't populated
+    const recordUserId = record.userId?._id
+      ? record.userId._id.toString()
+      : record.userId.toString();
+
+    const empLeaves = leaves.filter((l:any) => {
+      const leaveUserId = l.userId?._id
+        ? l.userId._id.toString()
+        : l.userId.toString();
+      return leaveUserId === recordUserId;
+    });
+
+    // 1. Calculate Date-Range Specific Hours
+    const empBucketed = bucketLeaveHours(empLeaves);
+
+    // 2. Recalculate Dynamic Remaining Hours
+    // Formula: Allowance (CarryForward + Accrued) - (Date Range Used + Date Range Booked)
+    const allowance = (record.carryForward || 0) + (record.holidayAccured || 0);
+    const dynamicRemaining =
+      allowance - (empBucketed.usedHours + empBucketed.bookedHours);
+
+    // 3. Override the original DB record with the date-range calculated values
+    const dynamicHolidayRecord = {
+      ...record.toObject(),
+      usedHours: empBucketed.usedHours,
+      bookedHours: empBucketed.bookedHours,
+      requestedHours: empBucketed.requestedHours,
+      unpaidLeaveTaken: empBucketed.unpaidLeaveTaken,
+      unpaidBookedHours: empBucketed.unpaidBookedHours,
+      unpaidLeaveRequest: empBucketed.unpaidLeaveRequest,
+      remainingHours: Number(dynamicRemaining.toFixed(2)),
+    };
+
+    return {
+      holidayRecord: dynamicHolidayRecord,
+      dateRangeSummary: {
+        period: { startDate: start, endDate: end },
+        year: holidayYear,
+        ...empBucketed,
+        totalLeaveCount: empLeaves.length,
+        leaveBreakdown: {
+          approved: empLeaves.filter((l) => l.status === "approved").length,
+          pending: empLeaves.filter((l) => l.status === "pending").length,
+          rejected: empLeaves.filter((l) => l.status === "rejected").length,
+        },
+      },
+    };
+  });
+
+  // ── Company-wide aggregate (only when querying by company) ──────────────
+  const bucketed = bucketLeaveHours(leaves);
+  const aggregate = companyId
+    ? {
+        totalEmployees: result.length,
+        ...bucketed,
+        totalLeaveCount: leaves.length,
+        leaveBreakdown: {
+          approved: leaves.filter((l) => l.status === "approved").length,
+          pending: leaves.filter((l) => l.status === "pending").length,
+          rejected: leaves.filter((l) => l.status === "rejected").length,
+        },
+      }
+    : null;
+
+  return { aggregate, result };
+};
 
 export const LeaveServices = {
   getAllLeaveFromDB,
   getSingleLeaveFromDB,
   updateLeaveIntoDB,
   createLeaveIntoDB,
+  getHolidaySummaryByDateRange,
 };

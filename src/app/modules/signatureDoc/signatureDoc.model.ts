@@ -1,6 +1,36 @@
 import { Schema, model } from "mongoose";
 import { TSignatureDoc } from "./signatureDoc.interface";
 
+const SignedSchema = new Schema(
+  {
+    userId: {
+      type: Schema.Types.ObjectId,
+      ref: "User",
+      required: true,
+    },
+  },
+  {
+    timestamps: true,
+  },
+);
+const ForwardSchema = new Schema(
+  {
+    index: {
+      type: Number,
+      required: true,
+      default: 0,
+    },
+    userId: {
+      type: Schema.Types.ObjectId,
+      ref: "User",
+      required: true,
+    },
+  },
+  {
+    timestamps: true,
+  },
+);
+
 const SignatureDocSchema = new Schema<TSignatureDoc>(
   {
     content: {
@@ -20,13 +50,8 @@ const SignatureDocSchema = new Schema<TSignatureDoc>(
       type: String,
       default: null,
     },
-    approverIds: [
-      {
-        type: Schema.Types.ObjectId,
-        ref: "User",
-      },
-    ],
-    signedByApprovers: [{ type: Schema.Types.ObjectId, ref: "User" }],
+    approverIds: [ForwardSchema],
+    signedBy: [SignedSchema],
     signedDocument: {
       type: String,
     },

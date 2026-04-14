@@ -11,6 +11,11 @@ router.get(
   LeaveControllers.getAllLeave
 );
 router.get(
+  "/report",
+//   auth("admin", "company", "creator", "user", "director"),
+  LeaveControllers.getHolidaySummaryByDateRange
+);
+router.get(
   "/:id",
 //   auth("admin", "user", "director", "company", "creator"),
 LeaveControllers.getSingleLeave
