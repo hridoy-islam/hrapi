@@ -11,32 +11,66 @@ import moment from "../../../utils/moment-setup";
 import { Types } from "mongoose";
 import { HolidayServices } from "../holidays/holiday.service";
 
+
 const getAllLeaveFromDB = async (query: Record<string, unknown>) => {
-  const { fromDate, toDate, ...restQuery } = query;
+  const { fromDate, toDate, companyId, limit, ...restQuery } = query;
 
-  const dateFilters: any[] = [];
+  const andConditions: any[] = [];
 
-  if (fromDate) {
-    dateFilters.push({ endDate: { $gte: new Date(fromDate as string) } });
-  }
-  if (toDate) {
-    dateFilters.push({ startDate: { $lte: new Date(toDate as string) } });
-  }
-
-  // Inject the date filters into the rest of the query object
-  if (dateFilters.length > 0) {
-    restQuery.$and = dateFilters;
+  // ✅ Company filter (important)
+  if (companyId) {
+    andConditions.push({
+      companyId: new Types.ObjectId(companyId as string),
+    });
   }
 
+  // ✅ Date overlap logic
+  if (fromDate && toDate) {
+    andConditions.push({
+      $and: [
+        { endDate: { $gte: new Date(fromDate as string) } },
+        { startDate: { $lte: new Date(toDate as string) } },
+      ],
+    });
+  } else if (fromDate) {
+    andConditions.push({
+      endDate: { $gte: new Date(fromDate as string) },
+    });
+  } else if (toDate) {
+    andConditions.push({
+      startDate: { $lte: new Date(toDate as string) },
+    });
+  }
+
+  // ✅ Merge all filters safely
+  const finalQuery = {
+    ...restQuery,
+    ...(andConditions.length > 0 && { $and: andConditions }),
+  };
+
+  // ✅ Handle limit = "all"
+  let modifiedQuery = { ...query };
+  if (limit === "all") {
+    delete modifiedQuery.limit;
+    delete modifiedQuery.page;
+  }
+
+  // ✅ Build query
   const userQuery = new QueryBuilder(
-    Leave.find().populate("userId", "name title firstName initial lastName"),
-    restQuery,
+    Leave.find().populate(
+      "userId",
+      "name title firstName initial lastName"
+    ),
+    finalQuery
   )
     .search(LeaveSearchableFields)
-    .filter(query)
+    .filter(modifiedQuery)
     .sort()
     .paginate()
     .fields();
+
+  // ✅ Debug (optional)
+  // console.log(JSON.stringify(finalQuery, null, 2));
 
   const meta = await userQuery.countTotal();
   const result = await userQuery.modelQuery;
@@ -46,6 +80,8 @@ const getAllLeaveFromDB = async (query: Record<string, unknown>) => {
     result,
   };
 };
+
+
 const getSingleLeaveFromDB = async (id: string) => {
   const result = await Leave.findById(id);
   return result;
