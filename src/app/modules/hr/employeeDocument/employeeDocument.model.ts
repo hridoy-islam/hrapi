@@ -16,6 +16,9 @@ const EmployeeDocumentSchema = new Schema<TEmployeeDocument>(
       type: String,
       required: true,
     },
+    note:{
+      type: String
+    }
   },
   {
     timestamps: true,
