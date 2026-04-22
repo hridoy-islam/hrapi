@@ -28,11 +28,6 @@ router.patch(
 //   auth("admin", "user", "creator", "company", "director"),
 PayrollControllers.updatePayroll
 );
-router.get(
-  "/regenerate/:id",
-//   auth("admin", "user", "creator", "company", "director"),
-PayrollControllers.regeneratePayroll
-);
 
 
 

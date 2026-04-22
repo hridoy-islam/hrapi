@@ -12,8 +12,79 @@ import { Types } from "mongoose";
 import { HolidayServices } from "../holidays/holiday.service";
 
 
+// const getAllLeaveFromDB = async (query: Record<string, unknown>) => {
+//   const { fromDate, toDate, companyId, limit, ...restQuery } = query;
+
+//   const andConditions: any[] = [];
+
+//   // ✅ Company filter (important)
+//   if (companyId) {
+//     andConditions.push({
+//       companyId: new Types.ObjectId(companyId as string),
+//     });
+//   }
+
+//   // ✅ Date overlap logic
+//   if (fromDate && toDate) {
+//     andConditions.push({
+//       $and: [
+//         { endDate: { $gte: new Date(fromDate as string) } },
+//         { startDate: { $lte: new Date(toDate as string) } },
+//       ],
+//     });
+//   } else if (fromDate) {
+//     andConditions.push({
+//       endDate: { $gte: new Date(fromDate as string) },
+//     });
+//   } else if (toDate) {
+//     andConditions.push({
+//       startDate: { $lte: new Date(toDate as string) },
+//     });
+//   }
+
+//   // ✅ Merge all filters safely
+//   const finalQuery = {
+//     ...restQuery,
+//     ...(andConditions.length > 0 && { $and: andConditions }),
+//   };
+
+//   // ✅ Handle limit = "all"
+//   let modifiedQuery = { ...query };
+//   if (limit === "all") {
+//     delete modifiedQuery.limit;
+//     delete modifiedQuery.page;
+//   }
+
+//   // ✅ Build query
+//   const userQuery = new QueryBuilder(
+//     Leave.find().populate(
+//       "userId",
+//       "name title firstName initial lastName"
+//     ),
+//     finalQuery
+//   )
+//     .search(LeaveSearchableFields)
+//     .filter(modifiedQuery)
+//     .sort()
+//     .paginate()
+//     .fields();
+
+//   // ✅ Debug (optional)
+//   // console.log(JSON.stringify(finalQuery, null, 2));
+
+//   const meta = await userQuery.countTotal();
+//   const result = await userQuery.modelQuery;
+
+//   return {
+//     meta,
+//     result,
+//   };
+// };
+
+
+
 const getAllLeaveFromDB = async (query: Record<string, unknown>) => {
-  const { fromDate, toDate, companyId, limit, ...restQuery } = query;
+  const { fromDate, toDate, companyId, ...restQuery } = query;
 
   const andConditions: any[] = [];
 
@@ -44,33 +115,23 @@ const getAllLeaveFromDB = async (query: Record<string, unknown>) => {
 
   // ✅ Merge all filters safely
   const finalQuery = {
-    ...restQuery,
+    ...restQuery, // This already contains page and limit
     ...(andConditions.length > 0 && { $and: andConditions }),
   };
 
-  // ✅ Handle limit = "all"
-  let modifiedQuery = { ...query };
-  if (limit === "all") {
-    delete modifiedQuery.limit;
-    delete modifiedQuery.page;
-  }
-
-  // ✅ Build query
+  // ✅ Build query - let paginate() handle limit/page
   const userQuery = new QueryBuilder(
     Leave.find().populate(
       "userId",
       "name title firstName initial lastName"
     ),
-    finalQuery
+    finalQuery  // Pass finalQuery which includes page and limit
   )
     .search(LeaveSearchableFields)
-    .filter(modifiedQuery)
+    .filter(finalQuery)
     .sort()
-    .paginate()
+    .paginate()  // This should read limit and page from finalQuery
     .fields();
-
-  // ✅ Debug (optional)
-  // console.log(JSON.stringify(finalQuery, null, 2));
 
   const meta = await userQuery.countTotal();
   const result = await userQuery.modelQuery;

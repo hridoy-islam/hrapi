@@ -2,24 +2,13 @@ import { Schema, model, Types } from "mongoose";
 import { TAttendanceLog, TPayroll } from "./payroll.interface";
 
 const AttendanceLog = new Schema<TAttendanceLog>({
-  employementRateId: { type: Schema.Types.ObjectId, ref: "EmployeeRate" },
-  shiftId: { type: Schema.Types.ObjectId, ref: "Shift" },
-  startDate: {
-    type: String,
+  attendanceId: {
+    type: Schema.Types.ObjectId,
+    required: true,
+    ref: "Attendance",
   },
-  startTime: {
-    type: String,
-  },
-  endDate: {
-    type: String,
-  },
-  endTime: {
-    type: String,
-  },
-  payRate: { type: Number, default:0 },
-  note: { type: String },
-  bankHoliday: { type: Boolean, default: false },
-  bankHolidayId: { type: Schema.Types.ObjectId, ref: "BankHoliday" },
+  payRate: { type: Number, default: 0 },
+  duration: { type: Number, default: 0 },
 });
 
 const PayrollSchema = new Schema<TPayroll>(
@@ -34,6 +23,7 @@ const PayrollSchema = new Schema<TPayroll>(
       required: true,
       ref: "User",
     },
+    refId:{type:String,required:true},
     fromDate: {
       type: Date,
       required: true,
@@ -42,21 +32,12 @@ const PayrollSchema = new Schema<TPayroll>(
       type: Date,
       required: true,
     },
-    note: { type: String },
     status: {
       type: String,
       enum: ["pending", "approved", "rejected"],
       default: "pending",
     },
-    totalHour: { type: Number },
-    approvedBy: {
-      type: Types.ObjectId,
-      ref: "User",
-    },
-    totalAmount: {
-      type: Number,
-      default: 0,
-    },
+  
     attendanceList: [AttendanceLog],
   },
   {
