@@ -42,6 +42,7 @@ import { RotaRoutes } from "../modules/rota/rota.router";
 import { ServiceUserRoutes } from "../modules/serviceUser/serviceUser.router";
 import { SignatureDocRoutes } from "../modules/signatureDoc/signatureDoc.router";
 import { DocusignCredentialsRoutes } from "../modules/docusignCredentials/docusignCredentials.router";
+import { SickNoteRoutes } from "../modules/hr/sickNote/sickNote.router";
 
 const router = Router();
 
@@ -151,7 +152,7 @@ const moduleRoutes = [
     path: "/visa",
     route: VisaCheckRoutes,
   },
-    {
+  {
     path: "/dbs",
     route: DbsFormRoutes,
   },
@@ -219,6 +220,10 @@ const moduleRoutes = [
   {
     path: "/docusign-details",
     route: DocusignCredentialsRoutes,
+  },
+  {
+    path: "/sick-note",
+    route: SickNoteRoutes,
   },
 ];
 

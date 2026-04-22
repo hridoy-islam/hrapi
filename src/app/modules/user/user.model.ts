@@ -32,6 +32,10 @@ const PayrollSchema = new Schema({
   beneficiary: {
     type: String,
   },
+  payRate: {
+    type: Number,
+    default:0
+  },
 });
 
 const EqualityInformationSchema = new Schema({
