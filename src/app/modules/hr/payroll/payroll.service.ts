@@ -39,8 +39,9 @@ const calculateOverlapMinutes = (
   const mIn = moment(clockIn);
   const mOut = moment(clockOut);
 
-  const clockInMins = mIn.hours() * 60 + mIn.minutes();
-  const clockOutMins = mOut.hours() * 60 + mOut.minutes();
+  // ---> THE FIX: Include seconds as fractional minutes to prevent rounding inflation
+  const clockInMins = mIn.hours() * 60 + mIn.minutes() + (mIn.seconds() / 60);
+  const clockOutMins = mOut.hours() * 60 + mOut.minutes() + (mOut.seconds() / 60);
 
   let aStart = clockInMins;
   let aEnd = clockOutMins;
@@ -63,7 +64,8 @@ const calculateOverlapMinutes = (
     if (overlap > bestOverlap) bestOverlap = overlap;
   }
 
-  return bestOverlap;
+  // Floors 473.71 to 473 perfectly!
+  return Math.floor(bestOverlap);
 };
 
 // ─── Core calculation per employee ──────────────────────────────────────────
