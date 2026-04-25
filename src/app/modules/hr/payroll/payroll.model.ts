@@ -23,7 +23,7 @@ const PayrollSchema = new Schema<TPayroll>(
       required: true,
       ref: "User",
     },
-    payrollNo:{type:String,required:true},
+    payrollNo: { type: String, required: true },
     fromDate: {
       type: Date,
       required: true,
@@ -32,12 +32,19 @@ const PayrollSchema = new Schema<TPayroll>(
       type: Date,
       required: true,
     },
+    isContract: {
+      type: Boolean,
+      default: false,
+    },
+    contractAmount: {
+      type: Number,
+    },
     status: {
       type: String,
       enum: ["pending", "approved", "rejected"],
       default: "pending",
     },
-  
+
     attendanceList: [AttendanceLog],
   },
   {

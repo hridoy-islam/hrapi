@@ -32,6 +32,11 @@ router.patch(
 //   auth("admin", "user", "creator", "company", "director"),
 PayrollControllers.updatePayroll
 );
+router.delete(
+  "/:id",
+//   auth("admin", "user", "creator", "company", "director"),
+PayrollControllers.deleteSinglePayroll
+);
 
 router.post(
   "/regenerate",

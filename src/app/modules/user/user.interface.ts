@@ -102,6 +102,7 @@ export interface TUser {
   rtwDocumentUrl?: string;
   rtwCheckDate?: Date;
   area?: string;
+  contractAmount?: Number;
   contractHours?: Number;
   carTravelAllowance?: boolean;
   recruitmentEmploymentType?:

@@ -12,10 +12,12 @@ export interface TPayroll {
   fromDate: Date;
   toDate: Date;
   note?: string;
+  isContract?: boolean;
   payrollNo?: string;
 
   status: "pending" | "approved" | "rejected";
   reason?: string;
+  contractAmount?: number;
   totalHour?: number;
   approvedBy?: Types.ObjectId;
   totalAmount: number;

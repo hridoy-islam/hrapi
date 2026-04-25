@@ -27,6 +27,17 @@ const getSinglePayroll = catchAsync(async (req, res) => {
   });
 });
 
+const deleteSinglePayroll = catchAsync(async (req, res) => {
+  const { id } = req.params;
+  const result = await PayrollServices.deletePayrollIntoDB(id);
+  sendResponse(res, {
+    statusCode: httpStatus.OK,
+    success: true,
+    message: "Payroll is deleted succesfully",
+    data: result,
+  });
+});
+
 
 const updatePayroll = catchAsync(async (req, res) => {
   const { id } = req.params;
@@ -85,7 +96,8 @@ export const PayrollControllers = {
     getSinglePayroll,
     updatePayroll,
     getPayrollByBatch,
-    regeneratePayroll
+    regeneratePayroll,
+    deleteSinglePayroll
     
 };
 

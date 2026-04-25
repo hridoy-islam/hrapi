@@ -322,6 +322,9 @@ const userSchema = new Schema<TUser, UserModel>(
     contractHours: {
       type: Number,
     },
+    contractAmount: {
+      type: Number,
+    },
     carTravelAllowance: {
       type: Boolean,
     },

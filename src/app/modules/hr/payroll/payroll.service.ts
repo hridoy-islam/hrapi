@@ -606,11 +606,36 @@ const updatePayrollIntoDB = async (id: string, payload: Partial<TPayroll>) => {
   const payroll = await Payroll.findById(id);
   if (!payroll) throw new AppError(httpStatus.NOT_FOUND, "Payroll not found");
 
+  // Determine if it's a contract (check payload first, fallback to existing payroll data)
+  const isContract = payload.isContract !== undefined ? payload.isContract : payroll.isContract;
+
+  if (isContract) {
+    // Fetch the user to get the contract amount
+    const user = await User.findById(payroll.userId);
+    
+    if (!user) {
+      throw new AppError(httpStatus.NOT_FOUND, "User not found");
+    }
+
+    // Set the contractAmount in the payload, default to 0 if undefined/null
+    payload.contractAmount = user.contractAmount?.valueOf() ?? 0;
+  }
+
+  // Update the payroll with the modified payload
   return Payroll.findByIdAndUpdate(id, payload, {
     new: true,
     runValidators: true,
   });
 };
+
+
+const deletePayrollIntoDB = async (id: string) => {
+  const payroll = await Payroll.findById(id);
+  if (!payroll) throw new AppError(httpStatus.NOT_FOUND, "Payroll not found");
+
+  return Payroll.findByIdAndDelete(id);
+};
+
 
 
 const regeneratePayrollIntoDB = async (payload: { payrollIds: string[] }) => {
@@ -712,5 +737,6 @@ export const PayrollServices = {
   createPayrollIntoDB,
   updatePayrollIntoDB,
   regeneratePayrollIntoDB,
-  getCompanyPayrollByBatchFromDB
+  getCompanyPayrollByBatchFromDB,
+  deletePayrollIntoDB
 };
