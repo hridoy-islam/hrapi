@@ -190,10 +190,12 @@ const getPayrollFromDB = async (query: Record<string, unknown>) => {
   const {
     month,
     year,
+    fromDate, // ✅ Extract fromDate
+    toDate,   // ✅ Extract toDate
     page = 1,
     limit = 10,
     search,
-    companyId, // Add companyId to the query params
+    companyId,
     ...otherQueryParams
   } = query;
 
@@ -208,8 +210,22 @@ const getPayrollFromDB = async (query: Record<string, unknown>) => {
     matchStage.companyId = new Types.ObjectId(companyId as string);
   }
 
-  // ✅ Month filter
-  if (month && year) {
+  // ✅ Handle Specific Date Range Filtering First (fromDate & toDate)
+  if (fromDate && toDate) {
+    const queryStart = new Date(fromDate as string);
+    const queryEnd = new Date(toDate as string);
+    
+    // Ensure the end date covers the final millisecond of the day
+    queryEnd.setUTCHours(23, 59, 59, 999);
+
+    // Any payroll that starts before the query ends AND ends after the query starts
+    // This catches exactly contained payrolls, partially overlapping payrolls, and encompassing payrolls.
+    matchStage.fromDate = { $lte: queryEnd };
+    matchStage.toDate = { $gte: queryStart };
+  }
+
+  // ✅ Fallback to Month/Year filter if fromDate/toDate are not provided
+  else if (month && year) {
     const startOfMonth = moment(`${year}-${String(month).padStart(2, "0")}-01`)
       .startOf("month")
       .toDate();
@@ -269,7 +285,7 @@ const getPayrollFromDB = async (query: Record<string, unknown>) => {
       },
     },
 
-    // 🔹 DEPARTMENTS lookup - departmentId is an array in User schema
+    // 🔹 DEPARTMENTS lookup
     {
       $lookup: {
         from: "departments",
@@ -285,12 +301,18 @@ const getPayrollFromDB = async (query: Record<string, unknown>) => {
               },
             },
           },
+          // ✅ Added projection to only return departmentName (and _id implicitly)
+          {
+            $project: {
+              departmentName: 1,
+            }
+          }
         ],
         as: "departments",
       },
     },
 
-    // 🔹 DESIGNATIONS lookup - designationId is an array in User schema
+    // 🔹 DESIGNATIONS lookup
     {
       $lookup: {
         from: "designations",
@@ -306,6 +328,12 @@ const getPayrollFromDB = async (query: Record<string, unknown>) => {
               },
             },
           },
+          // ✅ Added projection to only return title (and _id implicitly)
+          {
+            $project: {
+              title: 1,
+            }
+          }
         ],
         as: "designations",
       },
@@ -393,6 +421,7 @@ const getPayrollFromDB = async (query: Record<string, unknown>) => {
               role: "$user.role",
               status: "$user.status",
               payroll: "$user.payroll",
+              // Since we filtered in the lookup pipelines, these will now only contain the requested fields
               designations: { $ifNull: ["$designations", []] },
               departments: { $ifNull: ["$departments", []] },
             },
@@ -415,13 +444,34 @@ const getPayrollFromDB = async (query: Record<string, unknown>) => {
   };
 };
 
-
 const getSinglePayrollFromDB = async (id: string) => {
   const result = await Payroll.findById(id)
-    .populate("userId")
-    .populate({ path: "attendanceList.attendanceId" });
+    // 1. Populate the User and their Designation
+    .populate({
+      path: "userId",
+      select: "firstName lastName email payroll designationId", 
+      populate: {
+        path: "designationId",
+        select: "title",
+      },
+      
+    }).populate({
+      path: "companyId",
+      select: "name", 
+     
+      
+    })
+    .populate({
+      path: "attendanceList.attendanceId",
+      select:"clockInDate clockOutDate clockIn clockOut",
+      populate: {
+        path: "rotaId",
+        select: "shiftName startTime endTime startDate endDate ",
+      },
+    });
 
   if (!result) throw new AppError(httpStatus.NOT_FOUND, "Payroll not found");
+  
   return result;
 };
 
