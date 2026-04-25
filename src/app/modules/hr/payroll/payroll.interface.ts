@@ -12,7 +12,7 @@ export interface TPayroll {
   fromDate: Date;
   toDate: Date;
   note?: string;
-  refId?: string;
+  payrollNo?: string;
 
   status: "pending" | "approved" | "rejected";
   reason?: string;

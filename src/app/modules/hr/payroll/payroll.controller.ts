@@ -53,11 +53,26 @@ const createPayroll = catchAsync(async (req, res) => {
   });
 });
 
+
+const regeneratePayroll = catchAsync(async (req, res) => {
+  const { payrollIds } = req.body;
+
+  const result = await PayrollServices.regeneratePayrollIntoDB({ payrollIds });
+
+  sendResponse(res, {
+    statusCode: httpStatus.OK,
+    success: true,
+    message: "Payroll regenerated succesfully",
+    data: result,
+  });
+});
+
 export const PayrollControllers = {
     createPayroll,
     getAllPayroll,
     getSinglePayroll,
     updatePayroll,
+    regeneratePayroll
     
 };
 

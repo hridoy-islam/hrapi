@@ -1,3 +1,4 @@
+import { Schema, model, Types } from "mongoose";
 import httpStatus from "http-status";
 import AppError from "../../../errors/AppError";
 import moment from "../../../utils/moment-setup";
@@ -6,16 +7,7 @@ import { TPayroll } from "./payroll.interface";
 import { Attendance } from "../../attendance/attendance.model";
 import { User } from "../../user/user.model";
 import { Rota } from "../../rota/rota.model";
-import { Types } from "mongoose";
-
-// ─── Helpers ────────────────────────────────────────────────────────────────
-const generatePayrollRefId = (): string => {
-  const datePart = moment().format("YYYYMMDD");
-  // Generates a 4-character random alphanumeric string
-  const randomPart = Math.random().toString(36).substring(2, 6);
-  return `pay-${datePart}${randomPart}`;
-};
-
+import { EmployeeRate } from "../employeeRate/employeeRate.model";
 
 /** Convert "HH:MM" → total minutes from midnight */
 const timeToMinutes = (timeStr: string): number => {
@@ -27,16 +19,6 @@ const timeToMinutes = (timeStr: string): number => {
 /**
  * Calculate the overlapping (payable) minutes between a rota window and an
  * actual clock-in / clock-out window.
- *
- * Rules
- * ──────
- * • If the rota's endTime < startTime  → the rota crosses midnight
- *   (e.g. 22:00 → 06:00 means the shift ends the next calendar day).
- * • The employee is only paid for the portion of their clock-in/out that
- *   falls WITHIN the rota window.
- *   - Arrives early  → cap start at rota start
- *   - Leaves late    → cap end   at rota end
- *   - Arrives late / leaves early → use their actual times
  */
 const calculateOverlapMinutes = (
   rotaStart: string,
@@ -54,8 +36,6 @@ const calculateOverlapMinutes = (
   if (rEnd < rStart) rEnd += 24 * 60;
 
   // ── attendance window ──────────────────────────────────────────────────────
-  // moment-setup sets Europe/London as default tz, so .hours()/.minutes()
-  // automatically reflect the correct local time.
   const mIn = moment(clockIn);
   const mOut = moment(clockOut);
 
@@ -68,8 +48,6 @@ const calculateOverlapMinutes = (
   // Overnight attendance
   if (aEnd < aStart) aEnd += 24 * 60;
 
-  // ── Try ±24 h offsets to handle edge cases where attendance and rota ───────
-  // fall on different sides of midnight relative to each other.
   const scenarios: [number, number][] = [
     [aStart, aEnd], // same day
     [aStart + 24 * 60, aEnd + 24 * 60], // attendance +24 h
@@ -85,7 +63,7 @@ const calculateOverlapMinutes = (
     if (overlap > bestOverlap) bestOverlap = overlap;
   }
 
-  return bestOverlap; // minutes
+  return bestOverlap;
 };
 
 // ─── Core calculation per employee ──────────────────────────────────────────
@@ -96,12 +74,10 @@ const calculatePayrollForEmployee = async (
   fromDate: Date,
   toDate: Date,
 ) => {
-  // moment-setup default tz (Europe/London) is used for all formatting
   const fromStr = moment(fromDate).format("YYYY-MM-DD");
   const toStr = moment(toDate).format("YYYY-MM-DD");
 
   // 1. Fetch approved attendance records in the date range.
-  //    clockIn is stored as an ISO string — compare the first 10 chars (YYYY-MM-DD).
   const attendanceRecords = await Attendance.find({
     userId,
     companyId,
@@ -121,11 +97,14 @@ const calculatePayrollForEmployee = async (
     );
   }
 
-  // 2. Get employee's payRate from User.payroll.payRate (default 0)
-  const employee = await User.findById(userId).select("payroll");
-  const payRate: number = (employee as any)?.payroll?.payRate ?? 0;
+  // 2. Fetch EmployeeRates and POPULATE the shiftId array
+  const employeeRates = await EmployeeRate.find({ employeeId: userId })
+    .populate({
+      path: "shiftId",
+      select: "name startTime endTime", 
+    })
+    .sort({ createdAt: -1 });
 
-  // 3. Build attendance list
   const attendanceList: {
     attendanceId: string;
     payRate: number;
@@ -135,31 +114,79 @@ const calculatePayrollForEmployee = async (
   let totalDurationMinutes = 0;
   let totalAmount = 0;
 
+  const rotaCache = new Map<string, any>();
+
   for (const record of attendanceRecords) {
     const rec = record as any;
+    const mClockIn = moment(rec.clockIn);
+    const dayOfWeek = mClockIn.format("dddd"); // E.g., "Monday"
+    
+    let currentPayRate = 0; // Defaults to 0
 
-    // 4. No rota linked — record with 0 duration
+    // 3. No rota linked — record with 0 duration
     if (!rec.rotaId) {
       attendanceList.push({
         attendanceId: rec._id.toString(),
-        payRate,
+        payRate: 0,
         duration: 0,
       });
       continue;
     }
 
-    const rota = await Rota.findById(rec.rotaId);
+    // Fetch or get cached Rota
+    let rota = rotaCache.get(rec.rotaId.toString());
+    if (!rota) {
+      rota = await Rota.findById(rec.rotaId);
+      if (rota) rotaCache.set(rec.rotaId.toString(), rota);
+    }
 
     if (!rota || !(rota as any).startTime || !(rota as any).endTime) {
       attendanceList.push({
         attendanceId: rec._id.toString(),
-        payRate,
+        payRate: 0,
         duration: 0,
       });
       continue;
     }
 
-    // 5. Payable minutes = overlap between rota window and actual clock-in/out
+    const rotaStartTime = (rota as any).startTime;
+    const rotaStartMins = timeToMinutes(rotaStartTime);
+
+    // 4. FIND THE PAY RATE based on the number of EmployeeRate records
+    let bestRateDoc: any = null;
+
+    if (employeeRates.length === 1) {
+      // ✅ If there's only one rate, use it immediately
+      bestRateDoc = employeeRates[0];
+    } else if (employeeRates.length > 1) {
+      // ✅ If there are multiple rates, find the one with the closest shift.startTime
+      let minDiff = Infinity;
+
+      for (const rateDoc of employeeRates) {
+        if (!rateDoc.shiftId || !Array.isArray(rateDoc.shiftId)) continue;
+        
+        for (const shift of rateDoc.shiftId) {
+          if (!shift || typeof shift !== 'object' || !('startTime' in shift) || !shift.startTime) continue;
+          
+          const shiftStartMins = timeToMinutes(String(shift.startTime));
+          
+          const rawDiff = Math.abs(shiftStartMins - rotaStartMins);
+          const diff = Math.min(rawDiff, 24 * 60 - rawDiff);
+          
+          if (diff < minDiff) {
+            minDiff = diff;
+            bestRateDoc = rateDoc;
+          }
+        }
+      }
+    }
+
+    // Extract the rate for the specific day from the matched doc.
+    if (bestRateDoc?.rates?.has(dayOfWeek)) {
+      currentPayRate = bestRateDoc.rates.get(dayOfWeek)?.rate ?? 0;
+    }
+
+    // 5. FIND THE DURATION: Calculate payable minutes capping at the Rota limits
     const overlapMins = calculateOverlapMinutes(
       (rota as any).startTime,
       (rota as any).endTime,
@@ -168,11 +195,11 @@ const calculatePayrollForEmployee = async (
     );
 
     totalDurationMinutes += overlapMins;
-    totalAmount += (overlapMins / 60) * payRate;
+    totalAmount += (overlapMins / 60) * currentPayRate;
 
     attendanceList.push({
       attendanceId: rec._id.toString(),
-      payRate,
+      payRate: currentPayRate,
       duration: overlapMins,
     });
   }
@@ -184,14 +211,12 @@ const calculatePayrollForEmployee = async (
   };
 };
 
-
-
 const getPayrollFromDB = async (query: Record<string, unknown>) => {
   const {
     month,
     year,
-    fromDate, // ✅ Extract fromDate
-    toDate,   // ✅ Extract toDate
+    fromDate, 
+    toDate,  
     page = 1,
     limit = 10,
     search,
@@ -205,27 +230,18 @@ const getPayrollFromDB = async (query: Record<string, unknown>) => {
 
   const matchStage: any = { ...otherQueryParams };
 
-  // ✅ Add companyId filter if provided
   if (companyId) {
     matchStage.companyId = new Types.ObjectId(companyId as string);
   }
 
-  // ✅ Handle Specific Date Range Filtering First (fromDate & toDate)
   if (fromDate && toDate) {
     const queryStart = new Date(fromDate as string);
     const queryEnd = new Date(toDate as string);
-    
-    // Ensure the end date covers the final millisecond of the day
     queryEnd.setUTCHours(23, 59, 59, 999);
 
-    // Any payroll that starts before the query ends AND ends after the query starts
-    // This catches exactly contained payrolls, partially overlapping payrolls, and encompassing payrolls.
     matchStage.fromDate = { $lte: queryEnd };
     matchStage.toDate = { $gte: queryStart };
-  }
-
-  // ✅ Fallback to Month/Year filter if fromDate/toDate are not provided
-  else if (month && year) {
+  } else if (month && year) {
     const startOfMonth = moment(`${year}-${String(month).padStart(2, "0")}-01`)
       .startOf("month")
       .toDate();
@@ -243,11 +259,8 @@ const getPayrollFromDB = async (query: Record<string, unknown>) => {
 
   const searchRegex = search ? new RegExp(search as string, "i") : null;
 
-  // ✅ BASE PIPELINE
   const basePipeline: any[] = [
     { $match: matchStage },
-
-    // 🔹 USER lookup
     {
       $lookup: {
         from: "users",
@@ -262,30 +275,21 @@ const getPayrollFromDB = async (query: Record<string, unknown>) => {
         preserveNullAndEmptyArrays: true,
       },
     },
-
-    // 🔹 Filter to ensure user is an employee of this company
     {
       $match: {
-        $or: [
-          { "user.role": "employee" },
-        ],
-        // Ensure the user belongs to the company
+        $or: [{ "user.role": "employee" }],
         ...(companyId
           ? {
               $expr: {
                 $or: [
-                  {
-                    $eq: ["$user.company", new Types.ObjectId(companyId as string)],
-                  },
-                  { $eq: ["$user._id", new Types.ObjectId(companyId as string)] }, // For company admin
+                  { $eq: ["$user.company", new Types.ObjectId(companyId as string)] },
+                  { $eq: ["$user._id", new Types.ObjectId(companyId as string)] }, 
                 ],
               },
             }
           : {}),
       },
     },
-
-    // 🔹 DEPARTMENTS lookup
     {
       $lookup: {
         from: "departments",
@@ -301,18 +305,11 @@ const getPayrollFromDB = async (query: Record<string, unknown>) => {
               },
             },
           },
-          // ✅ Added projection to only return departmentName (and _id implicitly)
-          {
-            $project: {
-              departmentName: 1,
-            }
-          }
+          { $project: { departmentName: 1 } }
         ],
         as: "departments",
       },
     },
-
-    // 🔹 DESIGNATIONS lookup
     {
       $lookup: {
         from: "designations",
@@ -328,19 +325,14 @@ const getPayrollFromDB = async (query: Record<string, unknown>) => {
               },
             },
           },
-          // ✅ Added projection to only return title (and _id implicitly)
-          {
-            $project: {
-              title: 1,
-            }
-          }
+          { $project: { title: 1 } }
         ],
         as: "designations",
       },
     },
   ];
 
-  // ✅ SEARCH
+  // ✅ SEARCH (Updated refId to payrollNo)
   if (searchRegex) {
     basePipeline.push({
       $match: {
@@ -348,7 +340,7 @@ const getPayrollFromDB = async (query: Record<string, unknown>) => {
           { "user.firstName": searchRegex },
           { "user.lastName": searchRegex },
           { "user.email": searchRegex },
-          { refId: searchRegex }, // Search by payroll reference ID
+          { payrollNo: searchRegex }, // Extracted from payrollNumber
           {
             $expr: {
               $regexMatch: {
@@ -363,7 +355,6 @@ const getPayrollFromDB = async (query: Record<string, unknown>) => {
     });
   }
 
-  // ✅ TOTAL COUNT
   const totalResult = await Payroll.aggregate([
     ...basePipeline,
     { $count: "total" },
@@ -371,18 +362,15 @@ const getPayrollFromDB = async (query: Record<string, unknown>) => {
 
   const total = totalResult[0]?.total || 0;
 
-  // ✅ FINAL PIPELINE
   const aggregationPipeline = [
     ...basePipeline,
-
     { $sort: { createdAt: -1 } },
     { $skip: skip },
     { $limit: limitNumber },
-
     {
       $project: {
         _id: 1,
-        refId: 1,
+        payrollNo: 1, // Updated Projection
         fromDate: 1,
         toDate: 1,
         status: 1,
@@ -390,23 +378,11 @@ const getPayrollFromDB = async (query: Record<string, unknown>) => {
         createdAt: 1,
         updatedAt: 1,
         companyId: 1,
-
-        // Calculate total hours
         totalHours: {
           $round: [{ $divide: [{ $sum: "$attendanceList.duration" }, 60] }, 2],
         },
-
-        // Calculate total duration in minutes
-        totalDuration: {
-          $sum: "$attendanceList.duration",
-        },
-
-        // Count of attendance records
-        attendanceCount: {
-          $size: "$attendanceList",
-        },
-
-        // User object
+        totalDuration: { $sum: "$attendanceList.duration" },
+        attendanceCount: { $size: "$attendanceList" },
         user: {
           $cond: {
             if: { $eq: ["$user", null] },
@@ -421,7 +397,6 @@ const getPayrollFromDB = async (query: Record<string, unknown>) => {
               role: "$user.role",
               status: "$user.status",
               payroll: "$user.payroll",
-              // Since we filtered in the lookup pipelines, these will now only contain the requested fields
               designations: { $ifNull: ["$designations", []] },
               departments: { $ifNull: ["$departments", []] },
             },
@@ -446,7 +421,6 @@ const getPayrollFromDB = async (query: Record<string, unknown>) => {
 
 const getSinglePayrollFromDB = async (id: string) => {
   const result = await Payroll.findById(id)
-    // 1. Populate the User and their Designation
     .populate({
       path: "userId",
       select: "firstName lastName email payroll designationId", 
@@ -454,12 +428,9 @@ const getSinglePayrollFromDB = async (id: string) => {
         path: "designationId",
         select: "title",
       },
-      
     }).populate({
       path: "companyId",
       select: "name", 
-     
-      
     })
     .populate({
       path: "attendanceList.attendanceId",
@@ -485,13 +456,13 @@ const createPayrollIntoDB = async (payload: {
     throw new AppError(httpStatus.BAD_REQUEST, "companyId is required");
   }
 
-  // 1. Get all active, non-deleted employees of this company
+  // Fetch users with their payroll nested object so we can map payrollNo
   const employees = await User.find({
     company: payload.companyId,
     role: "employee",
     isDeleted: false,
     status: "active",
-  }).select("_id");
+  }).select("_id payroll"); 
 
   if (!employees.length) {
     throw new AppError(
@@ -505,9 +476,9 @@ const createPayrollIntoDB = async (payload: {
 
   for (const emp of employees) {
     const userId = (emp._id as any).toString();
+    const payrollNo = (emp as any).payroll?.payrollNumber || "N/A";
 
     try {
-      // 2. Prevent duplicate payroll for overlapping date range
       const existing = await Payroll.findOne({
         userId,
         $or: [
@@ -527,7 +498,6 @@ const createPayrollIntoDB = async (payload: {
         );
       }
 
-      // 3. Calculate payroll for this employee
       const calculations = await calculatePayrollForEmployee(
         userId,
         payload.companyId,
@@ -535,12 +505,11 @@ const createPayrollIntoDB = async (payload: {
         moment(payload.toDate).toDate(),
       );
 
-      // 4. Persist
       const created = await Payroll.create({
         userId,
         companyId: payload.companyId,
+        payrollNo, // Insert dynamically extracted payrollNo
         fromDate: payload.fromDate,
-        refId: generatePayrollRefId(),
         toDate: payload.toDate,
         note: payload.note,
         status: "pending",
@@ -580,9 +549,73 @@ const updatePayrollIntoDB = async (id: string, payload: Partial<TPayroll>) => {
   });
 };
 
+
+const regeneratePayrollIntoDB = async (payload: { payrollIds: string[] }) => {
+  const { payrollIds } = payload;
+
+  if (!payrollIds || !Array.isArray(payrollIds) || payrollIds.length === 0) {
+    throw new AppError(
+      httpStatus.BAD_REQUEST,
+      "Please provide an array of payroll IDs to regenerate"
+    );
+  }
+
+  const regeneratedPayrolls: any[] = [];
+  const errors: { payrollId: string; message: string }[] = [];
+
+  for (const id of payrollIds) {
+    try {
+      // 1. Fetch the existing payroll to get its parameters
+      const payroll = await Payroll.findById(id);
+
+      if (!payroll) {
+        throw new AppError(httpStatus.NOT_FOUND, "Payroll not found");
+      }
+
+      // 2. Recalculate using the exact same logic as creation
+      const calculations = await calculatePayrollForEmployee(
+        payroll.userId.toString(),
+        payroll.companyId.toString(),
+        payroll.fromDate,
+        payroll.toDate
+      );
+
+      // 3. Update the existing payroll document with the fresh data
+      payroll.totalHour = calculations.totalHour;
+      payroll.totalAmount = calculations.totalAmount;
+      payroll.attendanceList = calculations.attendanceList as any; // Cast as any if TS complains about subdocument typing
+      
+      // Optional: If you want regenerating a payroll to revert its status to "pending" so it must be re-approved, uncomment the line below:
+      // payroll.status = "pending";
+
+      await payroll.save();
+
+      regeneratedPayrolls.push(payroll);
+    } catch (err: any) {
+      errors.push({
+        payrollId: id,
+        message: err.message || "Failed to regenerate payroll",
+      });
+    }
+  }
+
+  // 4. If nothing succeeded, throw the first error so the client knows what went wrong
+  if (regeneratedPayrolls.length === 0 && errors.length > 0) {
+    throw new AppError(httpStatus.BAD_REQUEST, errors[0].message);
+  }
+
+  return {
+    successCount: regeneratedPayrolls.length,
+    errorCount: errors.length,
+    regeneratedPayrolls,
+    errors,
+  };
+};
+
 export const PayrollServices = {
   getPayrollFromDB,
   getSinglePayrollFromDB,
   createPayrollIntoDB,
   updatePayrollIntoDB,
+  regeneratePayrollIntoDB
 };

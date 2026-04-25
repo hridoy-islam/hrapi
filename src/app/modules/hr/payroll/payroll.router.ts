@@ -29,7 +29,10 @@ router.patch(
 PayrollControllers.updatePayroll
 );
 
-
+router.post(
+  "/regenerate",
+  PayrollControllers.regeneratePayroll
+);
 
 
 

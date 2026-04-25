@@ -23,7 +23,7 @@ const PayrollSchema = new Schema<TPayroll>(
       required: true,
       ref: "User",
     },
-    refId:{type:String,required:true},
+    payrollNo:{type:String,required:true},
     fromDate: {
       type: Date,
       required: true,
