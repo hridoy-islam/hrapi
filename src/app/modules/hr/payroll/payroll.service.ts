@@ -211,29 +211,235 @@ const calculatePayrollForEmployee = async (
   };
 };
 
+// const getPayrollFromDB = async (query: Record<string, unknown>) => {
+//   const {
+//     month,
+//     year,
+//     fromDate, 
+//     toDate,  
+//     page = 1,
+//     limit = 10,
+//     search,
+//     companyId,
+//     ...otherQueryParams
+//   } = query;
+
+//   const pageNumber = Number(page);
+//   const limitNumber = Number(limit);
+//   const skip = (pageNumber - 1) * limitNumber;
+
+//   const matchStage: any = { ...otherQueryParams };
+
+//   if (companyId) {
+//     matchStage.companyId = new Types.ObjectId(companyId as string);
+//   }
+
+//   if (fromDate && toDate) {
+//     const queryStart = new Date(fromDate as string);
+//     const queryEnd = new Date(toDate as string);
+//     queryEnd.setUTCHours(23, 59, 59, 999);
+
+//     matchStage.fromDate = { $lte: queryEnd };
+//     matchStage.toDate = { $gte: queryStart };
+//   } else if (month && year) {
+//     const startOfMonth = moment(`${year}-${String(month).padStart(2, "0")}-01`)
+//       .startOf("month")
+//       .toDate();
+
+//     const endOfMonth = moment(`${year}-${String(month).padStart(2, "0")}-01`)
+//       .endOf("month")
+//       .toDate();
+
+//     matchStage.$or = [
+//       { fromDate: { $gte: startOfMonth, $lte: endOfMonth } },
+//       { toDate: { $gte: startOfMonth, $lte: endOfMonth } },
+//       { fromDate: { $lte: startOfMonth }, toDate: { $gte: endOfMonth } },
+//     ];
+//   }
+
+//   const searchRegex = search ? new RegExp(search as string, "i") : null;
+
+//   const basePipeline: any[] = [
+//     { $match: matchStage },
+//     {
+//       $lookup: {
+//         from: "users",
+//         localField: "userId",
+//         foreignField: "_id",
+//         as: "user",
+//       },
+//     },
+//     {
+//       $unwind: {
+//         path: "$user",
+//         preserveNullAndEmptyArrays: true,
+//       },
+//     },
+//     {
+//       $match: {
+//         $or: [{ "user.role": "employee" }],
+//         ...(companyId
+//           ? {
+//               $expr: {
+//                 $or: [
+//                   { $eq: ["$user.company", new Types.ObjectId(companyId as string)] },
+//                   { $eq: ["$user._id", new Types.ObjectId(companyId as string)] }, 
+//                 ],
+//               },
+//             }
+//           : {}),
+//       },
+//     },
+//     {
+//       $lookup: {
+//         from: "departments",
+//         let: { deptIds: "$user.departmentId" },
+//         pipeline: [
+//           {
+//             $match: {
+//               $expr: {
+//                 $and: [
+//                   { $ne: ["$$deptIds", null] },
+//                   { $in: ["$_id", { $ifNull: ["$$deptIds", []] }] },
+//                 ],
+//               },
+//             },
+//           },
+//           { $project: { departmentName: 1 } }
+//         ],
+//         as: "departments",
+//       },
+//     },
+//     {
+//       $lookup: {
+//         from: "designations",
+//         let: { desigIds: "$user.designationId" },
+//         pipeline: [
+//           {
+//             $match: {
+//               $expr: {
+//                 $and: [
+//                   { $ne: ["$$desigIds", null] },
+//                   { $in: ["$_id", { $ifNull: ["$$desigIds", []] }] },
+//                 ],
+//               },
+//             },
+//           },
+//           { $project: { title: 1 } }
+//         ],
+//         as: "designations",
+//       },
+//     },
+//   ];
+
+//   // ✅ SEARCH (Updated refId to payrollNo)
+//   if (searchRegex) {
+//     basePipeline.push({
+//       $match: {
+//         $or: [
+//           { "user.firstName": searchRegex },
+//           { "user.lastName": searchRegex },
+//           { "user.email": searchRegex },
+//           { payrollNo: searchRegex }, // Extracted from payrollNumber
+//           {
+//             $expr: {
+//               $regexMatch: {
+//                 input: { $concat: ["$user.firstName", " ", "$user.lastName"] },
+//                 regex: search as string,
+//                 options: "i",
+//               },
+//             },
+//           },
+//         ],
+//       },
+//     });
+//   }
+
+//   const totalResult = await Payroll.aggregate([
+//     ...basePipeline,
+//     { $count: "total" },
+//   ]);
+
+//   const total = totalResult[0]?.total || 0;
+
+//   const aggregationPipeline = [
+//     ...basePipeline,
+//     { $sort: { createdAt: -1 } },
+//     { $skip: skip },
+//     { $limit: limitNumber },
+//     {
+//       $project: {
+//         _id: 1,
+//         payrollNo: 1, // Updated Projection
+//         fromDate: 1,
+//         toDate: 1,
+//         status: 1,
+//         attendanceList: 1,
+//         createdAt: 1,
+//         updatedAt: 1,
+//         companyId: 1,
+//         totalHours: {
+//           $round: [{ $divide: [{ $sum: "$attendanceList.duration" }, 60] }, 2],
+//         },
+//         totalDuration: { $sum: "$attendanceList.duration" },
+//         attendanceCount: { $size: "$attendanceList" },
+//         user: {
+//           $cond: {
+//             if: { $eq: ["$user", null] },
+//             then: null,
+//             else: {
+//               _id: "$user._id",
+//               firstName: "$user.firstName",
+//               lastName: "$user.lastName",
+//               name: "$user.name",
+//               email: "$user.email",
+//               phone: "$user.phone",
+//               role: "$user.role",
+//               status: "$user.status",
+//               payroll: "$user.payroll",
+//               designations: { $ifNull: ["$designations", []] },
+//               departments: { $ifNull: ["$departments", []] },
+//             },
+//           },
+//         },
+//       },
+//     },
+//   ];
+
+//   const result = await Payroll.aggregate(aggregationPipeline);
+
+//   return {
+//     meta: {
+//       page: pageNumber,
+//       limit: limitNumber,
+//       total,
+//       totalPages: Math.ceil(total / limitNumber),
+//     },
+//     result,
+//   };
+// };
+
+
 const getPayrollFromDB = async (query: Record<string, unknown>) => {
   const {
-    month,
-    year,
-    fromDate, 
-    toDate,  
+    fromDate,
+    toDate,
     page = 1,
     limit = 10,
-    search,
     companyId,
-    ...otherQueryParams
   } = query;
 
   const pageNumber = Number(page);
   const limitNumber = Number(limit);
   const skip = (pageNumber - 1) * limitNumber;
 
-  const matchStage: any = { ...otherQueryParams };
+  const matchStage: any = {};
 
   if (companyId) {
     matchStage.companyId = new Types.ObjectId(companyId as string);
   }
 
+  // Date filtering
   if (fromDate && toDate) {
     const queryStart = new Date(fromDate as string);
     const queryEnd = new Date(toDate as string);
@@ -241,172 +447,26 @@ const getPayrollFromDB = async (query: Record<string, unknown>) => {
 
     matchStage.fromDate = { $lte: queryEnd };
     matchStage.toDate = { $gte: queryStart };
-  } else if (month && year) {
-    const startOfMonth = moment(`${year}-${String(month).padStart(2, "0")}-01`)
-      .startOf("month")
-      .toDate();
-
-    const endOfMonth = moment(`${year}-${String(month).padStart(2, "0")}-01`)
-      .endOf("month")
-      .toDate();
-
-    matchStage.$or = [
-      { fromDate: { $gte: startOfMonth, $lte: endOfMonth } },
-      { toDate: { $gte: startOfMonth, $lte: endOfMonth } },
-      { fromDate: { $lte: startOfMonth }, toDate: { $gte: endOfMonth } },
-    ];
   }
 
-  const searchRegex = search ? new RegExp(search as string, "i") : null;
+  // Count total
+  const total = await Payroll.countDocuments(matchStage);
 
-  const basePipeline: any[] = [
+  // Fetch data
+  const result = await Payroll.aggregate([
     { $match: matchStage },
-    {
-      $lookup: {
-        from: "users",
-        localField: "userId",
-        foreignField: "_id",
-        as: "user",
-      },
-    },
-    {
-      $unwind: {
-        path: "$user",
-        preserveNullAndEmptyArrays: true,
-      },
-    },
-    {
-      $match: {
-        $or: [{ "user.role": "employee" }],
-        ...(companyId
-          ? {
-              $expr: {
-                $or: [
-                  { $eq: ["$user.company", new Types.ObjectId(companyId as string)] },
-                  { $eq: ["$user._id", new Types.ObjectId(companyId as string)] }, 
-                ],
-              },
-            }
-          : {}),
-      },
-    },
-    {
-      $lookup: {
-        from: "departments",
-        let: { deptIds: "$user.departmentId" },
-        pipeline: [
-          {
-            $match: {
-              $expr: {
-                $and: [
-                  { $ne: ["$$deptIds", null] },
-                  { $in: ["$_id", { $ifNull: ["$$deptIds", []] }] },
-                ],
-              },
-            },
-          },
-          { $project: { departmentName: 1 } }
-        ],
-        as: "departments",
-      },
-    },
-    {
-      $lookup: {
-        from: "designations",
-        let: { desigIds: "$user.designationId" },
-        pipeline: [
-          {
-            $match: {
-              $expr: {
-                $and: [
-                  { $ne: ["$$desigIds", null] },
-                  { $in: ["$_id", { $ifNull: ["$$desigIds", []] }] },
-                ],
-              },
-            },
-          },
-          { $project: { title: 1 } }
-        ],
-        as: "designations",
-      },
-    },
-  ];
-
-  // ✅ SEARCH (Updated refId to payrollNo)
-  if (searchRegex) {
-    basePipeline.push({
-      $match: {
-        $or: [
-          { "user.firstName": searchRegex },
-          { "user.lastName": searchRegex },
-          { "user.email": searchRegex },
-          { payrollNo: searchRegex }, // Extracted from payrollNumber
-          {
-            $expr: {
-              $regexMatch: {
-                input: { $concat: ["$user.firstName", " ", "$user.lastName"] },
-                regex: search as string,
-                options: "i",
-              },
-            },
-          },
-        ],
-      },
-    });
-  }
-
-  const totalResult = await Payroll.aggregate([
-    ...basePipeline,
-    { $count: "total" },
-  ]);
-
-  const total = totalResult[0]?.total || 0;
-
-  const aggregationPipeline = [
-    ...basePipeline,
     { $sort: { createdAt: -1 } },
     { $skip: skip },
     { $limit: limitNumber },
     {
       $project: {
         _id: 1,
-        payrollNo: 1, // Updated Projection
+        payrollNo: 1,
         fromDate: 1,
         toDate: 1,
-        status: 1,
-        attendanceList: 1,
-        createdAt: 1,
-        updatedAt: 1,
-        companyId: 1,
-        totalHours: {
-          $round: [{ $divide: [{ $sum: "$attendanceList.duration" }, 60] }, 2],
-        },
-        totalDuration: { $sum: "$attendanceList.duration" },
-        attendanceCount: { $size: "$attendanceList" },
-        user: {
-          $cond: {
-            if: { $eq: ["$user", null] },
-            then: null,
-            else: {
-              _id: "$user._id",
-              firstName: "$user.firstName",
-              lastName: "$user.lastName",
-              name: "$user.name",
-              email: "$user.email",
-              phone: "$user.phone",
-              role: "$user.role",
-              status: "$user.status",
-              payroll: "$user.payroll",
-              designations: { $ifNull: ["$designations", []] },
-              departments: { $ifNull: ["$departments", []] },
-            },
-          },
-        },
       },
     },
-  ];
-
-  const result = await Payroll.aggregate(aggregationPipeline);
+  ]);
 
   return {
     meta: {
@@ -418,6 +478,7 @@ const getPayrollFromDB = async (query: Record<string, unknown>) => {
     result,
   };
 };
+
 
 const getSinglePayrollFromDB = async (id: string) => {
   const result = await Payroll.findById(id)
@@ -560,55 +621,86 @@ const regeneratePayrollIntoDB = async (payload: { payrollIds: string[] }) => {
     );
   }
 
-  const regeneratedPayrolls: any[] = [];
-  const errors: { payrollId: string; message: string }[] = [];
-
-  for (const id of payrollIds) {
-    try {
-      // 1. Fetch the existing payroll to get its parameters
-      const payroll = await Payroll.findById(id);
-
-      if (!payroll) {
-        throw new AppError(httpStatus.NOT_FOUND, "Payroll not found");
-      }
-
-      // 2. Recalculate using the exact same logic as creation
-      const calculations = await calculatePayrollForEmployee(
-        payroll.userId.toString(),
-        payroll.companyId.toString(),
-        payroll.fromDate,
-        payroll.toDate
-      );
-
-      // 3. Update the existing payroll document with the fresh data
-      payroll.totalHour = calculations.totalHour;
-      payroll.totalAmount = calculations.totalAmount;
-      payroll.attendanceList = calculations.attendanceList as any; // Cast as any if TS complains about subdocument typing
-      
-      // Optional: If you want regenerating a payroll to revert its status to "pending" so it must be re-approved, uncomment the line below:
-      // payroll.status = "pending";
-
-      await payroll.save();
-
-      regeneratedPayrolls.push(payroll);
-    } catch (err: any) {
-      errors.push({
-        payrollId: id,
-        message: err.message || "Failed to regenerate payroll",
-      });
-    }
+  // 1. Fetch the first payroll to get the batch parameters (companyId, dates)
+  const firstPayroll = await Payroll.findById(payrollIds[0]);
+  
+  if (!firstPayroll) {
+    throw new AppError(httpStatus.NOT_FOUND, "Payroll records not found to regenerate");
   }
 
-  // 4. If nothing succeeded, throw the first error so the client knows what went wrong
-  if (regeneratedPayrolls.length === 0 && errors.length > 0) {
-    throw new AppError(httpStatus.BAD_REQUEST, errors[0].message);
+  const { companyId, fromDate, toDate } = firstPayroll;
+
+  // 2. Delete all provided payroll IDs so they can be recreated cleanly
+  await Payroll.deleteMany({ _id: { $in: payrollIds } });
+
+  // 3. Run the exact creation logic for this company and date range
+  // Note: createPayrollIntoDB handles all active employees, and will just skip 
+  // employees that already have payrolls (the ones you didn't delete)
+  return await createPayrollIntoDB({
+    companyId: companyId.toString(),
+    fromDate,
+    toDate,
+  });
+};
+
+
+const getCompanyPayrollByBatchFromDB = async (query: Record<string, unknown>) => {
+  const {
+    page = 1,
+    limit = 10,
+    companyId,
+  } = query;
+
+  if (!companyId) {
+    throw new AppError(httpStatus.BAD_REQUEST, "companyId is required");
   }
+
+  const pageNumber = Number(page);
+  const limitNumber = Number(limit);
+  const skip = (pageNumber - 1) * limitNumber;
+
+  const pipeline: any[] = [
+    {
+      $match: {
+        companyId: new Types.ObjectId(companyId as string),
+      },
+    },
+    // The Fix: Added _id to the group stage
+    {
+      $group: {
+        _id: "$batchId", // Replace with the field you want to group by (e.g., "$batchId")
+        ids: { $push: "$_id" },
+        totalAmount: { $sum: "$totalAmount" },
+        totalHours: { $sum: "$totalHour" },
+        count: { $sum: 1 },
+        // If you need createdAt for sorting later, you'll need an accumulator here
+        createdAt: { $first: "$createdAt" } 
+      },
+    },
+    {
+      $sort: { createdAt: -1 },
+    },
+    {
+      $facet: {
+        metadata: [{ $count: "total" }],
+        data: [{ $skip: skip }, { $limit: limitNumber }],
+      },
+    },
+  ];
+
+  const result = await Payroll.aggregate(pipeline);
+
+  const data = result[0]?.data || [];
+  const total = result[0]?.metadata[0]?.total || 0;
 
   return {
-    successCount: regeneratedPayrolls.length,
-    errorCount: errors.length,
-    regeneratedPayrolls,
-    errors,
+    meta: {
+      page: pageNumber,
+      limit: limitNumber,
+      total,
+      totalPages: Math.ceil(total / limitNumber),
+    },
+    result, // Changed from result to data to return the actual paginated records
   };
 };
 
@@ -617,5 +709,6 @@ export const PayrollServices = {
   getSinglePayrollFromDB,
   createPayrollIntoDB,
   updatePayrollIntoDB,
-  regeneratePayrollIntoDB
+  regeneratePayrollIntoDB,
+  getCompanyPayrollByBatchFromDB
 };

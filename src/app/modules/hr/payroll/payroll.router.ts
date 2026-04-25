@@ -11,6 +11,10 @@ router.get(
 //   auth("admin", "company", "creator", "user", "director"),
 PayrollControllers.getAllPayroll
 );
+router.get(
+  "/batch",
+  PayrollControllers.getPayrollByBatch
+);
 
 router.get(
   "/:id",
@@ -33,7 +37,6 @@ router.post(
   "/regenerate",
   PayrollControllers.regeneratePayroll
 );
-
 
 
 export const PayrollRoutes = router;

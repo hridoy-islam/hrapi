@@ -53,25 +53,38 @@ const createPayroll = catchAsync(async (req, res) => {
   });
 });
 
+const getPayrollByBatch = catchAsync(async (req, res) => {
+  const result = await PayrollServices.getCompanyPayrollByBatchFromDB(req.query);
 
+  sendResponse(res, {
+    success: true,
+    statusCode: httpStatus.OK,
+    message: "Payroll batches retrieved successfully",
+    data: result.result,  // ✅ array of batches
+  });
+});
+
+// ─── Regenerate Existing Payrolls ───────────────────────────────────────────
 const regeneratePayroll = catchAsync(async (req, res) => {
   const { payrollIds } = req.body;
 
   const result = await PayrollServices.regeneratePayrollIntoDB({ payrollIds });
 
-  sendResponse(res, {
-    statusCode: httpStatus.OK,
+ sendResponse(res,{
     success: true,
-    message: "Payroll regenerated succesfully",
+    statusCode: httpStatus.OK,
+    message: "Payrolls regenerated successfully",
     data: result,
   });
 });
+
 
 export const PayrollControllers = {
     createPayroll,
     getAllPayroll,
     getSinglePayroll,
     updatePayroll,
+    getPayrollByBatch,
     regeneratePayroll
     
 };
