@@ -1,6 +1,8 @@
 import { Queue } from "bullmq";
 import IORedis from "ioredis";
 
+
+
 // 1. Connect to Redis (Default is localhost:6379)
 // maxRetriesPerRequest must be null for BullMQ
 const redisConnection = new IORedis({ maxRetriesPerRequest: null }); 
