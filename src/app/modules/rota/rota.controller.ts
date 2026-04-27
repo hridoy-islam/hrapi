@@ -14,6 +14,18 @@ const getAllRota: RequestHandler = catchAsync(async (req, res) => {
     data: result,
   });
 });
+
+const getAllMissedRota: RequestHandler = catchAsync(async (req, res) => {
+  const result = await RotaServices.getAllMissedRotaFromDB(req.query);
+  sendResponse(res, {
+    statusCode: httpStatus.OK,
+    success: true,
+    message: "Missed Rotas retrived succesfully",
+    data: result,
+  });
+});
+
+
 const getUpcomingRota: RequestHandler = catchAsync(async (req, res) => {
   const result = await RotaServices.getUpcomingRotaFromDB(req.query);
   sendResponse(res, {
@@ -109,4 +121,5 @@ export const RotaControllers = {
   copyRota,
   getUpcomingRota,
   getAttendance,
+  getAllMissedRota
 };

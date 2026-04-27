@@ -16,6 +16,11 @@ router.get(
   RotaControllers.getUpcomingRota
 );
 router.get(
+  "/missed-attendance",
+  auth("admin", "user", "director", "company", "creator","employee","companyAdmin"),
+  RotaControllers.getAllMissedRota
+);
+router.get(
   "/:id",
   auth("admin", "user", "director", "company", "creator","employee","companyAdmin"),
 RotaControllers.getSingleRota

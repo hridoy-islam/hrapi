@@ -10,6 +10,7 @@ import { User } from "../user/user.model";
 import moment from "moment-timezone";
 import { Notice } from "../hr/notice/notice.model";
 import { sendEmailRota } from "../../utils/sendEmailRota";
+import { Attendance } from "../attendance/attendance.model";
 
 moment.tz.setDefault("Europe/London");
 
@@ -937,6 +938,75 @@ const createRotaAttendanceIntoDB = async (payload: { rotaId: string }) => {
   return currentRota;
 };
 
+
+const getAllMissedRotaFromDB = async (query: Record<string, unknown>) => {
+  const { startDate, endDate, attendanceDate, ...restQuery } = query;
+
+  const dateFilter: Record<string, any> = {};
+
+  // ✅ Only published rotas, no leaveType
+  dateFilter.status = "publish";
+  dateFilter.leaveType = { $in: [null, undefined, ""] };
+
+  // ✅ Date range filter on rota startDate
+  if (attendanceDate) {
+    dateFilter.startDate = attendanceDate;
+  } else if (startDate || endDate) {
+    dateFilter.startDate = {};
+    if (startDate) dateFilter.startDate.$gte = startDate;
+    if (endDate) dateFilter.startDate.$lte = endDate;
+  }
+
+  // ✅ Build attendance date filter to find who already clocked in
+  const attendanceDateFilter: Record<string, any> = {};
+
+  if (attendanceDate) {
+    attendanceDateFilter.clockInDate = attendanceDate;
+  } else if (startDate || endDate) {
+    attendanceDateFilter.clockInDate = {};
+    if (startDate) attendanceDateFilter.clockInDate.$gte = startDate;
+    if (endDate) attendanceDateFilter.clockInDate.$lte = endDate;
+  }
+
+  // ✅ Strategy 1: attended via rotaId (direct link)
+  const attendedByRotaId = await Attendance.distinct("rotaId", {
+    ...attendanceDateFilter,
+    rotaId: { $exists: true, $ne: null },
+  });
+
+  // ✅ Strategy 2: attended via userId+date match (no rotaId on attendance)
+  // Get all userIds who have attendance in the date range
+  const attendanceRecords = await Attendance.find(
+    attendanceDateFilter,
+    { userId: 1, clockInDate: 1 }
+  ).lean();
+
+  // Build a Set of "employeeId_date" pairs for fast lookup
+  const attendedEmployeeDateSet = new Set(
+    attendanceRecords
+      .filter((a) => a.userId)
+      .map((a) => `${a.userId}_${a.clockInDate}`)
+  );
+
+  // ✅ Fetch candidate rotas (excluding direct rotaId matches)
+  const candidateRotas = await Rota.find({
+    ...dateFilter,
+    _id: { $nin: attendedByRotaId },
+  })
+    .populate("departmentId")
+    .lean();
+
+  // ✅ Filter out rotas where employee already has attendance on that date
+  const missedRotas = candidateRotas.filter((rota) => {
+    const key = `${rota.employeeId}_${rota.startDate}`;
+    return !attendedEmployeeDateSet.has(key);
+  });
+
+  return {
+    meta: { total: missedRotas.length },
+    result: missedRotas,
+  };
+};
 export const RotaServices = {
   getAllRotaFromDB,
   getSingleRotaFromDB,
@@ -947,4 +1017,5 @@ export const RotaServices = {
   bulkAssignRotaIntoDB,
   getUpcomingRotaFromDB,
   createRotaAttendanceIntoDB,
+  getAllMissedRotaFromDB
 };

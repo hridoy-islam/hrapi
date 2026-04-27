@@ -673,61 +673,85 @@ const regeneratePayrollIntoDB = async (payload: { payrollIds: string[] }) => {
 
 const getCompanyPayrollByBatchFromDB = async (query: Record<string, unknown>) => {
   const {
+    fromDate,
+    toDate,
     page = 1,
     limit = 10,
     companyId,
   } = query;
 
-  if (!companyId) {
-    throw new AppError(httpStatus.BAD_REQUEST, "companyId is required");
-  }
-
   const pageNumber = Number(page);
   const limitNumber = Number(limit);
   const skip = (pageNumber - 1) * limitNumber;
 
-  const pipeline: any[] = [
-    {
-      $match: {
-        companyId: new Types.ObjectId(companyId as string),
-      },
-    },
-    // The Fix: Added _id to the group stage
+  const matchStage: any = {};
+
+  if (companyId) {
+    matchStage.companyId = new Types.ObjectId(companyId as string);
+  }
+
+  if (fromDate && toDate) {
+    const queryStart = new Date(fromDate as string);
+    const queryEnd = new Date(toDate as string);
+    queryEnd.setUTCHours(23, 59, 59, 999);
+    matchStage.fromDate = { $lte: queryEnd };
+    matchStage.toDate = { $gte: queryStart };
+  }
+
+  const result = await Payroll.aggregate([
+    { $match: matchStage },
+    { $sort: { createdAt: -1 } },
+
     {
       $group: {
-        _id: "$batchId", // Replace with the field you want to group by (e.g., "$batchId")
+        _id: {
+          fromDate: "$fromDate",
+          toDate: "$toDate",
+        },
         ids: { $push: "$_id" },
-        totalAmount: { $sum: "$totalAmount" },
-        totalHours: { $sum: "$totalHour" },
-        count: { $sum: 1 },
-        // If you need createdAt for sorting later, you'll need an accumulator here
-        createdAt: { $first: "$createdAt" } 
+        companyId: { $first: "$companyId" },
+        fromDate: { $first: "$fromDate" },
+        toDate: { $first: "$toDate" },
+        createdAt: { $first: "$createdAt" },
       },
     },
-    {
-      $sort: { createdAt: -1 },
-    },
+
+    { $sort: { fromDate: -1 } },
+
     {
       $facet: {
-        metadata: [{ $count: "total" }],
-        data: [{ $skip: skip }, { $limit: limitNumber }],
+        data: [
+          { $skip: skip },
+          { $limit: limitNumber },
+          {
+            $project: {
+              _id: 0,
+              ids: 1,
+              companyId: 1,
+              fromDate: 1,
+              toDate: 1,
+              createdAt: 1,
+            },
+          },
+        ],
+        totalCount: [
+          { $count: "count" },
+        ],
       },
     },
-  ];
+  ]);
 
-  const result = await Payroll.aggregate(pipeline);
-
-  const data = result[0]?.data || [];
-  const total = result[0]?.metadata[0]?.total || 0;
+  const data = result[0]?.data ?? [];
+  const total = result[0]?.totalCount[0]?.count ?? 0;
 
   return {
-    meta: {
+   
+    result: {data, meta: {
       page: pageNumber,
       limit: limitNumber,
       total,
       totalPages: Math.ceil(total / limitNumber),
-    },
-    result, // Changed from result to data to return the actual paginated records
+    }},
   };
 };
 
