@@ -179,7 +179,7 @@ const processBatchedRotaUpdates = async (batchKey: string) => {
         dateRotas.map((r) =>
           r.leaveType && r.leaveType.trim() !== ""
             ? r.leaveType
-            : `${r.startTime} - ${r.endTime}`
+            : `${r.startTime} - ${r.endTime}`,
         ),
       ),
     ];
@@ -197,7 +197,7 @@ const processBatchedRotaUpdates = async (batchKey: string) => {
 
   // .join("<br>") puts each date's sentence on a new line in the email.
   const emailDescription = `${shiftLines.join("<br>")}`;
-  
+
   const today = moment().format("ddd, MMM DD, YYYY");
   const subject = `${companyName} – Shift Change Notification`;
 
@@ -938,11 +938,22 @@ const createRotaAttendanceIntoDB = async (payload: { rotaId: string }) => {
   return currentRota;
 };
 
-
 const getAllMissedRotaFromDB = async (query: Record<string, unknown>) => {
-  const { startDate, endDate, attendanceDate, ...restQuery } = query;
+  // 1. Destructure employeeId, userId, and companyId so we can use them in the DB query
+  const { startDate, endDate, attendanceDate, employeeId, userId, companyId, ...restQuery } = query;
 
   const dateFilter: Record<string, any> = {};
+
+  // ✅ Check for employeeId or userId and add it to the filter
+  const targetEmployeeId = employeeId || userId;
+  if (targetEmployeeId) {
+    dateFilter.employeeId = targetEmployeeId;
+  }
+
+  // ✅ Add companyId to the filter if provided
+  if (companyId) {
+    dateFilter.companyId = companyId;
+  }
 
   // ✅ Only published rotas, no leaveType
   dateFilter.status = "publish";
@@ -960,6 +971,14 @@ const getAllMissedRotaFromDB = async (query: Record<string, unknown>) => {
   // ✅ Build attendance date filter to find who already clocked in
   const attendanceDateFilter: Record<string, any> = {};
 
+  // Add the same user/company filters to the Attendance query for performance
+  if (targetEmployeeId) {
+    attendanceDateFilter.userId = targetEmployeeId; // Assuming Attendance schema uses userId
+  }
+  if (companyId) {
+    attendanceDateFilter.companyId = companyId;
+  }
+
   if (attendanceDate) {
     attendanceDateFilter.clockInDate = attendanceDate;
   } else if (startDate || endDate) {
@@ -975,30 +994,38 @@ const getAllMissedRotaFromDB = async (query: Record<string, unknown>) => {
   });
 
   // ✅ Strategy 2: attended via userId+date match (no rotaId on attendance)
-  // Get all userIds who have attendance in the date range
-  const attendanceRecords = await Attendance.find(
-    attendanceDateFilter,
-    { userId: 1, clockInDate: 1 }
-  ).lean();
+  const attendanceRecords = await Attendance.find(attendanceDateFilter, {
+    userId: 1,
+    clockInDate: 1,
+  }).lean();
 
   // Build a Set of "employeeId_date" pairs for fast lookup
   const attendedEmployeeDateSet = new Set(
     attendanceRecords
       .filter((a) => a.userId)
-      .map((a) => `${a.userId}_${a.clockInDate}`)
+      .map((a:any) => `${a.userId.toString()}_${a.clockInDate}`),
   );
 
-  // ✅ Fetch candidate rotas (excluding direct rotaId matches)
+  // ✅ Fetch candidate rotas (now properly filtered by employeeId and companyId!)
   const candidateRotas = await Rota.find({
     ...dateFilter,
     _id: { $nin: attendedByRotaId },
   })
-    .populate("departmentId")
+    .populate({
+      path:"departmentId",
+      select:"departmentName"
+    })
+    .populate({
+      path: "employeeId",
+      select: "firstName lastName email",
+    })
     .lean();
 
   // ✅ Filter out rotas where employee already has attendance on that date
   const missedRotas = candidateRotas.filter((rota) => {
-    const key = `${rota.employeeId}_${rota.startDate}`;
+    // Note: Because employeeId is populated, it is an object. We must extract the _id.
+    const empId = rota.employeeId?._id ? rota.employeeId._id.toString() : rota.employeeId?.toString();
+    const key = `${empId}_${rota.startDate}`;
     return !attendedEmployeeDateSet.has(key);
   });
 
@@ -1007,6 +1034,7 @@ const getAllMissedRotaFromDB = async (query: Record<string, unknown>) => {
     result: missedRotas,
   };
 };
+
 export const RotaServices = {
   getAllRotaFromDB,
   getSingleRotaFromDB,
@@ -1017,5 +1045,5 @@ export const RotaServices = {
   bulkAssignRotaIntoDB,
   getUpcomingRotaFromDB,
   createRotaAttendanceIntoDB,
-  getAllMissedRotaFromDB
+  getAllMissedRotaFromDB,
 };

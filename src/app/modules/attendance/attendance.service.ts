@@ -153,7 +153,7 @@ const getAttendanceFromDB = async (query: Record<string, unknown>) => {
       .format("YYYY-MM-DDTHH:mm:ss.SSS[Z]");
 
     attendanceQuery.modelQuery
-      .where("clockInDate")
+      .where("clockIn")
       .gte(startString as any)
       .lte(endOfMonthString as any);
   } else if (fromDate && toDate) {
@@ -162,7 +162,7 @@ const getAttendanceFromDB = async (query: Record<string, unknown>) => {
     const endISO = `${toDate}T23:59:59.999Z`;
 
     attendanceQuery.modelQuery
-      .where("clockInDate")
+      .where("clockIn")
       .gte(startISO as any)
       .lte(endISO as any);
   }
