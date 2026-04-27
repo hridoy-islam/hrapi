@@ -980,11 +980,11 @@ const getAllMissedRotaFromDB = async (query: Record<string, unknown>) => {
   }
 
   if (attendanceDate) {
-    attendanceDateFilter.clockInDate = attendanceDate;
+    attendanceDateFilter.clockIn = attendanceDate;
   } else if (startDate || endDate) {
-    attendanceDateFilter.clockInDate = {};
-    if (startDate) attendanceDateFilter.clockInDate.$gte = startDate;
-    if (endDate) attendanceDateFilter.clockInDate.$lte = endDate;
+    attendanceDateFilter.clockIn = {};
+    if (startDate) attendanceDateFilter.clockIn.$gte = startDate;
+    if (endDate) attendanceDateFilter.clockIn.$lte = endDate;
   }
 
   // ✅ Strategy 1: attended via rotaId (direct link)
@@ -996,7 +996,7 @@ const getAllMissedRotaFromDB = async (query: Record<string, unknown>) => {
   // ✅ Strategy 2: attended via userId+date match (no rotaId on attendance)
   const attendanceRecords = await Attendance.find(attendanceDateFilter, {
     userId: 1,
-    clockInDate: 1,
+    clockIn: 1,
   }).lean();
 
   // Build a Set of "employeeId_date" pairs for fast lookup
