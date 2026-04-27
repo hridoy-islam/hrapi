@@ -1,5 +1,4 @@
 import { RequestHandler } from "express";
-;
 import httpStatus from "http-status";
 
 import catchAsync from "../../../utils/catchAsync";
@@ -11,7 +10,7 @@ const getAllPayroll: RequestHandler = catchAsync(async (req, res) => {
   sendResponse(res, {
     statusCode: httpStatus.OK,
     success: true,
-    message: "Payrolls retrived succesfully",
+    message: "Payrolls retrieved successfully",
     data: result,
   });
 });
@@ -22,7 +21,7 @@ const getSinglePayroll = catchAsync(async (req, res) => {
   sendResponse(res, {
     statusCode: httpStatus.OK,
     success: true,
-    message: "Payroll is retrieved succesfully",
+    message: "Payroll is retrieved successfully",
     data: result,
   });
 });
@@ -33,11 +32,10 @@ const deleteSinglePayroll = catchAsync(async (req, res) => {
   sendResponse(res, {
     statusCode: httpStatus.OK,
     success: true,
-    message: "Payroll is deleted succesfully",
+    message: "Payroll is deleted successfully",
     data: result,
   });
 });
-
 
 const updatePayroll = catchAsync(async (req, res) => {
   const { id } = req.params;
@@ -45,21 +43,33 @@ const updatePayroll = catchAsync(async (req, res) => {
   sendResponse(res, {
     statusCode: httpStatus.OK,
     success: true,
-    message: "Payroll is updated succesfully",
+    message: "Payroll is updated successfully",
     data: result,
   });
 });
 
-
-
-
+// ─── BACKGROUND JOB: Create Payroll ─────────────────────────────────────────
 const createPayroll = catchAsync(async (req, res) => {
+  // ✅ Call the ENQUEUE service, not the heavy DB service
+  const result = await PayrollServices.enqueueCreatePayroll(req.body);
   
-  const result = await PayrollServices.createPayrollIntoDB( req.body);
   sendResponse(res, {
-    statusCode: httpStatus.OK,
+    statusCode: httpStatus.ACCEPTED, // 202 Accepted
     success: true,
-    message: "Payroll Created succesfully",
+    message: result.message,
+    data: result,
+  });
+});
+
+// ─── BACKGROUND JOB: Regenerate Payroll ─────────────────────────────────────
+const regeneratePayroll = catchAsync(async (req, res) => {
+  // ✅ Call the ENQUEUE service, not the heavy DB service
+  const result = await PayrollServices.enqueueRegeneratePayroll(req.body);
+
+  sendResponse(res,{
+    success: true,
+    statusCode: httpStatus.ACCEPTED, // 202 Accepted
+    message: result.message,
     data: result,
   });
 });
@@ -71,24 +81,9 @@ const getPayrollByBatch = catchAsync(async (req, res) => {
     success: true,
     statusCode: httpStatus.OK,
     message: "Payroll batches retrieved successfully",
-    data: result.result,  // ✅ array of batches
+    data: result.result,  // array of batches
   });
 });
-
-// ─── Regenerate Existing Payrolls ───────────────────────────────────────────
-const regeneratePayroll = catchAsync(async (req, res) => {
-  const { payrollIds } = req.body;
-
-  const result = await PayrollServices.regeneratePayrollIntoDB({ payrollIds });
-
- sendResponse(res,{
-    success: true,
-    statusCode: httpStatus.OK,
-    message: "Payrolls regenerated successfully",
-    data: result,
-  });
-});
-
 
 export const PayrollControllers = {
     createPayroll,
@@ -98,6 +93,4 @@ export const PayrollControllers = {
     getPayrollByBatch,
     regeneratePayroll,
     deleteSinglePayroll
-    
 };
-

@@ -8,18 +8,18 @@ import { Attendance } from "../../attendance/attendance.model";
 import { User } from "../../user/user.model";
 import { Rota } from "../../rota/rota.model";
 import { EmployeeRate } from "../employeeRate/employeeRate.model";
+import { payrollQueue } from "../../../utils/payrollQueue";
 
-/** Convert "HH:MM" → total minutes from midnight */
+// ─────────────────────────────────────────────────────────────────────────────
+// 1. HELPER FUNCTIONS (Math & Overlaps)
+// ─────────────────────────────────────────────────────────────────────────────
+
 const timeToMinutes = (timeStr: string): number => {
   if (!timeStr) return 0;
   const [hours, minutes] = timeStr.split(":").map(Number);
   return hours * 60 + minutes;
 };
 
-/**
- * Calculate the overlapping (payable) minutes between a rota window and an
- * actual clock-in / clock-out window.
- */
 const calculateOverlapMinutes = (
   rotaStart: string,
   rotaEnd: string,
@@ -28,31 +28,24 @@ const calculateOverlapMinutes = (
 ): number => {
   if (!clockIn || !clockOut) return 0;
 
-  // ── rota window ────────────────────────────────────────────────────────────
   let rStart = timeToMinutes(rotaStart);
   let rEnd = timeToMinutes(rotaEnd);
-
-  // Overnight rota (e.g. 22:00 → 06:00)
   if (rEnd < rStart) rEnd += 24 * 60;
 
-  // ── attendance window ──────────────────────────────────────────────────────
   const mIn = moment(clockIn);
   const mOut = moment(clockOut);
 
-  // ---> THE FIX: Include seconds as fractional minutes to prevent rounding inflation
   const clockInMins = mIn.hours() * 60 + mIn.minutes() + (mIn.seconds() / 60);
   const clockOutMins = mOut.hours() * 60 + mOut.minutes() + (mOut.seconds() / 60);
 
   let aStart = clockInMins;
   let aEnd = clockOutMins;
-
-  // Overnight attendance
   if (aEnd < aStart) aEnd += 24 * 60;
 
   const scenarios: [number, number][] = [
-    [aStart, aEnd], // same day
-    [aStart + 24 * 60, aEnd + 24 * 60], // attendance +24 h
-    [aStart - 24 * 60, aEnd - 24 * 60], // attendance -24 h
+    [aStart, aEnd], 
+    [aStart + 24 * 60, aEnd + 24 * 60], 
+    [aStart - 24 * 60, aEnd - 24 * 60], 
   ];
 
   let bestOverlap = 0;
@@ -64,11 +57,8 @@ const calculateOverlapMinutes = (
     if (overlap > bestOverlap) bestOverlap = overlap;
   }
 
-  // Floors 473.71 to 473 perfectly!
   return Math.floor(bestOverlap);
 };
-
-// ─── Core calculation per employee ──────────────────────────────────────────
 
 const calculatePayrollForEmployee = async (
   userId: string,
@@ -79,7 +69,6 @@ const calculatePayrollForEmployee = async (
   const fromStr = moment(fromDate).format("YYYY-MM-DD");
   const toStr = moment(toDate).format("YYYY-MM-DD");
 
-  // 1. Fetch approved attendance records in the date range.
   const attendanceRecords = await Attendance.find({
     userId,
     companyId,
@@ -99,7 +88,6 @@ const calculatePayrollForEmployee = async (
     );
   }
 
-  // 2. Fetch EmployeeRates and POPULATE the shiftId array
   const employeeRates = await EmployeeRate.find({ employeeId: userId })
     .populate({
       path: "shiftId",
@@ -110,7 +98,7 @@ const calculatePayrollForEmployee = async (
   const attendanceList: {
     attendanceId: string;
     payRate: number;
-    duration: number; // minutes
+    duration: number; 
   }[] = [];
 
   let totalDurationMinutes = 0;
@@ -121,11 +109,10 @@ const calculatePayrollForEmployee = async (
   for (const record of attendanceRecords) {
     const rec = record as any;
     const mClockIn = moment(rec.clockIn);
-    const dayOfWeek = mClockIn.format("dddd"); // E.g., "Monday"
+    const dayOfWeek = mClockIn.format("dddd"); 
     
-    let currentPayRate = 0; // Defaults to 0
+    let currentPayRate = 0; 
 
-    // 3. No rota linked — record with 0 duration
     if (!rec.rotaId) {
       attendanceList.push({
         attendanceId: rec._id.toString(),
@@ -135,7 +122,6 @@ const calculatePayrollForEmployee = async (
       continue;
     }
 
-    // Fetch or get cached Rota
     let rota = rotaCache.get(rec.rotaId.toString());
     if (!rota) {
       rota = await Rota.findById(rec.rotaId);
@@ -154,14 +140,11 @@ const calculatePayrollForEmployee = async (
     const rotaStartTime = (rota as any).startTime;
     const rotaStartMins = timeToMinutes(rotaStartTime);
 
-    // 4. FIND THE PAY RATE based on the number of EmployeeRate records
     let bestRateDoc: any = null;
 
     if (employeeRates.length === 1) {
-      // ✅ If there's only one rate, use it immediately
       bestRateDoc = employeeRates[0];
     } else if (employeeRates.length > 1) {
-      // ✅ If there are multiple rates, find the one with the closest shift.startTime
       let minDiff = Infinity;
 
       for (const rateDoc of employeeRates) {
@@ -183,12 +166,10 @@ const calculatePayrollForEmployee = async (
       }
     }
 
-    // Extract the rate for the specific day from the matched doc.
     if (bestRateDoc?.rates?.has(dayOfWeek)) {
       currentPayRate = bestRateDoc.rates.get(dayOfWeek)?.rate ?? 0;
     }
 
-    // 5. FIND THE DURATION: Calculate payable minutes capping at the Rota limits
     const overlapMins = calculateOverlapMinutes(
       (rota as any).startTime,
       (rota as any).endTime,
@@ -213,224 +194,161 @@ const calculatePayrollForEmployee = async (
   };
 };
 
-// const getPayrollFromDB = async (query: Record<string, unknown>) => {
-//   const {
-//     month,
-//     year,
-//     fromDate, 
-//     toDate,  
-//     page = 1,
-//     limit = 10,
-//     search,
-//     companyId,
-//     ...otherQueryParams
-//   } = query;
+// ─────────────────────────────────────────────────────────────────────────────
+// 2. QUEUE ENQUEUERS (API Controllers Must Call These!)
+// ─────────────────────────────────────────────────────────────────────────────
 
-//   const pageNumber = Number(page);
-//   const limitNumber = Number(limit);
-//   const skip = (pageNumber - 1) * limitNumber;
+const enqueueCreatePayroll = async (payload: {
+  companyId: string;
+  fromDate: string | Date;
+  toDate: string | Date;
 
-//   const matchStage: any = { ...otherQueryParams };
+}) => {
+  if (!payload.companyId) {
+    throw new AppError(httpStatus.BAD_REQUEST, "companyId is required");
+  }
 
-//   if (companyId) {
-//     matchStage.companyId = new Types.ObjectId(companyId as string);
-//   }
+  await payrollQueue.add("create-payroll-job", {
+    companyId: payload.companyId,
+    fromDate: payload.fromDate,
+    toDate: payload.toDate,
 
-//   if (fromDate && toDate) {
-//     const queryStart = new Date(fromDate as string);
-//     const queryEnd = new Date(toDate as string);
-//     queryEnd.setUTCHours(23, 59, 59, 999);
+  });
 
-//     matchStage.fromDate = { $lte: queryEnd };
-//     matchStage.toDate = { $gte: queryStart };
-//   } else if (month && year) {
-//     const startOfMonth = moment(`${year}-${String(month).padStart(2, "0")}-01`)
-//       .startOf("month")
-//       .toDate();
+  return {
+    status: "processing",
+    message: "Payroll creation has started in the background. It will be available shortly.",
+  };
+};
 
-//     const endOfMonth = moment(`${year}-${String(month).padStart(2, "0")}-01`)
-//       .endOf("month")
-//       .toDate();
+const enqueueRegeneratePayroll = async (payload: { payrollIds: string[] }) => {
+  const { payrollIds } = payload;
 
-//     matchStage.$or = [
-//       { fromDate: { $gte: startOfMonth, $lte: endOfMonth } },
-//       { toDate: { $gte: startOfMonth, $lte: endOfMonth } },
-//       { fromDate: { $lte: startOfMonth }, toDate: { $gte: endOfMonth } },
-//     ];
-//   }
+  if (!payrollIds || !Array.isArray(payrollIds) || payrollIds.length === 0) {
+    throw new AppError(
+      httpStatus.BAD_REQUEST,
+      "Please provide an array of payroll IDs to regenerate"
+    );
+  }
 
-//   const searchRegex = search ? new RegExp(search as string, "i") : null;
+  const firstPayroll = await Payroll.findById(payrollIds[0]);
+  
+  if (!firstPayroll) {
+    throw new AppError(httpStatus.NOT_FOUND, "Payroll records not found to regenerate");
+  }
 
-//   const basePipeline: any[] = [
-//     { $match: matchStage },
-//     {
-//       $lookup: {
-//         from: "users",
-//         localField: "userId",
-//         foreignField: "_id",
-//         as: "user",
-//       },
-//     },
-//     {
-//       $unwind: {
-//         path: "$user",
-//         preserveNullAndEmptyArrays: true,
-//       },
-//     },
-//     {
-//       $match: {
-//         $or: [{ "user.role": "employee" }],
-//         ...(companyId
-//           ? {
-//               $expr: {
-//                 $or: [
-//                   { $eq: ["$user.company", new Types.ObjectId(companyId as string)] },
-//                   { $eq: ["$user._id", new Types.ObjectId(companyId as string)] }, 
-//                 ],
-//               },
-//             }
-//           : {}),
-//       },
-//     },
-//     {
-//       $lookup: {
-//         from: "departments",
-//         let: { deptIds: "$user.departmentId" },
-//         pipeline: [
-//           {
-//             $match: {
-//               $expr: {
-//                 $and: [
-//                   { $ne: ["$$deptIds", null] },
-//                   { $in: ["$_id", { $ifNull: ["$$deptIds", []] }] },
-//                 ],
-//               },
-//             },
-//           },
-//           { $project: { departmentName: 1 } }
-//         ],
-//         as: "departments",
-//       },
-//     },
-//     {
-//       $lookup: {
-//         from: "designations",
-//         let: { desigIds: "$user.designationId" },
-//         pipeline: [
-//           {
-//             $match: {
-//               $expr: {
-//                 $and: [
-//                   { $ne: ["$$desigIds", null] },
-//                   { $in: ["$_id", { $ifNull: ["$$desigIds", []] }] },
-//                 ],
-//               },
-//             },
-//           },
-//           { $project: { title: 1 } }
-//         ],
-//         as: "designations",
-//       },
-//     },
-//   ];
+  const { companyId, fromDate, toDate } = firstPayroll;
 
-//   // ✅ SEARCH (Updated refId to payrollNo)
-//   if (searchRegex) {
-//     basePipeline.push({
-//       $match: {
-//         $or: [
-//           { "user.firstName": searchRegex },
-//           { "user.lastName": searchRegex },
-//           { "user.email": searchRegex },
-//           { payrollNo: searchRegex }, // Extracted from payrollNumber
-//           {
-//             $expr: {
-//               $regexMatch: {
-//                 input: { $concat: ["$user.firstName", " ", "$user.lastName"] },
-//                 regex: search as string,
-//                 options: "i",
-//               },
-//             },
-//           },
-//         ],
-//       },
-//     });
-//   }
+  await Payroll.deleteMany({ _id: { $in: payrollIds } });
 
-//   const totalResult = await Payroll.aggregate([
-//     ...basePipeline,
-//     { $count: "total" },
-//   ]);
-
-//   const total = totalResult[0]?.total || 0;
-
-//   const aggregationPipeline = [
-//     ...basePipeline,
-//     { $sort: { createdAt: -1 } },
-//     { $skip: skip },
-//     { $limit: limitNumber },
-//     {
-//       $project: {
-//         _id: 1,
-//         payrollNo: 1, // Updated Projection
-//         fromDate: 1,
-//         toDate: 1,
-//         status: 1,
-//         attendanceList: 1,
-//         createdAt: 1,
-//         updatedAt: 1,
-//         companyId: 1,
-//         totalHours: {
-//           $round: [{ $divide: [{ $sum: "$attendanceList.duration" }, 60] }, 2],
-//         },
-//         totalDuration: { $sum: "$attendanceList.duration" },
-//         attendanceCount: { $size: "$attendanceList" },
-//         user: {
-//           $cond: {
-//             if: { $eq: ["$user", null] },
-//             then: null,
-//             else: {
-//               _id: "$user._id",
-//               firstName: "$user.firstName",
-//               lastName: "$user.lastName",
-//               name: "$user.name",
-//               email: "$user.email",
-//               phone: "$user.phone",
-//               role: "$user.role",
-//               status: "$user.status",
-//               payroll: "$user.payroll",
-//               designations: { $ifNull: ["$designations", []] },
-//               departments: { $ifNull: ["$departments", []] },
-//             },
-//           },
-//         },
-//       },
-//     },
-//   ];
-
-//   const result = await Payroll.aggregate(aggregationPipeline);
-
-//   return {
-//     meta: {
-//       page: pageNumber,
-//       limit: limitNumber,
-//       total,
-//       totalPages: Math.ceil(total / limitNumber),
-//     },
-//     result,
-//   };
-// };
-
-
-const getPayrollFromDB = async (query: Record<string, unknown>) => {
-  const {
+  await payrollQueue.add("regenerate-payroll-job", {
+    companyId: companyId.toString(),
     fromDate,
     toDate,
-    page = 1,
-    limit = 10,
-    companyId,
-  } = query;
+  });
 
+  return {
+    status: "processing",
+    message: "Payroll regeneration has started in the background. It will be available shortly.",
+  };
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 3. BACKGROUND WORKER PROCESS (Runs in the Background!)
+// ─────────────────────────────────────────────────────────────────────────────
+
+const createPayrollIntoDB = async (payload: {
+  companyId: string;
+  fromDate: string | Date;
+  toDate: string | Date;
+  note?: string;
+}) => {
+  if (!payload.companyId) {
+    throw new AppError(httpStatus.BAD_REQUEST, "companyId is required");
+  }
+
+  const employees = await User.find({
+    company: payload.companyId,
+    role: "employee",
+    isDeleted: false,
+    status: "active",
+  }).select("_id payroll"); 
+
+  if (!employees.length) {
+    throw new AppError(httpStatus.NOT_FOUND, "No employees found for this company");
+  }
+
+  const createdPayrolls: any[] = [];
+  const errors: { userId: string; message: string }[] = [];
+
+  for (const emp of employees) {
+    const userId = (emp._id as any).toString();
+    const payrollNo = (emp as any).payroll?.payrollNumber || "N/A";
+
+    try {
+      const existing = await Payroll.findOne({
+        userId,
+        $or: [
+          { fromDate: { $gte: payload.fromDate, $lte: payload.toDate } },
+          { toDate: { $gte: payload.fromDate, $lte: payload.toDate } },
+          {
+            fromDate: { $lte: payload.fromDate },
+            toDate: { $gte: payload.toDate },
+          },
+        ],
+      });
+
+      if (existing) {
+        throw new AppError(httpStatus.BAD_REQUEST, "Payroll already exists for this period");
+      }
+
+      const calculations = await calculatePayrollForEmployee(
+        userId,
+        payload.companyId,
+        moment(payload.fromDate).toDate(),
+        moment(payload.toDate).toDate(),
+      );
+
+      const created = await Payroll.create({
+        userId,
+        companyId: payload.companyId,
+        payrollNo,
+        fromDate: payload.fromDate,
+        toDate: payload.toDate,
+        note: payload.note,
+        status: "pending",
+        totalHour: calculations.totalHour,
+        totalAmount: calculations.totalAmount,
+        attendanceList: calculations.attendanceList,
+      });
+
+      createdPayrolls.push(created);
+    } catch (err: any) {
+      errors.push({
+        userId,
+        message: err.message || "Failed to calculate payroll",
+      });
+    }
+  }
+
+  if (createdPayrolls.length === 0 && errors.length > 0) {
+    throw new AppError(httpStatus.BAD_REQUEST, errors[0].message);
+  }
+
+  return {
+    successCount: createdPayrolls.length,
+    errorCount: errors.length,
+    createdPayrolls,
+    errors,
+  };
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 4. STANDARD CRUD OPERATIONS (Fast APIs)
+// ─────────────────────────────────────────────────────────────────────────────
+
+const getPayrollFromDB = async (query: Record<string, unknown>) => {
+  const { fromDate, toDate, page = 1, limit = 10, companyId } = query;
   const pageNumber = Number(page);
   const limitNumber = Number(limit);
   const skip = (pageNumber - 1) * limitNumber;
@@ -441,7 +359,6 @@ const getPayrollFromDB = async (query: Record<string, unknown>) => {
     matchStage.companyId = new Types.ObjectId(companyId as string);
   }
 
-  // Date filtering
   if (fromDate && toDate) {
     const queryStart = new Date(fromDate as string);
     const queryEnd = new Date(toDate as string);
@@ -451,10 +368,8 @@ const getPayrollFromDB = async (query: Record<string, unknown>) => {
     matchStage.toDate = { $gte: queryStart };
   }
 
-  // Count total
   const total = await Payroll.countDocuments(matchStage);
 
-  // Fetch data
   const result = await Payroll.aggregate([
     { $match: matchStage },
     { $sort: { createdAt: -1 } },
@@ -480,7 +395,6 @@ const getPayrollFromDB = async (query: Record<string, unknown>) => {
     result,
   };
 };
-
 
 const getSinglePayrollFromDB = async (id: string) => {
   const result = await Payroll.findById(id)
@@ -509,125 +423,25 @@ const getSinglePayrollFromDB = async (id: string) => {
   return result;
 };
 
-const createPayrollIntoDB = async (payload: {
-  companyId: string;
-  fromDate: string | Date;
-  toDate: string | Date;
-  note?: string;
-}) => {
-  if (!payload.companyId) {
-    throw new AppError(httpStatus.BAD_REQUEST, "companyId is required");
-  }
-
-  // Fetch users with their payroll nested object so we can map payrollNo
-  const employees = await User.find({
-    company: payload.companyId,
-    role: "employee",
-    isDeleted: false,
-    status: "active",
-  }).select("_id payroll"); 
-
-  if (!employees.length) {
-    throw new AppError(
-      httpStatus.NOT_FOUND,
-      "No employees found for this company",
-    );
-  }
-
-  const createdPayrolls: any[] = [];
-  const errors: { userId: string; message: string }[] = [];
-
-  for (const emp of employees) {
-    const userId = (emp._id as any).toString();
-    const payrollNo = (emp as any).payroll?.payrollNumber || "N/A";
-
-    try {
-      const existing = await Payroll.findOne({
-        userId,
-        $or: [
-          { fromDate: { $gte: payload.fromDate, $lte: payload.toDate } },
-          { toDate: { $gte: payload.fromDate, $lte: payload.toDate } },
-          {
-            fromDate: { $lte: payload.fromDate },
-            toDate: { $gte: payload.toDate },
-          },
-        ],
-      });
-
-      if (existing) {
-        throw new AppError(
-          httpStatus.BAD_REQUEST,
-          "Payroll already exists for this period",
-        );
-      }
-
-      const calculations = await calculatePayrollForEmployee(
-        userId,
-        payload.companyId,
-        moment(payload.fromDate).toDate(),
-        moment(payload.toDate).toDate(),
-      );
-
-      const created = await Payroll.create({
-        userId,
-        companyId: payload.companyId,
-        payrollNo, // Insert dynamically extracted payrollNo
-        fromDate: payload.fromDate,
-        toDate: payload.toDate,
-        note: payload.note,
-        status: "pending",
-        totalHour: calculations.totalHour,
-        totalAmount: calculations.totalAmount,
-        attendanceList: calculations.attendanceList,
-      });
-
-      createdPayrolls.push(created);
-    } catch (err: any) {
-      errors.push({
-        userId,
-        message: err.message || "Failed to calculate payroll",
-      });
-    }
-  }
-
- if (createdPayrolls.length === 0 && errors.length > 0) {
-   throw new AppError(httpStatus.BAD_REQUEST, errors[0].message);
- }
-
-  return {
-    successCount: createdPayrolls.length,
-    errorCount: errors.length,
-    createdPayrolls,
-    errors,
-  };
-};
-
 const updatePayrollIntoDB = async (id: string, payload: Partial<TPayroll>) => {
   const payroll = await Payroll.findById(id);
   if (!payroll) throw new AppError(httpStatus.NOT_FOUND, "Payroll not found");
 
-  // Determine if it's a contract (check payload first, fallback to existing payroll data)
   const isContract = payload.isContract !== undefined ? payload.isContract : payroll.isContract;
 
   if (isContract) {
-    // Fetch the user to get the contract amount
     const user = await User.findById(payroll.userId);
-    
     if (!user) {
       throw new AppError(httpStatus.NOT_FOUND, "User not found");
     }
-
-    // Set the contractAmount in the payload, default to 0 if undefined/null
     payload.contractAmount = user.contractAmount?.valueOf() ?? 0;
   }
 
-  // Update the payroll with the modified payload
   return Payroll.findByIdAndUpdate(id, payload, {
     new: true,
     runValidators: true,
   });
 };
-
 
 const deletePayrollIntoDB = async (id: string) => {
   const payroll = await Payroll.findById(id);
@@ -636,49 +450,8 @@ const deletePayrollIntoDB = async (id: string) => {
   return Payroll.findByIdAndDelete(id);
 };
 
-
-
-const regeneratePayrollIntoDB = async (payload: { payrollIds: string[] }) => {
-  const { payrollIds } = payload;
-
-  if (!payrollIds || !Array.isArray(payrollIds) || payrollIds.length === 0) {
-    throw new AppError(
-      httpStatus.BAD_REQUEST,
-      "Please provide an array of payroll IDs to regenerate"
-    );
-  }
-
-  // 1. Fetch the first payroll to get the batch parameters (companyId, dates)
-  const firstPayroll = await Payroll.findById(payrollIds[0]);
-  
-  if (!firstPayroll) {
-    throw new AppError(httpStatus.NOT_FOUND, "Payroll records not found to regenerate");
-  }
-
-  const { companyId, fromDate, toDate } = firstPayroll;
-
-  // 2. Delete all provided payroll IDs so they can be recreated cleanly
-  await Payroll.deleteMany({ _id: { $in: payrollIds } });
-
-  // 3. Run the exact creation logic for this company and date range
-  // Note: createPayrollIntoDB handles all active employees, and will just skip 
-  // employees that already have payrolls (the ones you didn't delete)
-  return await createPayrollIntoDB({
-    companyId: companyId.toString(),
-    fromDate,
-    toDate,
-  });
-};
-
-
 const getCompanyPayrollByBatchFromDB = async (query: Record<string, unknown>) => {
-  const {
-    fromDate,
-    toDate,
-    page = 1,
-    limit = 10,
-    companyId,
-  } = query;
+  const { fromDate, toDate, page = 1, limit = 10, companyId } = query;
 
   const pageNumber = Number(page);
   const limitNumber = Number(limit);
@@ -701,7 +474,6 @@ const getCompanyPayrollByBatchFromDB = async (query: Record<string, unknown>) =>
   const result = await Payroll.aggregate([
     { $match: matchStage },
     { $sort: { createdAt: -1 } },
-
     {
       $group: {
         _id: {
@@ -715,9 +487,7 @@ const getCompanyPayrollByBatchFromDB = async (query: Record<string, unknown>) =>
         createdAt: { $first: "$createdAt" },
       },
     },
-
     { $sort: { fromDate: -1 } },
-
     {
       $facet: {
         data: [
@@ -734,9 +504,7 @@ const getCompanyPayrollByBatchFromDB = async (query: Record<string, unknown>) =>
             },
           },
         ],
-        totalCount: [
-          { $count: "count" },
-        ],
+        totalCount: [{ $count: "count" }],
       },
     },
   ]);
@@ -745,22 +513,34 @@ const getCompanyPayrollByBatchFromDB = async (query: Record<string, unknown>) =>
   const total = result[0]?.totalCount[0]?.count ?? 0;
 
   return {
-   
-    result: {data, meta: {
-      page: pageNumber,
-      limit: limitNumber,
-      total,
-      totalPages: Math.ceil(total / limitNumber),
-    }},
+    result: {
+      data, 
+      meta: {
+        page: pageNumber,
+        limit: limitNumber,
+        total,
+        totalPages: Math.ceil(total / limitNumber),
+      }
+    },
   };
 };
 
+// ─────────────────────────────────────────────────────────────────────────────
+// 5. THE FINAL EXPORTS
+// ─────────────────────────────────────────────────────────────────────────────
+
 export const PayrollServices = {
+  // Read / Update / Delete
   getPayrollFromDB,
   getSinglePayrollFromDB,
-  createPayrollIntoDB,
-  updatePayrollIntoDB,
-  regeneratePayrollIntoDB,
   getCompanyPayrollByBatchFromDB,
-  deletePayrollIntoDB
+  updatePayrollIntoDB,
+  deletePayrollIntoDB,
+
+  // ✅ FOR YOUR CONTROLLERS: Call these to start background jobs
+  enqueueCreatePayroll,
+  enqueueRegeneratePayroll,
+
+  // ✅ FOR YOUR BULLMQ WORKER: The background task uses this 
+  createPayrollIntoDB,
 };

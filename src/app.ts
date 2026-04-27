@@ -9,7 +9,7 @@ import globalErrorHandler from "./app/middlewares/globalErrorhandler";
 import notFound from "./app/middlewares/notFound";
 import router from "./app/routes";
 import cron from "node-cron";
-
+import "../src/app/utils/payrollWorker";
 const app: Application = express();
 const Pusher = require("pusher");
 
