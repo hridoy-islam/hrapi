@@ -14,5 +14,6 @@ export interface TNotice {
   status?: "active" | "inactive"; 
   noticeDate?: Date;       
   createdAt?: Date;       
+  documents:string[];
 }
 

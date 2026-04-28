@@ -39,6 +39,7 @@ const noticeSchema = new Schema<TNotice>(
       type: String,
       default: "active",
     },
+    documents:[{type:String}],
     noticeDate: {
       type: Date,
       default: Date.now,
