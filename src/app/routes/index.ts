@@ -43,6 +43,7 @@ import { ServiceUserRoutes } from "../modules/serviceUser/serviceUser.router";
 import { SignatureDocRoutes } from "../modules/signatureDoc/signatureDoc.router";
 import { DocusignCredentialsRoutes } from "../modules/docusignCredentials/docusignCredentials.router";
 import { SickNoteRoutes } from "../modules/hr/sickNote/sickNote.router";
+import { MeetingMinsRoutes } from "../modules/meetingMins/meetingMins.router";
 
 const router = Router();
 
@@ -224,6 +225,10 @@ const moduleRoutes = [
   {
     path: "/sick-note",
     route: SickNoteRoutes,
+  },
+  {
+    path: "/company-meeting",
+    route: MeetingMinsRoutes,
   },
 ];
 

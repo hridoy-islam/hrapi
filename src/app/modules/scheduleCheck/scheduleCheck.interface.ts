@@ -15,4 +15,5 @@ export interface TScheduleCheck {
   supervisionDuration:number
   qaCheckDuration:number
   qaCheckDate:number
+  meetingCheckDate:number
 }

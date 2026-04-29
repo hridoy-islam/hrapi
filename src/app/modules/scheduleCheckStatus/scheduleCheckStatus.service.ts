@@ -17,6 +17,7 @@ import { Disciplinary } from "../disciplinary/disciplinary.model";
 import { QACheck } from "../qaCheck/QACheck.model";
 import { EmployeeDocument } from "../hr/employeeDocument/employeeDocument.model";
 import { MIN_REFERENCE_COUNT, REQUIRED_DOCUMENTS_LIST } from "../hr/employeeDocument/employeeDocument.constant";
+import { MeetingMins } from "../meetingMins/meetingMins.model";
 
 const getSettingsAndThreshold = async (
   companyId: string,
@@ -563,7 +564,7 @@ const getCompanyComplianceStats = async (companyId: string) => {
   const employees = await User.find({
     company: companyId,
     role: "employee",
-  }).select("_id noRtwCheck isBritish"); // <--- Added flags here
+  }).select("_id noRtwCheck isBritish"); 
   
   const employeeIds = employees.map((user) => user._id);
   const totalEmployees = employeeIds.length;
@@ -574,14 +575,14 @@ const getCompanyComplianceStats = async (companyId: string) => {
   if (totalEmployees === 0) {
     return {
       passport: 0, rtw: 0, visa: 0, dbs: 0, immigration: 0, appraisal: 0,
-      spot: 0, supervision: 0, training: 0, induction: 0, disciplinary: 0, employeeDocument: 0, 
+      spot: 0, supervision: 0, training: 0, induction: 0, disciplinary: 0, employeeDocument: 0, meeting: 0,
     };
   }
 
   const settings = await ScheduleCheck.findOne({ companyId });
   const defaults = {
     passport: 30, visa: 30, dbs: 30, immigration: 30, appraisal: 30,
-    rtw: 30, spot: 30, supervision: 30, disciplinary: 30, qa: 30,
+    rtw: 30, spot: 30, supervision: 30, disciplinary: 30, qa: 30, meeting: 3,
   };
 
   const intervals = {
@@ -595,6 +596,7 @@ const getCompanyComplianceStats = async (companyId: string) => {
     supervision: settings?.supervisionCheckDate || defaults.supervision,
     disciplinary: settings?.disciplinaryCheckDate || defaults.disciplinary,
     qa: settings?.qaCheckDate || defaults.qa,
+    meeting: settings?.meetingCheckDate || defaults.meeting,
   };
 
   const getSafeThreshold = (days: number) => moment().add(days, "days").toDate();
@@ -607,21 +609,21 @@ const getCompanyComplianceStats = async (companyId: string) => {
   }));
 
   const [
-     compliantPassportIds,
-  compliantVisaIds,
-  compliantImmigrationIds,  
-  compliantRTWIds,         
-  compliantDbsIds,         
-  compliantAppraisalIds,  
-  compliantSpotCheckIds,
-  compliantSupervisionIds,
-  compliantQaIds,
-  compliantInductionIds,
-  activeDisciplinaryIssues,
-  nonCompliantTrainingIds,
-  allEmployeeDocs,
+    compliantPassportIds,
+    compliantVisaIds,
+    compliantImmigrationIds,  
+    compliantRTWIds,         
+    compliantDbsIds,         
+    compliantAppraisalIds,  
+    compliantSpotCheckIds,
+    compliantSupervisionIds,
+    compliantQaIds,
+    compliantInductionIds,
+    activeDisciplinaryIssues,
+    nonCompliantTrainingIds,
+    allEmployeeDocs,
+    meetingNonCompliantCount, // <--- Added here
   ] = await Promise.all([
-    // ---> Use restricted `rtwRequiredEmployeeIds` for these 4 queries <---
     Passport.distinct("userId", {
       userId: { $in: rtwRequiredEmployeeIds },
       passportExpiryDate: { $gt: getSafeThreshold(intervals.passport) },
@@ -638,7 +640,6 @@ const getCompanyComplianceStats = async (companyId: string) => {
       employeeId: { $in: rtwRequiredEmployeeIds },
       nextCheckDate: { $gt: getSafeThreshold(intervals.rtw) },
     }),
-    // ---------------------------------------------------------------------
 
     DbsForm.distinct("userId", {
       userId: { $in: employeeIds },
@@ -677,6 +678,15 @@ const getCompanyComplianceStats = async (companyId: string) => {
     EmployeeDocument.find({
       employeeId: { $in: employeeIds },
     }).select("employeeId documentTitle"),
+   
+    MeetingMins.countDocuments({
+      companyId: companyId,
+      $or: [
+        { nextMeetingDate: { $exists: false } },
+        { nextMeetingDate: null },
+        { nextMeetingDate: { $lte: getSafeThreshold(intervals.meeting) } }
+      ]
+    })
   ]);
 
   let employeeDocumentNonCompliantCount = 0;
@@ -689,7 +699,6 @@ const getCompanyComplianceStats = async (companyId: string) => {
       d.documentTitle.trim().toLowerCase(),
     );
 
-    // Apply isBritish Logic inside the stat counter
     let requiredForThisUser = [...REQUIRED_DOCUMENTS_LIST];
     if (user.noRtwCheck) {
       requiredForThisUser = requiredForThisUser.filter(
@@ -715,12 +724,10 @@ const getCompanyComplianceStats = async (companyId: string) => {
   });
 
   return {
-    // Determine counts using the restricted employee total lengths where applicable
     passport: rtwRequiredEmployeeIds.length - compliantPassportIds.length,
     visa: rtwRequiredEmployeeIds.length - compliantVisaIds.length,
     immigration: rtwRequiredEmployeeIds.length - compliantImmigrationIds.length,
     rtw: rtwRequiredEmployeeIds.length - compliantRTWIds.length,
-    // ...everything else uses totalEmployees length
     dbs: totalEmployees - compliantDbsIds.length,
     appraisal: totalEmployees - compliantAppraisalIds.length,
     spot: totalEmployees - compliantSpotCheckIds.length,
@@ -730,6 +737,7 @@ const getCompanyComplianceStats = async (companyId: string) => {
     disciplinary: activeDisciplinaryIssues,
     training: nonCompliantTrainingIds.length,
     employeeDocument: employeeDocumentNonCompliantCount, 
+    meeting: meetingNonCompliantCount, 
   };
 };
 export const ScheduleCheckStatuServices = {

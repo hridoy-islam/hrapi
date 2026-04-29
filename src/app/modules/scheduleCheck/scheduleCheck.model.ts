@@ -60,6 +60,10 @@ const ScheduleCheckSchema = new Schema<TScheduleCheck>(
       type: Number,
       default: 0,
     },
+     meetingCheckDate: {
+      type: Number,
+      default: 3,
+    },
   },
   {
     timestamps: true,
