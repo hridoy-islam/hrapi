@@ -26,6 +26,10 @@ router.patch(
   "/:meetingId/logs/:logId/acknowledge/:employeeId",
   MeetingMinsControllers.acknowledgeMeetingLog
 );
+router.patch(
+  "/:meetingId/log/:logId/documents",
+  MeetingMinsControllers.uploadDocumentsToMeetingLogIntoDB
+);
 
 router.post(
   "/",

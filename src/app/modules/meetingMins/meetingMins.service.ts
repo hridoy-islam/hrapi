@@ -48,7 +48,7 @@ const getSingleMeetingMinsFromDB = async (id: string) => {
 const createMeetingMinsIntoDB = async (payload: any) => {
   try {
     const initialLogEntry = {
-      title: "Meeting created",
+      title: "Meeting initiated",
       date: new Date(),
       updatedBy: payload.updatedBy,
       documents: payload.documents || [], // ✅ fixed
@@ -74,7 +74,7 @@ const createMeetingMinsIntoDB = async (payload: any) => {
 
 export const updateMeetingMinsIntoDB = async (
   id: string,
-  payload: Partial<TMeetingMins> & { updatedBy?: string; documents?: string[] }
+  payload: Partial<TMeetingMins> & { updatedBy?: string; documents?: string[]; note?: string }
 ) => {
   const meetingMins = await MeetingMins.findById(id);
 
@@ -95,21 +95,31 @@ export const updateMeetingMinsIntoDB = async (
       date: logDate,
       updatedBy: payload.updatedBy,
       documents: payload.documents,
-      note:(payload as any).note
+      note: payload.note
     };
 
-    // Push into the logs array
+    // Safely push into the logs array
+    if (!(meetingMins as any).logs) {
+      (meetingMins as any).logs = [];
+    }
     (meetingMins as any).logs.push(newLog);
+    
+    // Tell Mongoose the logs array was modified
+    meetingMins.markModified('logs');
   }
 
-  // 2. Update the nextMeetingDate for the future
-  if (payload.nextMeetingDate !== undefined) {
-    meetingMins.nextMeetingDate = payload.nextMeetingDate;
+  // 2. Update the nextMeetingDate for the future (only if passed in the payload)
+  if ('nextMeetingDate' in payload) {
+    (meetingMins as any).nextMeetingDate = payload.nextMeetingDate;
+    
+    // Explicitly mark as modified to force Mongoose to save the Date/String change
+    meetingMins.markModified('nextMeetingDate');
   }
 
   // 3. Update any other standard fields safely
   Object.keys(payload).forEach((key) => {
-    if (key !== "nextMeetingDate" && key !== "logs" && key !== "documents" && key !== "updatedBy") {
+    // Also exclude "note" here so it doesn't get written to the root document
+    if (!["nextMeetingDate", "logs", "documents", "updatedBy", "note"].includes(key)) {
       (meetingMins as any)[key] = (payload as any)[key];
     }
   });
@@ -235,7 +245,50 @@ const acknowledgeMeetingLogIntoDB = async (payload: {
   return result;
 };
 
+const uploadDocumentsToMeetingLogIntoDB = async (payload: {
+  meetingId: string;
+  logId: string;
+  documents: string[];
+}) => {
+  const { meetingId, logId, documents } = payload;
 
+  // 1. Find the meeting document
+  const meetingMins = await MeetingMins.findById(meetingId);
+
+  if (!meetingMins) {
+    throw new AppError(httpStatus.NOT_FOUND, "Meeting minutes not found");
+  }
+
+  if (!meetingMins.logs || meetingMins.logs.length === 0) {
+    throw new AppError(httpStatus.BAD_REQUEST, "No logs exist for this meeting.");
+  }
+
+  // 2. Find the index of the specific log using logId
+  const targetLogIndex = meetingMins.logs.findIndex(
+    (log: any) => log._id.toString() === logId.toString()
+  );
+
+  if (targetLogIndex === -1) {
+    throw new AppError(httpStatus.NOT_FOUND, "Specific meeting log not found");
+  }
+
+  const targetLog = meetingMins.logs[targetLogIndex];
+
+  // 3. Initialize documents array if it somehow doesn't exist
+  if (!targetLog.documents) {
+    targetLog.documents = [];
+  }
+
+  // 4. Push the new documents to the target log's documents array
+  targetLog.documents.push(...documents);
+
+  // 5. Tell mongoose the exact subdocument array index that has been modified
+  meetingMins.markModified(`logs.${targetLogIndex}.documents`);
+
+  // 6. Save and return
+  const result = await meetingMins.save();
+  return result;
+};
 
 export const MeetingMinsServices = {
   getAllMeetingMinsFromDB,
@@ -243,5 +296,6 @@ export const MeetingMinsServices = {
   createMeetingMinsIntoDB,
   updateMeetingMinsIntoDB,
   getUnacknowledgedMeetingsFromDB,
-  acknowledgeMeetingLogIntoDB
+  acknowledgeMeetingLogIntoDB,
+  uploadDocumentsToMeetingLogIntoDB
 };

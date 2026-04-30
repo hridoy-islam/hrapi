@@ -75,6 +75,24 @@ const acknowledgeMeetingLog: RequestHandler = catchAsync(async (req, res) => {
     data: result,
   });
 });
+const uploadDocumentsToMeetingLogIntoDB: RequestHandler = catchAsync(async (req, res) => {
+  const { meetingId, logId } = req.params;
+  const { documents } = req.body;
+
+  const result =
+    await MeetingMinsServices.uploadDocumentsToMeetingLogIntoDB({
+      meetingId,
+      logId,
+      documents
+    });
+
+  sendResponse(res, {
+    statusCode: httpStatus.OK,
+    success: true,
+    message: "Meeting log acknowledged successfully",
+    data: result,
+  });
+});
 
 export const MeetingMinsControllers = {
 
@@ -83,6 +101,7 @@ export const MeetingMinsControllers = {
     createMeetingMins,
     updateMeetingMins,  
     getAllUnAcknowledgeMeetingMins  ,
-    acknowledgeMeetingLog
+    acknowledgeMeetingLog,
+    uploadDocumentsToMeetingLogIntoDB
 };
 
