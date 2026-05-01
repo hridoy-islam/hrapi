@@ -33,11 +33,11 @@ router.post(
 //   validateRequest(AuthValidations.createUserValidationSchema),
 //   AuthControllers.createUser,
 // );
-// router.post(
-//   "/forget",
-//   validateRequest(AuthValidations.forgetPasswordValidationSchema),
-//   AuthControllers.forgetPassword
-// );
+router.post(
+  "/forget",
+  validateRequest(AuthValidations.forgetPasswordValidationSchema),
+  AuthControllers.forgetPassword
+);
 
 // router.post(
 //   "/validate",

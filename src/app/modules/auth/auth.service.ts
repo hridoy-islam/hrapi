@@ -15,6 +15,7 @@ import sendResponse from "../../utils/sendResponse";
 import moment from '../../utils/moment-setup';
 import { RightToWork } from "../hr/rightToWork/rightToWork.model";
 
+const BLOCKED_ERROR_MESSAGE = "Your account has been suspended. Please contact the administrator for assistance.";
 function generateOTP() {
   const otp = Math.floor(1000 + Math.random() * 9000).toString();
   return otp;
@@ -22,21 +23,24 @@ function generateOTP() {
 
 const checkLogin = async (payload: TLogin) => {
   try {
-      const normalizedEmail = payload.email.trim().toLowerCase();
+    const normalizedEmail = payload.email.trim().toLowerCase();
 
     const foundUser = await User.isUserExists(normalizedEmail);
     if (!foundUser) {
-      throw new AppError(httpStatus.NOT_FOUND, "Login Detials is not correct");
+      throw new AppError(httpStatus.NOT_FOUND, "Login Details are not correct");
     }
+
     if (foundUser.isDeleted) {
-      throw new AppError(
-        httpStatus.NOT_FOUND,
-        "This Account Has Been Deleted."
-      );
+      throw new AppError(httpStatus.NOT_FOUND, "This Account Has Been Deleted.");
+    }
+
+    // Blocked user check
+    if (foundUser.status === "block") {
+      throw new AppError(httpStatus.FORBIDDEN, BLOCKED_ERROR_MESSAGE);
     }
 
     if (!(await User.isPasswordMatched(payload?.password, foundUser?.password)))
-      throw new AppError(httpStatus.FORBIDDEN, "Password do not matched");
+      throw new AppError(httpStatus.FORBIDDEN, "Please Check Your Login Credentials");
 
     const jwtPayload = {
       _id: foundUser._id?.toString(),
@@ -44,15 +48,13 @@ const checkLogin = async (payload: TLogin) => {
       name: foundUser?.name,
       role: foundUser?.role,
       authorized: foundUser?.authorized,
-      image:foundUser?.image,
-      company:foundUser?.company,
-      companyAccess:foundUser?.companyAccess,
-      
+      image: foundUser?.image,
+      company: foundUser?.company,
+      companyAccess: foundUser?.companyAccess,
     };
 
     const accessToken = createToken(
       jwtPayload,
-
       config.jwt_access_secret as string,
       config.jwt_access_expires_in as string
     );
@@ -67,7 +69,11 @@ const checkLogin = async (payload: TLogin) => {
       refreshToken,
     };
   } catch (error) {
-    throw new AppError(httpStatus.NOT_FOUND, "Details doesnt match");
+    // Ensure we throw our custom AppErrors instead of swallowing them in a generic catch
+    if (error instanceof AppError) {
+      throw error;
+    }
+    throw new AppError(httpStatus.NOT_FOUND, "Details doesn't match");
   }
 };
 
@@ -230,6 +236,12 @@ const EmailSendOTP = async (email: string) => {
   if (!user) {
     throw new AppError(httpStatus.NOT_FOUND, "No User Found");
   }
+
+  // Blocked user check
+  if (user.status === "block") {
+    throw new AppError(httpStatus.FORBIDDEN, BLOCKED_ERROR_MESSAGE);
+  }
+
   // Generate OTP
   const otp = Math.floor(1000 + Math.random() * 9000).toString(); // 4-digit OTP
   await User.updateOne({ email }, { otp });
@@ -241,6 +253,11 @@ export const verifyEmailIntoDB = async (email: string, otp: string) => {
 
   if (!foundUser) {
     throw new AppError(httpStatus.NOT_FOUND, "Email is not correct");
+  }
+
+  // Blocked user check
+  if (foundUser.status === "block") {
+    throw new AppError(httpStatus.FORBIDDEN, BLOCKED_ERROR_MESSAGE);
   }
 
   // Check OTP
@@ -307,6 +324,11 @@ const forgetPasswordOtp = async (email: string) => {
   if (!user) {
     throw new AppError(httpStatus.NOT_FOUND, "This user is not found !");
   }
+
+  // Blocked user check
+  if (user.status === "block") {
+    throw new AppError(httpStatus.FORBIDDEN, BLOCKED_ERROR_MESSAGE);
+  }
 };
 
 const resetPassword = async (
@@ -316,6 +338,11 @@ const resetPassword = async (
   const user = await User.findOne({ email: payload.email }).select("+password");
   if (!user) {
     throw new AppError(httpStatus.NOT_FOUND, "This user is not found !");
+  }
+
+  // Blocked user check
+  if (user.status === "block") {
+    throw new AppError(httpStatus.FORBIDDEN, BLOCKED_ERROR_MESSAGE);
   }
 
   const decoded = jwt.verify(
@@ -333,8 +360,6 @@ const resetPassword = async (
   return user;
 };
 
-
-
 const ChangePassword = async (
   userId: string,
   currentPassword: string,
@@ -344,6 +369,11 @@ const ChangePassword = async (
   const user = await User.findById(userId).select("+password");
   if (!user) {
     throw new AppError(httpStatus.NOT_FOUND, "User not found!");
+  }
+
+  // Blocked user check
+  if (user.status === "block") {
+    throw new AppError(httpStatus.FORBIDDEN, BLOCKED_ERROR_MESSAGE);
   }
 
   // Step 2: Verify the current password
@@ -361,7 +391,6 @@ const ChangePassword = async (
   // Return success message
   return { message: "Password updated successfully" };
 };
-
 
 export const AuthServices = {
   checkLogin,

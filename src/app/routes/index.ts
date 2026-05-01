@@ -44,6 +44,7 @@ import { SignatureDocRoutes } from "../modules/signatureDoc/signatureDoc.router"
 import { DocusignCredentialsRoutes } from "../modules/docusignCredentials/docusignCredentials.router";
 import { SickNoteRoutes } from "../modules/hr/sickNote/sickNote.router";
 import { MeetingMinsRoutes } from "../modules/meetingMins/meetingMins.router";
+import { LeaverRoutes } from "../modules/hr/leaver/leaver.router";
 
 const router = Router();
 
@@ -229,6 +230,10 @@ const moduleRoutes = [
   {
     path: "/company-meeting",
     route: MeetingMinsRoutes,
+  },
+  {
+    path: "/leaver",
+    route: LeaverRoutes,
   },
 ];
 

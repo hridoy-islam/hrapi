@@ -67,16 +67,16 @@ const createUser = catchAsync(async (req, res) => {
   });
 });
 
-// const forgetPassword = catchAsync(async (req, res) => {
-//   const email = req.body.email;
-//   const result = await PasswordResetServices.requestOtp(email);
-//   sendResponse(res, {
-//     statusCode: httpStatus.OK,
-//     success: true,
-//     message: "OTP Code is generated succesfully!",
-//     data: result,
-//   });
-// });
+const forgetPassword = catchAsync(async (req, res) => {
+  const email = req.body.email;
+  const result = await AuthServices.forgetPasswordOtp(email);
+  sendResponse(res, {
+    statusCode: httpStatus.OK,
+    success: true,
+    message: "OTP Code is generated succesfully!",
+    data: result,
+  });
+});
 
 // const validateReset = catchAsync(async (req, res) => {
 //   const email = req.body.email;
@@ -146,7 +146,7 @@ const ChangePassword = catchAsync(async (req, res) => {
 export const AuthControllers = {
   login,
   createUser,
-  // forgetPassword,
+  forgetPassword,
   resetPassword,
   googleLoginController,
   // validateReset,
