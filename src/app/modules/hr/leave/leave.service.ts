@@ -10,6 +10,8 @@ import { Holiday } from "../holidays/holiday.model";
 import moment from "../../../utils/moment-setup";
 import { Types } from "mongoose";
 import { HolidayServices } from "../holidays/holiday.service";
+import { Rota } from "../../rota/rota.model";
+import { Attendance } from "../../attendance/attendance.model";
 
 
 // const getAllLeaveFromDB = async (query: Record<string, unknown>) => {
@@ -234,41 +236,297 @@ const createLeaveIntoDB = async (payload: TLeave) => {
   }
 };
 
-const updateLeaveIntoDB = async (
+const toIdString = (val: any): string => {
+  if (!val) return "";
+  if (val._id) return val._id.toString();
+  return val.toString();
+};
+
+// ============================================================
+// HELPER: Build start/end times for a leave shift
+// ============================================================
+const buildShiftTimes = (
+  shiftType: string,
+  durationHours: number,
+): { startTime: string; endTime: string } => {
+  if (shiftType === "AL" && durationHours > 0) {
+    const startTime = "09:00";
+    const endTime = moment(startTime, "HH:mm")
+      .add(durationHours, "hours")
+      .format("HH:mm");
+    return { startTime, endTime };
+  }
+  return { startTime: "", endTime: "" };
+};
+
+// ============================================================
+// HELPER: Build the common rota document shape
+// ============================================================
+const buildRotaDoc = (
+  base: {
+    companyId: any;
+    employeeId: any;
+    departmentId: any;
+    dateStr: string;
+    shiftType: string;
+    startTime: string;
+    endTime: string;
+    actionUserId: string;
+  },
+  historyMessage: string,
+) => ({
+  companyId: base.companyId,
+  employeeId: base.employeeId,
+  departmentId: base.departmentId,
+  startDate: base.dateStr,
+  endDate: base.dateStr,
+  leaveType: base.shiftType,
+  shiftName: base.shiftType,
+  startTime: base.startTime,
+  endTime: base.endTime,
+  status: "publish" as const,
+  history: [
+    {
+      message: historyMessage,
+      userId: base.actionUserId,
+      createdAt: new Date(),
+    },
+  ],
+});
+
+// ============================================================
+// HELPER: Process rota entries for a single leave day
+// ============================================================
+const processRotaForLeaveDay = async (
+  day: { leaveDate: Date | string; duration?: number },
+  opts: {
+    companyId: any;
+    employeeId: any;
+    allDeptRawIds: any[];
+    primaryShiftType: string;
+    actionUserId: string;
+  },
+): Promise<void> => {
+  const {
+    companyId,
+    employeeId,
+    allDeptRawIds,
+    primaryShiftType,
+    actionUserId,
+  } = opts;
+
+  const dateStr = moment(day.leaveDate).format("YYYY-MM-DD");
+  const durationHours = day.duration ?? 0;
+  const { startTime, endTime } = buildShiftTimes(primaryShiftType, durationHours);
+
+  const allDeptIdStrings = allDeptRawIds.map(toIdString);
+
+  // Fetch all existing rotas for this employee on this day
+  const existingRotas = await Rota.find({
+    employeeId,
+    companyId,
+    startDate: dateStr,
+  });
+
+  const scheduledDeptIdStrings = new Set(
+    existingRotas.map((r) => toIdString(r.departmentId)),
+  );
+
+  const isSingleDept = allDeptIdStrings.length === 1;
+  const allOccupied = allDeptIdStrings.every((id) =>
+    scheduledDeptIdStrings.has(id),
+  );
+
+  // ── CASE 1: Single department ─────────────────────────────────────────────
+  // Always upsert — update the existing rota or insert a new one
+  if (isSingleDept) {
+    const targetDeptRaw = allDeptRawIds[0];
+    const targetDeptIdStr = allDeptIdStrings[0];
+    const existingRota = existingRotas.find(
+      (r) => toIdString(r.departmentId) === targetDeptIdStr,
+    );
+
+    if (existingRota) {
+      await Rota.findByIdAndUpdate(existingRota._id, {
+        $set: {
+          leaveType: primaryShiftType,
+          shiftName: primaryShiftType,
+          startTime,
+          endTime,
+          status: "publish",
+        },
+        $push: {
+          history: {
+            message: `System updated rota to ${primaryShiftType} from approved leave request`,
+            userId: actionUserId,
+            createdAt: new Date(),
+          },
+        },
+      });
+    } else {
+      await Rota.create(
+        buildRotaDoc(
+          {
+            companyId,
+            employeeId,
+            departmentId: targetDeptRaw._id ?? targetDeptRaw,
+            dateStr,
+            shiftType: primaryShiftType,
+            startTime,
+            endTime,
+            actionUserId,
+          },
+          `System generated rota from approved leave request`,
+        ),
+      );
+    }
+    return;
+  }
+
+  // ── CASE 2: Multiple departments, all are already occupied ────────────────
+  // Update the first department's existing rota with the AL/DO shift
+  if (allOccupied) {
+    const primaryDeptIdStr = allDeptIdStrings[0];
+    const existingRota = existingRotas.find(
+      (r) => toIdString(r.departmentId) === primaryDeptIdStr,
+    );
+
+    if (existingRota) {
+      await Rota.findByIdAndUpdate(existingRota._id, {
+        $set: {
+          leaveType: primaryShiftType,
+          shiftName: primaryShiftType,
+          startTime,
+          endTime,
+          status: "publish",
+        },
+        $push: {
+          history: {
+            message: `System updated rota to ${primaryShiftType} (all departments occupied) from approved leave request`,
+            userId: actionUserId,
+            createdAt: new Date(),
+          },
+        },
+      });
+    }
+    return;
+  }
+
+  // ── CASE 3: Multiple departments, at least one is free ───────────────────
+  // Assign AL/DO to the first free department.
+  // Insert NT for remaining free departments.
+  // Skip departments that already have a scheduled rota.
+  const freeDeptIdStrings = allDeptIdStrings.filter(
+    (id) => !scheduledDeptIdStrings.has(id),
+  );
+
+  const targetDeptIdStr = freeDeptIdStrings[0];
+
+  const rotasToInsert = allDeptRawIds
+    .map((rawId) => {
+      const idStr = toIdString(rawId);
+
+      // Skip departments that already have a rota — never overwrite real shifts
+      if (scheduledDeptIdStrings.has(idStr)) return null;
+
+      const isTarget = idStr === targetDeptIdStr;
+      const shiftType = isTarget ? primaryShiftType : "NT";
+
+      return buildRotaDoc(
+        {
+          companyId,
+          employeeId,
+          departmentId: rawId._id ?? rawId,
+          dateStr,
+          shiftType,
+          startTime: isTarget ? startTime : "",
+          endTime: isTarget ? endTime : "",
+          actionUserId,
+        },
+        `System generated rota from approved leave request`,
+      );
+    })
+    .filter(Boolean);
+
+  if (rotasToInsert.length > 0) {
+    await Rota.insertMany(rotasToInsert);
+  }
+};
+
+// ============================================================
+// HELPER: Generate rotas and attendance for all leave days
+// ============================================================
+const generateRotaAndAttendanceForLeave = async (
+  updatedLeave: any,
+  actionUserId: string,
+): Promise<void> => {
+  let primaryShiftType = "";
+
+  if (updatedLeave.holidayType === "holiday") {
+    primaryShiftType = "AL";
+  } else if (updatedLeave.holidayType === "absence") {
+    primaryShiftType = "DO";
+  }
+
+  if (!primaryShiftType) return;
+
+  const employee:any = await User.findById(updatedLeave.userId);
+
+  if (!Array.isArray(employee?.departmentId) || employee.departmentId.length === 0 || !updatedLeave.leaveDays?.length) {
+    return;
+  }
+
+  // Process each leave day independently
+  for (const day of updatedLeave.leaveDays) {
+    await processRotaForLeaveDay(day, {
+      companyId: updatedLeave.companyId,
+      employeeId: updatedLeave.userId,
+      allDeptRawIds: employee.departmentId as unknown as any[],
+      primaryShiftType,
+      actionUserId,
+    });
+  }
+
+
+};
+
+// ============================================================
+// MAIN SERVICE: Update leave and trigger rota/attendance logic
+// ============================================================
+export const updateLeaveIntoDB = async (
   id: string,
   payload: Partial<TLeave>,
-  actionUserId: string, // 👈 Passed from your controller (e.g., req.user.id)
+  actionUserId: string,
 ) => {
   const leave = await Leave.findById(id);
 
   if (!leave) {
     throw new AppError(httpStatus.NOT_FOUND, "Leave not found");
   }
+
   const actionUser = await User.findById(actionUserId);
+
   if (!actionUser) {
     throw new AppError(httpStatus.NOT_FOUND, "Action user not found");
   }
 
   const userName =
-    actionUser.name || `${actionUser.firstName} ${actionUser.lastName}`.trim();
+    actionUser.name ||
+    `${actionUser.firstName} ${actionUser.lastName}`.trim();
 
-  // 1. Determine the history log message based on what changed
+  // Build a meaningful history message based on what changed
   let actionMessage = `${userName} updated the leave request`;
 
   if (payload.status && payload.status !== leave.status) {
     if (payload.status === "approved") {
-      actionMessage = `${userName} Approved the leave request`;
+      actionMessage = `${userName} approved the leave request`;
     } else if (payload.status === "rejected") {
-      actionMessage = `${userName} Rejected the leave request`;
+      actionMessage = `${userName} rejected the leave request`;
     } else {
       actionMessage = `${userName} changed the status to ${payload.status}`;
     }
   }
 
-  // Format the exact time (you can adjust the date formatting as needed)
-  const exactTime = new Date().toLocaleString();
-
-  // 2. Prepare the update query using $set (for payload) and $push (for history)
   const updateQuery = {
     $set: payload,
     $push: {
@@ -280,7 +538,6 @@ const updateLeaveIntoDB = async (
     },
   };
 
-  // 3. Perform the update
   const updatedLeave = await Leave.findByIdAndUpdate(id, updateQuery, {
     new: true,
     runValidators: true,
@@ -290,8 +547,11 @@ const updateLeaveIntoDB = async (
     throw new AppError(httpStatus.NOT_FOUND, "Leave not found after update");
   }
 
-  // 4. Only update holiday counters if status changes to 'approved' from 'pending'
+  // Only run holiday counters and rota/attendance logic when
+  // status transitions from "pending" → "approved"
   if (leave.status === "pending" && updatedLeave.status === "approved") {
+
+    // ── Update Holiday Allowances ─────────────────────────────────────────
     const userHoliday = await Holiday.findOne({
       userId: updatedLeave.userId,
       year: updatedLeave.holidayYear,
@@ -310,20 +570,20 @@ const updateLeaveIntoDB = async (
     const paidHours = isPaid ? finalTotalHours : 0;
     const unpaidHours = !isPaid ? finalTotalHours : 0;
 
-    // Transfer Paid from Requested -> Booked
     userHoliday.requestedHours -= paidHours;
     userHoliday.bookedHours += paidHours;
 
-    // Transfer Unpaid from Requested -> Booked
     userHoliday.unpaidLeaveRequest -= unpaidHours;
     userHoliday.unpaidBookedHours += unpaidHours;
 
-    // Update remaining hours based on accrued vs used + booked
     userHoliday.remainingHours =
       userHoliday.holidayAccured -
       (userHoliday.usedHours + userHoliday.bookedHours);
 
     await userHoliday.save();
+
+    // ── Generate Rota & Attendance Entries ────────────────────────────────
+    await generateRotaAndAttendanceForLeave(updatedLeave, actionUserId);
   }
 
   return updatedLeave;

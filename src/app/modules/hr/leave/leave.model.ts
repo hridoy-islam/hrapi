@@ -50,6 +50,9 @@ const LeaveSchema = new Schema(
           type: String,
           enum: ["paid", "unpaid", "dayoff"],
         },
+        duration:{
+          type: Number, 
+        }
       },
     ],
 

@@ -21,6 +21,7 @@ const daysOfWeek = [
   "Thursday",
   "Friday",
   "Saturday",
+  "Holiday",
 ];
 
 const EmployeeRateSchema = new Schema<TEmployeeRate>(

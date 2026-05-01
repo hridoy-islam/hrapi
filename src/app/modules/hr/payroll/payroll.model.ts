@@ -4,8 +4,11 @@ import { TAttendanceLog, TPayroll } from "./payroll.interface";
 const AttendanceLog = new Schema<TAttendanceLog>({
   attendanceId: {
     type: Schema.Types.ObjectId,
-    required: true,
     ref: "Attendance",
+  },
+  rotaId: {
+    type: Schema.Types.ObjectId,
+    ref: "Rota",
   },
   payRate: { type: Number, default: 0 },
   duration: { type: Number, default: 0 },

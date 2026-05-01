@@ -2,6 +2,7 @@ import { Types } from "mongoose";
 
 export interface TAttendanceLog {
   attendanceId?: Types.ObjectId;
+  rotaId?: Types.ObjectId;
   payRate: number;
   duration: number;
 }
