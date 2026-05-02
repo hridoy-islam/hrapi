@@ -21,6 +21,9 @@ const getAllUserFromDB = async (query: Record<string, unknown>) => {
       }).populate({
         path: "subscriptionId",
         select: "title",
+      }).populate({
+        path: "company",
+        select: "name",
       })
       .populate({ path: "designationId", select: "title" }),
     query
