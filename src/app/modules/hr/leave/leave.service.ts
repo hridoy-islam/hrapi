@@ -12,6 +12,7 @@ import { Types } from "mongoose";
 import { HolidayServices } from "../holidays/holiday.service";
 import { Rota } from "../../rota/rota.model";
 import { Attendance } from "../../attendance/attendance.model";
+import { SickNote } from "../sickNote/sickNote.model";
 
 
 // const getAllLeaveFromDB = async (query: Record<string, unknown>) => {
@@ -249,7 +250,8 @@ const buildShiftTimes = (
   shiftType: string,
   durationHours: number,
 ): { startTime: string; endTime: string } => {
-  if (shiftType === "AL" && durationHours > 0) {
+  // Added "S" (Sick Leave) to generate standard shift times similarly to Annual Leave
+  if ((shiftType === "AL" || shiftType === "S") && durationHours > 0) {
     const startTime = "09:00";
     const endTime = moment(startTime, "HH:mm")
       .add(durationHours, "hours")
@@ -384,7 +386,7 @@ const processRotaForLeaveDay = async (
   }
 
   // ── CASE 2: Multiple departments, all are already occupied ────────────────
-  // Update the first department's existing rota with the AL/DO shift
+  // Update the first department's existing rota with the AL/DO/S shift
   if (allOccupied) {
     const primaryDeptIdStr = allDeptIdStrings[0];
     const existingRota = existingRotas.find(
@@ -413,7 +415,7 @@ const processRotaForLeaveDay = async (
   }
 
   // ── CASE 3: Multiple departments, at least one is free ───────────────────
-  // Assign AL/DO to the first free department.
+  // Assign AL/DO/S to the first free department.
   // Insert NT for remaining free departments.
   // Skip departments that already have a scheduled rota.
   const freeDeptIdStrings = allDeptIdStrings.filter(
@@ -466,6 +468,8 @@ const generateRotaAndAttendanceForLeave = async (
     primaryShiftType = "AL";
   } else if (updatedLeave.holidayType === "absence") {
     primaryShiftType = "DO";
+  } else if (updatedLeave.holidayType === "sick") {
+    primaryShiftType = "S"; // 🚀 Added logic for Sick leave mapping to "S"
   }
 
   if (!primaryShiftType) return;
@@ -486,8 +490,6 @@ const generateRotaAndAttendanceForLeave = async (
       actionUserId,
     });
   }
-
-
 };
 
 // ============================================================
@@ -584,6 +586,18 @@ export const updateLeaveIntoDB = async (
 
     // ── Generate Rota & Attendance Entries ────────────────────────────────
     await generateRotaAndAttendanceForLeave(updatedLeave, actionUserId);
+
+    // ── 🚀 Generate Sick Note Document if holidayType is 'sick' ───────────
+    if (updatedLeave.holidayType === "sick") {
+      await SickNote.create({
+        note: updatedLeave.reason || "",
+        startDate: updatedLeave.startDate,
+        endDate: updatedLeave.endDate,
+        employeeId: updatedLeave.userId,
+        companyId: updatedLeave.companyId,
+        documents: updatedLeave.documents || [],
+      });
+    }
   }
 
   return updatedLeave;

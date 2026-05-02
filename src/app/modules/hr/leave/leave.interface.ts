@@ -11,6 +11,7 @@ export interface TLeave {
   startDate: Date;
   endDate: Date;
 
+  documents?: string[]; 
   reason?: string; // optional (matches schema)
 
   status?: "pending" | "approved" | "rejected";

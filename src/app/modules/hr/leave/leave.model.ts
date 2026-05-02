@@ -12,14 +12,11 @@ const historySchema = new Schema(
       ref: "User",
       required: true,
     },
-    
   },
   {
     timestamps: true,
   },
 );
-
-
 
 const LeaveSchema = new Schema(
   {
@@ -37,10 +34,15 @@ const LeaveSchema = new Schema(
     holidayType: {
       type: String,
       enum: ["holiday", "absence", "sick", "family"],
-      required: true
+      required: true,
     },
-    totalDays: { type: Number }, 
-    totalHours: { type: Number }, 
+    totalDays: { type: Number },
+    totalHours: { type: Number },
+    documents: [
+      {
+        type: String,
+      },
+    ],
     leaveDays: [
       {
         leaveDate: {
@@ -50,9 +52,9 @@ const LeaveSchema = new Schema(
           type: String,
           enum: ["paid", "unpaid", "dayoff"],
         },
-        duration:{
-          type: Number, 
-        }
+        duration: {
+          type: Number,
+        },
       },
     ],
 

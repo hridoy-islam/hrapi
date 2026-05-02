@@ -573,6 +573,7 @@ const copyRotaIntoDB = async (payload: {
 
   const employees = await User.find({
     _id: { $in: employeeIds },
+     status: "active",
   })
     .select("firstName lastName")
     .lean();
@@ -728,6 +729,7 @@ const bulkAssignRotaIntoDB = async (payload: {
   // ✅ Fetch employees WITH department filter
   const employees = await User.find({
     _id: { $in: employeeIds },
+     status: "active",
     departmentId: departmentId, // 🔥 must contain this department
   })
     .select("firstName lastName departmentId")

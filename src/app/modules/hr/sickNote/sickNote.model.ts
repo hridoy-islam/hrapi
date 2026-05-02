@@ -6,7 +6,7 @@ const SickNoteSchema = new Schema<TSickNote>(
   {
     note: {
       type: String,
-      required: true,
+  
       trim: true,
     },
     startDate: {
