@@ -94,6 +94,18 @@ const uploadDocumentsToMeetingLogIntoDB: RequestHandler = catchAsync(async (req,
   });
 });
 
+
+const deleteMeetingMins = catchAsync(async (req, res) => {
+  const { id } = req.params;
+  const result = await MeetingMinsServices.deleteMeetingMinsFromDB(id);
+  sendResponse(res, {
+    statusCode: httpStatus.OK,
+    success: true,
+    message: "MeetingMins deleted successfully",
+    data: result,
+  });
+});
+
 export const MeetingMinsControllers = {
 
     getAllMeetingMins,
@@ -102,6 +114,7 @@ export const MeetingMinsControllers = {
     updateMeetingMins,  
     getAllUnAcknowledgeMeetingMins  ,
     acknowledgeMeetingLog,
-    uploadDocumentsToMeetingLogIntoDB
+    uploadDocumentsToMeetingLogIntoDB,
+    deleteMeetingMins
 };
 

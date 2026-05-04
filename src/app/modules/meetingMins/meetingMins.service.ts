@@ -290,6 +290,22 @@ const uploadDocumentsToMeetingLogIntoDB = async (payload: {
   return result;
 };
 
+
+const deleteMeetingMinsFromDB = async (id: string) => {
+  const meeting = await MeetingMins.findById(id);
+
+  if (!meeting) {
+    throw new AppError(httpStatus.NOT_FOUND, "MeetingMins not found");
+  }
+  const result = await MeetingMins.findByIdAndDelete(id);
+
+
+  return result;
+};
+
+
+
+
 export const MeetingMinsServices = {
   getAllMeetingMinsFromDB,
   getSingleMeetingMinsFromDB,
@@ -297,5 +313,6 @@ export const MeetingMinsServices = {
   updateMeetingMinsIntoDB,
   getUnacknowledgedMeetingsFromDB,
   acknowledgeMeetingLogIntoDB,
-  uploadDocumentsToMeetingLogIntoDB
+  uploadDocumentsToMeetingLogIntoDB,
+  deleteMeetingMinsFromDB,
 };

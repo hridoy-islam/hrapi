@@ -43,6 +43,11 @@ router.patch(
 //   auth("admin", "user", "creator", "company", "director"),
 MeetingMinsControllers.updateMeetingMins
 );
+router.delete(
+  "/:id",
+//   auth("admin", "user", "creator", "company", "director"),
+MeetingMinsControllers.deleteMeetingMins
+);
 
 
 
