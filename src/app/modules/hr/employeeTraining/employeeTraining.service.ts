@@ -80,7 +80,7 @@ const updateEmployeeTrainingIntoDB = async (
     const historyEntry: TCompletionRecord = {
       assignedDate: employeeTraining.assignedDate,
       expireDate: employeeTraining.expireDate,
-      completedAt: (payload as any).completedAt || new Date(),
+      completedAt: (payload as any).completedAt || null,
       certificate: payload.certificate || employeeTraining.certificate, 
     };
 
