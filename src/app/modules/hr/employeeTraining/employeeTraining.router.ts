@@ -31,6 +31,11 @@ router.patch(
 //   auth("admin", "user", "creator", "company", "director"),
 EmployeeTrainingControllers.updateEmployeeTraining
 );
+router.patch(
+  "/:id/logs/:logId",
+//   auth("admin", "user", "creator", "company", "director"),
+EmployeeTrainingControllers.updateEmployeeTrainingLog
+);
 
 
 

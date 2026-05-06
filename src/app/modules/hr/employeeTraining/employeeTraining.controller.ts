@@ -49,6 +49,18 @@ const createEmployeeTraining = catchAsync(async (req, res) => {
 });
 
 
+const updateEmployeeTrainingLog = catchAsync(async (req, res) => {
+  const { id, logId } = req.params;
+  const result = await EmployeeTrainingServices.updateTrainingLogIntoDB(id, logId, req.body);
+  sendResponse(res, {
+    statusCode: httpStatus.OK,
+    success: true,
+    message: "EmployeeTraining log is updated succesfully",
+    data: result,
+  });
+});
+
+
 
 export const EmployeeTrainingControllers = {
 
@@ -56,5 +68,6 @@ export const EmployeeTrainingControllers = {
     getSingleEmployeeTraining,
     createEmployeeTraining,
     updateEmployeeTraining,    
+    updateEmployeeTrainingLog
 };
 

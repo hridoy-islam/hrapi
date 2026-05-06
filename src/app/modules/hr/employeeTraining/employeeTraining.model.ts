@@ -9,7 +9,7 @@ const CompletionRecordSchema = new Schema<TCompletionRecord>(
     assignedDate: { type: Date },
     expireDate: { type: Date },
     completedAt: { type: Date },
-    certificate: { type: String },
+    certificate: [{ type: String }],
   }
 );
 
@@ -22,10 +22,9 @@ const EmployeeTrainingSchema = new Schema<TEmployeeTraining>(
       ref: "Training",
     },
 
-    // Root fields for the CURRENT active training
-    assignedDate: { type: Date, required: true },
+    assignedDate: { type: Date,  },
     expireDate: { type: Date },
-    certificate: { type: String },
+    certificate: [{ type: String }],
     status: {
       type: String,
       enum: ["pending", "in-progress", "completed", "expired"],
