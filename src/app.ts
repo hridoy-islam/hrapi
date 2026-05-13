@@ -25,10 +25,12 @@ pusher.trigger("my-channel", "my-event", {
   message: "hello world",
 });
 //parsers
-app.use(express.json());
+app.use(express.json({ limit: "50mb" }));
 app.use(cookieParser());
-app.use(express.urlencoded({ extended: true }));
+app.use(express.urlencoded({ extended: true ,limit: "50mb"}));
 app.use("/uploads", express.static("uploads"));
+
+
 // app.use((req, res, next) => {
 //   // Set the Access-Control-Allow-Origin header to allow requests from any origin
 //   res.setHeader("Access-Control-Allow-Origin", "*");
