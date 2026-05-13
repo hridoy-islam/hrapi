@@ -12,13 +12,12 @@ export interface TEmployeeTraining {
   employeeId: Types.ObjectId;
   trainingId: Types.ObjectId;
 
-  // --- CURRENT / ACTIVE CYCLE DETAILS ---
-  // These fields are overwritten every time you re-assign the course
+
   assignedDate: Date;
   expireDate?: Date;
   certificate?: string; 
   status: 'pending' | 'in-progress' | 'completed' | 'expired';
-
+  isOptional: boolean; // New field to indicate if the training is optional or mandatory
   // --- HISTORY ---
   // Only stores records when a course is marked "completed"
   completionHistory: TCompletionRecord[];

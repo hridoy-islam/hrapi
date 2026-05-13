@@ -35,7 +35,7 @@ const getSingleEmployeeTrainingFromDB = async (id: string) => {
 };
 
 const createEmployeeTrainingIntoDB = async (payload: any) => {
-  // 1. Check if training already exists for this user
+  // Check if training already exists
   const existingTraining = await EmployeeTraining.findOne({
     employeeId: payload.employeeId,
     trainingId: payload.trainingId,
@@ -48,7 +48,11 @@ const createEmployeeTrainingIntoDB = async (payload: any) => {
     );
   }
 
-  // 2. Create new record (History starts empty)
+  // If optional, ensure expireDate is null
+  if (payload.isOptional) {
+    payload.expireDate = null;
+  }
+
   const result = await EmployeeTraining.create({
     ...payload,
     status: payload.status || "pending",
@@ -71,34 +75,37 @@ const updateEmployeeTrainingIntoDB = async (
     );
   }
 
-  // If the new status is 'completed' AND it wasn't completed before
-  if (
-    payload.status === "completed" 
-  
-  ) {
-    // Create a history entry using the CURRENT data (snapshot)
+  // If the new status is 'completed'
+  if (payload.status === "completed") {
     const historyEntry: TCompletionRecord = {
       assignedDate: employeeTraining.assignedDate,
       expireDate: employeeTraining.expireDate,
-      completedAt: (payload as any).completedAt || null,
-      certificate: payload.certificate || employeeTraining.certificate, 
+      completedAt: (payload as any).completedAt || new Date(),
+      certificate: payload.certificate || employeeTraining.certificate,
     };
 
-    // Push to history logs
     employeeTraining.completionHistory.push(historyEntry);
 
-    // Nullify main fields after logging
-    employeeTraining.assignedDate = null as any; 
+    employeeTraining.assignedDate = null as any;
+   
     employeeTraining.expireDate = null as any;
-    employeeTraining.certificate = [] as any; 
+    employeeTraining.certificate = [] as any;
     employeeTraining.status = "completed";
-
   } else {
-    // Standard updates (e.g., when re-assigning and status is back to 'pending')
-    if (payload.assignedDate) employeeTraining.assignedDate = payload.assignedDate;
-    if (payload.expireDate) employeeTraining.expireDate = payload.expireDate;
-    if (payload.status) employeeTraining.status = payload.status;
-    if (payload.certificate) employeeTraining.certificate = payload.certificate;
+    // Standard updates
+    if (payload.assignedDate !== undefined) 
+      employeeTraining.assignedDate = payload.assignedDate;
+    
+    if (payload.expireDate !== undefined) {
+      employeeTraining.expireDate = payload.expireDate;
+    }
+    
+    if (payload.status !== undefined) 
+      employeeTraining.status = payload.status;
+    if (payload.certificate !== undefined) 
+      employeeTraining.certificate = payload.certificate;
+    if (payload.isOptional !== undefined) 
+      employeeTraining.isOptional = payload.isOptional;
   }
 
   const result = await employeeTraining.save();

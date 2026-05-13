@@ -25,6 +25,7 @@ const EmployeeTrainingSchema = new Schema<TEmployeeTraining>(
     assignedDate: { type: Date,  },
     expireDate: { type: Date },
     certificate: [{ type: String }],
+    isOptional: { type: Boolean, default: false }, 
     status: {
       type: String,
       enum: ["pending", "in-progress", "completed", "expired"],
@@ -47,3 +48,10 @@ export const EmployeeTraining = model<TEmployeeTraining>(
   "EmployeeTraining",
   EmployeeTrainingSchema,
 );
+
+EmployeeTrainingSchema.pre('save', function(next) {
+  if (this.isOptional) {
+    this.expireDate = null as any;
+  }
+  next();
+});
