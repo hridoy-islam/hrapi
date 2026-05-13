@@ -35,28 +35,37 @@ const getSingleImmigrationStatusFromDB = async (id: string) => {
 };
 
 const createImmigrationStatusIntoDB = async (payload: any) => {
+  const { employeeId, nextCheckDate, updatedBy, document, title } = payload;
+
+  if (!employeeId) {
+    throw new AppError(httpStatus.BAD_REQUEST, "employeeId is required");
+  }
+  if (!nextCheckDate) {
+    throw new AppError(httpStatus.BAD_REQUEST, "nextCheckDate is required");
+  }
+
+  const initialLogEntry = {
+    title: "Initiate Immigration Status Verification",
+    date: moment.utc().toDate(),       
+    updatedBy: updatedBy,
+    document: Array.isArray(document) ? document : [], 
+  };
+
+  const rtwData = {
+    employeeId,
+    nextCheckDate: moment.utc(nextCheckDate).startOf("day").toDate(), 
+    title: title || "",       
+    updatedBy: updatedBy,       
+    logs: [initialLogEntry],
+  };
+
   try {
-    const initialLogEntry = {
-      title: "Initiate Immigration Status Verification", // Professional title
-      date: new Date(), 
-      updatedBy: payload.updatedBy,
-      document: payload.document || "", 
-    };
-
-    const rtwData = {
-      employeeId: payload.employeeId,
-      nextCheckDate: payload.nextCheckDate,
-      logs: [initialLogEntry], 
-    };
-
     const result = await ImmigrationStatus.create(rtwData);
     return result;
   } catch (error: any) {
     console.error("Error in createImmigrationStatusIntoDB:", error);
 
-    if (error instanceof AppError) {
-      throw error;
-    }
+    if (error instanceof AppError) throw error;
 
     throw new AppError(
       httpStatus.INTERNAL_SERVER_ERROR,
@@ -67,58 +76,99 @@ const createImmigrationStatusIntoDB = async (payload: any) => {
 
 const updateImmigrationStatusIntoDB = async (
   id: string,
-  payload: Partial<TImmigrationStatus>
+  payload: Partial<any>
 ) => {
-  const immigrationStatus = await ImmigrationStatus.findById(id);
+  const immigrationStatus:any = await ImmigrationStatus.findById(id);
 
   if (!immigrationStatus) {
-    throw new AppError(httpStatus.NOT_FOUND, "ImmigrationStatus not found");
+    throw new AppError(
+      httpStatus.NOT_FOUND,
+      "ImmigrationStatus not found"
+    );
   }
 
   const logsToAdd = [];
 
-  // Helper function to compare dates properly
-  const areDatesEqual = (date1: Date | null | undefined, date2: Date | null | undefined) => {
+  // Normalize incoming date using moment
+  const newNextCheckDate = payload.nextCheckDate
+    ? moment.utc(payload.nextCheckDate).startOf("day").toDate()
+    : undefined;
+
+  // Compare dates only by day
+  const areDatesEqual = (
+    date1: Date | null | undefined,
+    date2: Date | null | undefined
+  ) => {
     if (!date1 && !date2) return true;
     if (!date1 || !date2) return false;
-    return moment(date1).isSame(moment(date2), 'day');
+    return moment.utc(date1).isSame(moment.utc(date2), "day");
   };
 
-
-  if (payload.nextCheckDate && !areDatesEqual(payload.nextCheckDate, immigrationStatus.nextCheckDate)) {
+  // Add log if date changed
+  if (
+    newNextCheckDate &&
+    !areDatesEqual(newNextCheckDate, immigrationStatus.nextCheckDate)
+  ) {
     const oldDate = immigrationStatus.nextCheckDate
-      ? moment(immigrationStatus.nextCheckDate).format('DD MMM YYYY')
-      : 'N/A';
-    const newDate = moment(payload.nextCheckDate).format('DD MMM YYYY');
+      ? moment.utc(immigrationStatus.nextCheckDate).format("DD MMM YYYY")
+      : "N/A";
 
-    logsToAdd.push({
+    const newDate = moment.utc(newNextCheckDate).format("DD MMM YYYY");
+
+    const logEntry: any = {
       title: `Immigration status Check Date Updated from ${oldDate} to ${newDate}`,
-      date: new Date(),
-      updatedBy: (payload as any)?.updatedBy,
-      document: (payload as any)?.document,
+      date: moment.utc().toDate(),
+      updatedBy: payload.updatedBy,
+    };
 
-    });
+    // ✅ Attach documents to log if provided
+    if (payload.document && payload.document.length > 0) {
+      logEntry.document = payload.document;
+    }
+
+    logsToAdd.push(logEntry);
+
+    // ✅ Update nextCheckDate on the record
+    immigrationStatus.nextCheckDate = newNextCheckDate;
   }
 
+  // ✅ Always update documents on the main record if provided
+  // (regardless of whether the date changed)
+  if (payload.document && payload.document.length > 0) {
+    immigrationStatus.document = [
+      ...(immigrationStatus.document || []),
+      ...payload.document,
+    ];
+    // OR replace entirely if that's your intent:
+    // immigrationStatus.document = payload.document;
+  }
 
-  // Push logs to existing logs
+  // Push logs
   if (logsToAdd.length > 0) {
-    immigrationStatus.logs?.push(...logsToAdd);
+    immigrationStatus.logs = immigrationStatus.logs || [];
+    immigrationStatus.logs.push(...logsToAdd);
   }
 
-  if (payload.nextCheckDate !== undefined) {
-    immigrationStatus.nextCheckDate = payload.nextCheckDate;
-  }
+  // Update remaining fields — exclude fields handled manually above
+  const EXCLUDED_KEYS = new Set([
+    "nextCheckDate",
+    "document",
+    "updatedBy",
+    "logs",
+  ]);
 
-  // Apply other payload properties
-  Object.keys(payload).forEach(key => {
-    if ( key !== 'nextCheckDate') {
+  Object.keys(payload).forEach((key) => {
+    if (!EXCLUDED_KEYS.has(key)) {
       (immigrationStatus as any)[key] = (payload as any)[key];
     }
   });
 
-  const result = await immigrationStatus.save();
+  // ✅ Always track who last updated
+  if (payload.updatedBy) {
+    immigrationStatus.updatedBy = payload.updatedBy;
+  }
 
+  const result = await immigrationStatus.save();
 
   return result;
 };

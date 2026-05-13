@@ -12,10 +12,10 @@ const EmployeeDocumentSchema = new Schema<TEmployeeDocument>(
       type: String,
       required: true,
     },
-    documentUrl: {
+    documentUrl: [{
       type: String,
       required: true,
-    },
+    }],
     note:{
       type: String
     }
