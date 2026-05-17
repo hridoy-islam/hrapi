@@ -45,6 +45,8 @@ import { DocusignCredentialsRoutes } from "../modules/docusignCredentials/docusi
 import { SickNoteRoutes } from "../modules/hr/sickNote/sickNote.router";
 import { MeetingMinsRoutes } from "../modules/meetingMins/meetingMins.router";
 import { LeaverRoutes } from "../modules/hr/leaver/leaver.router";
+import { CompanyPolicyRoutes } from "../modules/companyPolicy/companyPolicy.route";
+import { HealthAndSafetyRoutes } from "../modules/healthAndSafety/healthAndSafety.route";
 
 const router = Router();
 
@@ -234,6 +236,14 @@ const moduleRoutes = [
   {
     path: "/leaver",
     route: LeaverRoutes,
+  },
+  {
+    path: "/company-policy",
+    route: CompanyPolicyRoutes,
+  },
+  {
+    path: "/health-and-safety",
+    route: HealthAndSafetyRoutes,
   },
 ];
 

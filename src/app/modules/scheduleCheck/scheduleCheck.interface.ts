@@ -16,4 +16,6 @@ export interface TScheduleCheck {
   qaCheckDuration:number
   qaCheckDate:number
   meetingCheckDate:number
+  policyCheckDate:number
+  healthAndSafetyCheckDate:number
 }

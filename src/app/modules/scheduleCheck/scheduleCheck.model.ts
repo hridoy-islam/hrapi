@@ -64,6 +64,14 @@ const ScheduleCheckSchema = new Schema<TScheduleCheck>(
       type: Number,
       default: 3,
     },
+     policyCheckDate: {
+      type: Number,
+      default: 30,
+    },
+     healthAndSafetyCheckDate: {
+      type: Number,
+      default: 30,
+    },
   },
   {
     timestamps: true,
