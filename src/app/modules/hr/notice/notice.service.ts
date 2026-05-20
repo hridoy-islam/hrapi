@@ -7,10 +7,23 @@ import AppError from "../../../errors/AppError";
 import QueryBuilder from "../../../builder/QueryBuilder";
 import { User } from "../../user/user.model";
 import { Types } from "mongoose";
+import moment from "../../../utils/moment-setup"
 
 const getAllNoticeFromDB = async (query: Record<string, unknown>) => {
-  const { userId, ...restQuery } = query;
+  const { userId, startDate, endDate, ...restQuery } = query;
   let filterCondition: any = {};
+
+  // Build date range filter on createdAt
+  if (startDate || endDate) {
+    const dateFilter: any = {};
+    if (startDate) {
+      dateFilter.$gte = moment(startDate as string).startOf("day").toDate();
+    }
+    if (endDate) {
+      dateFilter.$lte = moment(endDate as string).endOf("day").toDate();
+    }
+    filterCondition.createdAt = dateFilter;
+  }
 
   if (userId) {
     const objectUserId = new Types.ObjectId(userId as string);
@@ -20,7 +33,7 @@ const getAllNoticeFromDB = async (query: Record<string, unknown>) => {
 
     if (!user) throw new Error("User not found");
 
-    filterCondition = {
+    const userConditions = {
       $or: [
         { noticeSetting: "all" },
         {
@@ -37,6 +50,10 @@ const getAllNoticeFromDB = async (query: Record<string, unknown>) => {
         },
       ],
     };
+
+    filterCondition = filterCondition.createdAt
+      ? { $and: [{ createdAt: filterCondition.createdAt }, userConditions] }
+      : userConditions;
   }
 
   const userQuery = new QueryBuilder(
@@ -58,6 +75,8 @@ const getAllNoticeFromDB = async (query: Record<string, unknown>) => {
 
   return { meta, result };
 };
+
+
 const getSingleNoticeFromDB = async (id: string) => {
   const result = await Notice.findById(id);
   return result;
