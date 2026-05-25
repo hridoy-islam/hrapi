@@ -297,6 +297,29 @@ const buildRotaDoc = (
 });
 
 // ============================================================
+// HELPER: Deduplicate rotas for a department — keep the most
+// recent one, delete the rest. Returns the surviving rota doc.
+// ============================================================
+const deduplicateRotasForDept = async (
+  rotas: any[],
+): Promise<any | null> => {
+  if (rotas.length === 0) return null;
+  if (rotas.length === 1) return rotas[0];
+ 
+  // Sort descending by _id (most recently inserted first)
+  const sorted = [...rotas].sort((a, b) =>
+    b._id.toString().localeCompare(a._id.toString()),
+  );
+ 
+  const [keep, ...duplicates] = sorted;
+  const duplicateIds = duplicates.map((r) => r._id);
+ 
+  await Rota.deleteMany({ _id: { $in: duplicateIds } });
+ 
+  return keep;
+};
+ 
+// ============================================================
 // HELPER: Process rota entries for a single leave day
 // ============================================================
 const processRotaForLeaveDay = async (
@@ -316,45 +339,55 @@ const processRotaForLeaveDay = async (
     primaryShiftType,
     actionUserId,
   } = opts;
-
+ 
   const dateStr = moment(day.leaveDate).format("YYYY-MM-DD");
+ 
   const durationHours = day.duration ?? 0;
-  const { startTime, endTime } = buildShiftTimes(primaryShiftType, durationHours);
-
+  const { startTime: newStartTime, endTime: newEndTime } = buildShiftTimes(
+    primaryShiftType,
+    durationHours,
+  );
+ 
   const allDeptIdStrings = allDeptRawIds.map(toIdString);
-
-  // Fetch all existing rotas for this employee on this day
-  const existingRotas = await Rota.find({
+ 
+  // ── Fetch ALL existing rotas for this employee on this day ───────────────
+  const allExistingRotas = await Rota.find({
     employeeId,
     companyId,
     startDate: dateStr,
   });
-
-  const scheduledDeptIdStrings = new Set(
-    existingRotas.map((r) => toIdString(r.departmentId)),
-  );
-
+ 
+  // ── Deduplicate per department ───────────────────────────────────────────
+  // Group rotas by departmentId, delete extras, keep the newest one per dept
+  const rotasByDept = new Map<string, any[]>();
+  for (const rota of allExistingRotas) {
+    const deptStr = toIdString(rota.departmentId);
+    if (!rotasByDept.has(deptStr)) rotasByDept.set(deptStr, []);
+    rotasByDept.get(deptStr)!.push(rota);
+  }
+ 
+  const survivingRotaByDept = new Map<string, any>();
+  for (const [deptStr, rotas] of rotasByDept.entries()) {
+    const survivor = await deduplicateRotasForDept(rotas);
+    if (survivor) survivingRotaByDept.set(deptStr, survivor);
+  }
+ 
   const isSingleDept = allDeptIdStrings.length === 1;
-  const allOccupied = allDeptIdStrings.every((id) =>
-    scheduledDeptIdStrings.has(id),
-  );
-
-  // ── CASE 1: Single department ─────────────────────────────────────────────
-  // Always upsert — update the existing rota or insert a new one
+ 
+  // ── CASE 1: Single department ────────────────────────────────────────────
   if (isSingleDept) {
     const targetDeptRaw = allDeptRawIds[0];
     const targetDeptIdStr = allDeptIdStrings[0];
-    const existingRota = existingRotas.find(
-      (r) => toIdString(r.departmentId) === targetDeptIdStr,
-    );
-
+    const existingRota = survivingRotaByDept.get(targetDeptIdStr);
+ 
     if (existingRota) {
+      // Rota exists → update to leaveType, clear times
       await Rota.findByIdAndUpdate(existingRota._id, {
         $set: {
           leaveType: primaryShiftType,
           shiftName: primaryShiftType,
-          startTime,
-          endTime,
+          startTime: "",
+          endTime: "",
           status: "publish",
         },
         $push: {
@@ -366,6 +399,7 @@ const processRotaForLeaveDay = async (
         },
       });
     } else {
+      // No rota → create new one
       await Rota.create(
         buildRotaDoc(
           {
@@ -374,8 +408,8 @@ const processRotaForLeaveDay = async (
             departmentId: targetDeptRaw._id ?? targetDeptRaw,
             dateStr,
             shiftType: primaryShiftType,
-            startTime,
-            endTime,
+            startTime: newStartTime,
+            endTime: newEndTime,
             actionUserId,
           },
           `System generated rota from approved leave request`,
@@ -384,74 +418,65 @@ const processRotaForLeaveDay = async (
     }
     return;
   }
-
-  // ── CASE 2: Multiple departments, all are already occupied ────────────────
-  // Update the first department's existing rota with the AL/DO/S shift
-  if (allOccupied) {
-    const primaryDeptIdStr = allDeptIdStrings[0];
-    const existingRota = existingRotas.find(
-      (r) => toIdString(r.departmentId) === primaryDeptIdStr,
-    );
-
+ 
+  // ── CASE 2: Multiple departments ─────────────────────────────────────────
+  //
+  // RULE (index-based, simple):
+  //   dept[0]   → always AL / DO / S  (the primary leave shift)
+  //   dept[1..n] → always NT          (no-task, regardless of existing rota)
+  //
+  // For each dept:
+  //   - If a rota survived dedup → update it to the correct shiftType, times = ""
+  //   - If no rota existed       → insert a new one with shiftType, times = ""
+  //
+  // Example (leave = AL):
+  //   Dept A (index 0): had 3 rotas → dedup keeps 1 → update to AL ✅
+  //   Dept B (index 1): had 2 rotas → dedup keeps 1 → update to NT ✅
+  //   Dept C (index 2): had 1 rota  → kept as-is   → update to NT ✅
+  //   Dept D (index 3): had 0 rotas → no rota       → insert NT   ✅
+ 
+  for (let i = 0; i < allDeptRawIds.length; i++) {
+    const rawId = allDeptRawIds[i];
+    const deptIdStr = toIdString(rawId);
+    const shiftType = i === 0 ? primaryShiftType : "NT";
+    const existingRota = survivingRotaByDept.get(deptIdStr);
+ 
     if (existingRota) {
+      // Rota exists (after dedup) → update to correct shiftType, clear times
       await Rota.findByIdAndUpdate(existingRota._id, {
         $set: {
-          leaveType: primaryShiftType,
-          shiftName: primaryShiftType,
-          startTime,
-          endTime,
+          leaveType: shiftType,
+          shiftName: shiftType,
+          startTime: "",
+          endTime: "",
           status: "publish",
         },
         $push: {
           history: {
-            message: `System updated rota to ${primaryShiftType} (all departments occupied) from approved leave request`,
+            message: `System updated rota to ${shiftType} from approved leave request`,
             userId: actionUserId,
             createdAt: new Date(),
           },
         },
       });
-    }
-    return;
-  }
-
-  // ── CASE 3: Multiple departments, at least one is free ───────────────────
-  // Assign AL/DO/S to the first free department.
-  // Insert NT for remaining free departments.
-  // Skip departments that already have a scheduled rota.
-  const freeDeptIdStrings = allDeptIdStrings.filter(
-    (id) => !scheduledDeptIdStrings.has(id),
-  );
-
-  const targetDeptIdStr = freeDeptIdStrings[0];
-
-  const rotasToInsert = allDeptRawIds
-    .map((rawId) => {
-      const idStr = toIdString(rawId);
-
-      // Skip departments that already have a rota — never overwrite real shifts
-      if (scheduledDeptIdStrings.has(idStr)) return null;
-
-      const isTarget = idStr === targetDeptIdStr;
-      const shiftType = isTarget ? primaryShiftType : "NT";
-
-      return buildRotaDoc(
-        {
-          companyId,
-          employeeId,
-          departmentId: rawId._id ?? rawId,
-          dateStr,
-          shiftType,
-          startTime: isTarget ? startTime : "",
-          endTime: isTarget ? endTime : "",
-          actionUserId,
-        },
-        `System generated rota from approved leave request`,
+    } else {
+      // No rota → insert new one with shiftType, times always ""
+      await Rota.create(
+        buildRotaDoc(
+          {
+            companyId,
+            employeeId,
+            departmentId: rawId._id ?? rawId,
+            dateStr,
+            shiftType,
+            startTime: "",
+            endTime: "",
+            actionUserId,
+          },
+          `System generated rota from approved leave request`,
+        ),
       );
-    })
-    .filter(Boolean);
-
-  if (rotasToInsert.length > 0) {
-    await Rota.insertMany(rotasToInsert);
+    }
   }
 };
 
@@ -525,7 +550,7 @@ export const updateLeaveIntoDB = async (
     } else if (payload.status === "rejected") {
       actionMessage = `${userName} rejected the leave request`;
     } else {
-      actionMessage = `${userName} changed the status to ${payload.status}`;
+      actionMessage
     }
   }
 
@@ -785,10 +810,21 @@ const getHolidaySummaryByDateRange = async (query: Record<string, unknown>) => {
   return { aggregate, result };
 };
 
+const deleteLeaveFromDB = async (id: string) => {
+  const leave = await Leave.findById(id);
+  if(!leave){
+     throw new AppError(httpStatus.BAD_REQUEST, "No Leave found");
+  }
+
+  const result = await Leave.findByIdAndDelete(id)
+  return result;
+};
+
 export const LeaveServices = {
   getAllLeaveFromDB,
   getSingleLeaveFromDB,
   updateLeaveIntoDB,
   createLeaveIntoDB,
   getHolidaySummaryByDateRange,
+  deleteLeaveFromDB
 };

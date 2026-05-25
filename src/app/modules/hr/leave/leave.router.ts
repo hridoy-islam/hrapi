@@ -31,6 +31,11 @@ router.patch(
 //   auth("admin", "user", "creator", "company", "director"),
 LeaveControllers.updateLeave
 );
+router.delete(
+  "/:id",
+//   auth("admin", "user", "creator", "company", "director"),
+LeaveControllers.deleteLeaveFromDB
+);
 
 
 

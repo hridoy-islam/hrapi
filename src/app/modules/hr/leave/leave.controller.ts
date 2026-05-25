@@ -59,11 +59,24 @@ const getHolidaySummaryByDateRange = catchAsync(async (req, res) => {
   });
 });
 
+const deleteLeaveFromDB = catchAsync(async (req, res) => {
+    const { id } = req.params;
+
+  const result = await LeaveServices.deleteLeaveFromDB(id);
+  sendResponse(res, {
+    statusCode: httpStatus.OK,
+    success: true,
+    message: 'Leave deleted successfully',
+    data: result,
+  });
+});
+
 export const LeaveControllers = {
     getAllLeave,
     getSingleLeave,
     updateLeave,
     createLeave,
-    getHolidaySummaryByDateRange
+    getHolidaySummaryByDateRange,
+    deleteLeaveFromDB
 };
 

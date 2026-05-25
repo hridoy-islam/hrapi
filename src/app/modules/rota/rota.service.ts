@@ -946,6 +946,25 @@ const getAllMissedRotaFromDB = async (query: Record<string, unknown>) => {
 
   const dateFilter: Record<string, any> = {};
 
+  // ✅ Track current time to check against future dates
+  const now = new Date();
+  const todayStr = now.toISOString().split('T')[0]; // Format: YYYY-MM-DD
+  
+  // Detect if query dates are strings or Date objects to apply matching formats
+  const isStringFormat = typeof startDate === 'string' || typeof endDate === 'string' || typeof attendanceDate === 'string';
+  const currentMaxDate = isStringFormat ? todayStr : now;
+
+  // ✅ Quick exit if a future attendance date is explicitly requested
+  if (attendanceDate) {
+    const reqDate = new Date(attendanceDate as string);
+    if (reqDate > now) {
+      return {
+        meta: { total: 0 },
+        result: [],
+      };
+    }
+  }
+
   // ✅ Check for employeeId or userId and add it to the filter
   const targetEmployeeId = employeeId || userId;
   if (targetEmployeeId) {
@@ -961,13 +980,22 @@ const getAllMissedRotaFromDB = async (query: Record<string, unknown>) => {
   dateFilter.status = "publish";
   dateFilter.leaveType = { $in: [null, undefined, ""] };
 
-  // ✅ Date range filter on rota startDate
+  // ✅ Date range filter on rota startDate (strictly capped to exclude future dates)
   if (attendanceDate) {
     dateFilter.startDate = attendanceDate;
   } else if (startDate || endDate) {
     dateFilter.startDate = {};
     if (startDate) dateFilter.startDate.$gte = startDate;
-    if (endDate) dateFilter.startDate.$lte = endDate;
+    
+    if (endDate) {
+      // Cap the endDate so it never allows querying into the future
+      dateFilter.startDate.$lte = endDate < currentMaxDate ? endDate : currentMaxDate;
+    } else {
+      dateFilter.startDate.$lte = currentMaxDate;
+    }
+  } else {
+    // Default fallback: If no date parameter is passed, restrict values to past or present days
+    dateFilter.startDate = { $lte: currentMaxDate };
   }
 
   // ✅ Build attendance date filter to find who already clocked in
@@ -1023,8 +1051,14 @@ const getAllMissedRotaFromDB = async (query: Record<string, unknown>) => {
     })
     .lean();
 
-  // ✅ Filter out rotas where employee already has attendance on that date
+  // ✅ Filter out rotas where employee already has attendance on that date OR if it's a future date
   const missedRotas = candidateRotas.filter((rota) => {
+    // ✅ Double check array items to drop any future dates completely
+    const rotaDate = new Date(rota.startDate);
+    if (rotaDate > now) {
+      return false;
+    }
+
     // Note: Because employeeId is populated, it is an object. We must extract the _id.
     const empId = rota.employeeId?._id ? rota.employeeId._id.toString() : rota.employeeId?.toString();
     const key = `${empId}_${rota.startDate}`;
