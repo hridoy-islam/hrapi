@@ -14,7 +14,6 @@ import { Rota } from "../../rota/rota.model";
 import { Attendance } from "../../attendance/attendance.model";
 import { SickNote } from "../sickNote/sickNote.model";
 
-
 // const getAllLeaveFromDB = async (query: Record<string, unknown>) => {
 //   const { fromDate, toDate, companyId, limit, ...restQuery } = query;
 
@@ -84,8 +83,6 @@ import { SickNote } from "../sickNote/sickNote.model";
 //   };
 // };
 
-
-
 const getAllLeaveFromDB = async (query: Record<string, unknown>) => {
   const { fromDate, toDate, companyId, ...restQuery } = query;
 
@@ -124,16 +121,13 @@ const getAllLeaveFromDB = async (query: Record<string, unknown>) => {
 
   // ✅ Build query - let paginate() handle limit/page
   const userQuery = new QueryBuilder(
-    Leave.find().populate(
-      "userId",
-      "name title firstName initial lastName"
-    ),
-    finalQuery  // Pass finalQuery which includes page and limit
+    Leave.find().populate("userId", "name title firstName initial lastName"),
+    finalQuery, // Pass finalQuery which includes page and limit
   )
     .search(LeaveSearchableFields)
     .filter(finalQuery)
     .sort()
-    .paginate()  // This should read limit and page from finalQuery
+    .paginate() // This should read limit and page from finalQuery
     .fields();
 
   const meta = await userQuery.countTotal();
@@ -144,7 +138,6 @@ const getAllLeaveFromDB = async (query: Record<string, unknown>) => {
     result,
   };
 };
-
 
 const getSingleLeaveFromDB = async (id: string) => {
   const result = await Leave.findById(id);
@@ -300,25 +293,23 @@ const buildRotaDoc = (
 // HELPER: Deduplicate rotas for a department — keep the most
 // recent one, delete the rest. Returns the surviving rota doc.
 // ============================================================
-const deduplicateRotasForDept = async (
-  rotas: any[],
-): Promise<any | null> => {
+const deduplicateRotasForDept = async (rotas: any[]): Promise<any | null> => {
   if (rotas.length === 0) return null;
   if (rotas.length === 1) return rotas[0];
- 
+
   // Sort descending by _id (most recently inserted first)
   const sorted = [...rotas].sort((a, b) =>
     b._id.toString().localeCompare(a._id.toString()),
   );
- 
+
   const [keep, ...duplicates] = sorted;
   const duplicateIds = duplicates.map((r) => r._id);
- 
+
   await Rota.deleteMany({ _id: { $in: duplicateIds } });
- 
+
   return keep;
 };
- 
+
 // ============================================================
 // HELPER: Process rota entries for a single leave day
 // ============================================================
@@ -339,24 +330,24 @@ const processRotaForLeaveDay = async (
     primaryShiftType,
     actionUserId,
   } = opts;
- 
+
   const dateStr = moment(day.leaveDate).format("YYYY-MM-DD");
- 
+
   const durationHours = day.duration ?? 0;
   const { startTime: newStartTime, endTime: newEndTime } = buildShiftTimes(
     primaryShiftType,
     durationHours,
   );
- 
+
   const allDeptIdStrings = allDeptRawIds.map(toIdString);
- 
+
   // ── Fetch ALL existing rotas for this employee on this day ───────────────
   const allExistingRotas = await Rota.find({
     employeeId,
     companyId,
     startDate: dateStr,
   });
- 
+
   // ── Deduplicate per department ───────────────────────────────────────────
   // Group rotas by departmentId, delete extras, keep the newest one per dept
   const rotasByDept = new Map<string, any[]>();
@@ -365,29 +356,29 @@ const processRotaForLeaveDay = async (
     if (!rotasByDept.has(deptStr)) rotasByDept.set(deptStr, []);
     rotasByDept.get(deptStr)!.push(rota);
   }
- 
+
   const survivingRotaByDept = new Map<string, any>();
   for (const [deptStr, rotas] of rotasByDept.entries()) {
     const survivor = await deduplicateRotasForDept(rotas);
     if (survivor) survivingRotaByDept.set(deptStr, survivor);
   }
- 
+
   const isSingleDept = allDeptIdStrings.length === 1;
- 
+
   // ── CASE 1: Single department ────────────────────────────────────────────
   if (isSingleDept) {
     const targetDeptRaw = allDeptRawIds[0];
     const targetDeptIdStr = allDeptIdStrings[0];
     const existingRota = survivingRotaByDept.get(targetDeptIdStr);
- 
+
     if (existingRota) {
       // Rota exists → update to leaveType, clear times
       await Rota.findByIdAndUpdate(existingRota._id, {
         $set: {
           leaveType: primaryShiftType,
           shiftName: primaryShiftType,
-          startTime: "",
-          endTime: "",
+          startTime: newStartTime,
+          endTime: newEndTime,
           status: "publish",
         },
         $push: {
@@ -418,7 +409,7 @@ const processRotaForLeaveDay = async (
     }
     return;
   }
- 
+
   // ── CASE 2: Multiple departments ─────────────────────────────────────────
   //
   // RULE (index-based, simple):
@@ -434,21 +425,21 @@ const processRotaForLeaveDay = async (
   //   Dept B (index 1): had 2 rotas → dedup keeps 1 → update to NT ✅
   //   Dept C (index 2): had 1 rota  → kept as-is   → update to NT ✅
   //   Dept D (index 3): had 0 rotas → no rota       → insert NT   ✅
- 
+
   for (let i = 0; i < allDeptRawIds.length; i++) {
     const rawId = allDeptRawIds[i];
     const deptIdStr = toIdString(rawId);
     const shiftType = i === 0 ? primaryShiftType : "NT";
     const existingRota = survivingRotaByDept.get(deptIdStr);
- 
+
     if (existingRota) {
       // Rota exists (after dedup) → update to correct shiftType, clear times
       await Rota.findByIdAndUpdate(existingRota._id, {
         $set: {
           leaveType: shiftType,
           shiftName: shiftType,
-          startTime: "",
-          endTime: "",
+          startTime: newStartTime,
+          endTime: newEndTime,
           status: "publish",
         },
         $push: {
@@ -468,9 +459,9 @@ const processRotaForLeaveDay = async (
             employeeId,
             departmentId: rawId._id ?? rawId,
             dateStr,
+            startTime: newStartTime,
+            endTime: newEndTime,
             shiftType,
-            startTime: "",
-            endTime: "",
             actionUserId,
           },
           `System generated rota from approved leave request`,
@@ -499,9 +490,13 @@ const generateRotaAndAttendanceForLeave = async (
 
   if (!primaryShiftType) return;
 
-  const employee:any = await User.findById(updatedLeave.userId);
+  const employee: any = await User.findById(updatedLeave.userId);
 
-  if (!Array.isArray(employee?.departmentId) || employee.departmentId.length === 0 || !updatedLeave.leaveDays?.length) {
+  if (
+    !Array.isArray(employee?.departmentId) ||
+    employee.departmentId.length === 0 ||
+    !updatedLeave.leaveDays?.length
+  ) {
     return;
   }
 
@@ -538,8 +533,7 @@ export const updateLeaveIntoDB = async (
   }
 
   const userName =
-    actionUser.name ||
-    `${actionUser.firstName} ${actionUser.lastName}`.trim();
+    actionUser.name || `${actionUser.firstName} ${actionUser.lastName}`.trim();
 
   // Build a meaningful history message based on what changed
   let actionMessage = `${userName} updated the leave request`;
@@ -550,7 +544,7 @@ export const updateLeaveIntoDB = async (
     } else if (payload.status === "rejected") {
       actionMessage = `${userName} rejected the leave request`;
     } else {
-      actionMessage
+      actionMessage;
     }
   }
 
@@ -577,7 +571,6 @@ export const updateLeaveIntoDB = async (
   // Only run holiday counters and rota/attendance logic when
   // status transitions from "pending" → "approved"
   if (leave.status === "pending" && updatedLeave.status === "approved") {
-
     // ── Update Holiday Allowances ─────────────────────────────────────────
     const userHoliday = await Holiday.findOne({
       userId: updatedLeave.userId,
@@ -748,7 +741,7 @@ const getHolidaySummaryByDateRange = async (query: Record<string, unknown>) => {
       ? record.userId._id.toString()
       : record.userId.toString();
 
-    const empLeaves = leaves.filter((l:any) => {
+    const empLeaves = leaves.filter((l: any) => {
       const leaveUserId = l.userId?._id
         ? l.userId._id.toString()
         : l.userId.toString();
@@ -812,11 +805,11 @@ const getHolidaySummaryByDateRange = async (query: Record<string, unknown>) => {
 
 const deleteLeaveFromDB = async (id: string) => {
   const leave = await Leave.findById(id);
-  if(!leave){
-     throw new AppError(httpStatus.BAD_REQUEST, "No Leave found");
+  if (!leave) {
+    throw new AppError(httpStatus.BAD_REQUEST, "No Leave found");
   }
 
-  const result = await Leave.findByIdAndDelete(id)
+  const result = await Leave.findByIdAndDelete(id);
   return result;
 };
 
@@ -826,5 +819,5 @@ export const LeaveServices = {
   updateLeaveIntoDB,
   createLeaveIntoDB,
   getHolidaySummaryByDateRange,
-  deleteLeaveFromDB
+  deleteLeaveFromDB,
 };
