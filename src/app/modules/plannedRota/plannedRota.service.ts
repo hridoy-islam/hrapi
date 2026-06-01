@@ -356,87 +356,109 @@ export const updatePlannedRotaIntoDB = async (
     actionUser.name || `${actionUser.firstName} ${actionUser.lastName}`.trim();
 
   // ─────────────────────────────────────────────────────────────────
-  // 3. PUBLISH FLOW — conflict check + Rota creation
+  // 3. PUBLISH FLOW
   // ─────────────────────────────────────────────────────────────────
-  const isPublishing = payload.status === "publish" && rota.status !== "publish";
+  const isPublishing =
+    payload.status === "publish" && rota.status !== "publish";
 
   if (isPublishing) {
-    const companyId   = rota.companyId.toString();
-    const employeeId  = rota.employeeId.toString();
+    const companyId    = rota.companyId.toString();
+    const employeeId   = rota.employeeId.toString();
     const departmentId = rota.departmentId.toString();
-    const startDate   = rota.startDate;
+    const startDate    = rota.startDate;
 
-    // Check for conflicts in the Rota collection
-    // (same company + department + employee + startDate)
-    const existingRotas = await Rota.find({
+    const { _id, history, __v, createdAt, updatedAt, ...rotaFields } =
+      (rota as any).toObject();
+
+    // Check if a Rota with the exact same shiftName already exists for
+    // the same employee + department + date
+    const sameShiftRota = await Rota.findOne({
       companyId,
       departmentId,
       employeeId,
       startDate,
-    }).lean();
-
-    const skippedRecords: any[] = [];
-
-    for (const existing of existingRotas) {
-      // Block 1: existing rota has a leaveType → always conflict
-      if (existing.leaveType) {
-        skippedRecords.push({
-          employeeId,
-          departmentId,
-          date: startDate,
-          reason: `A leave (${existing.leaveType}) already exists on this date`,
-          conflictingRotaId: existing._id,
-        });
-      }
-      // Block 2: existing rota has a different shiftName → conflict
-      else if (
-        existing.shiftName &&
-        rota.shiftName &&
-        existing.shiftName !== rota.shiftName
-      ) {
-        skippedRecords.push({
-          employeeId,
-          departmentId,
-          date: startDate,
-          reason: `A different shift (${existing.shiftName}) already exists on this date`,
-          conflictingRotaId: existing._id,
-        });
-      }
-    }
-
- 
-
-    if (skippedRecords.length > 0) {
-      // Return early — do NOT update PlannedRota, do NOT create Rota
-      return {
-        result: null,
-        skipped: true,
-        skippedRecords,
-        meta: {
-          skippedShiftsCount: skippedRecords.length,
-          hasSkippedRecords: true,
-        },
-      };
-    }
-
-    // No conflicts — copy PlannedRota into Rota with status 'publish'
-    const { _id, history, __v, createdAt, updatedAt, ...rotaFields } =
-      (rota as any).toObject();
-
-    await Rota.create({
-      ...rotaFields,
-      status: "publish",
-      history: [
-    {
-      message: `${userName} Published the rota at`,
-      userId: actionUserId,
-    },
-  ],
+      shiftName: rota.shiftName, // exact shiftName match
     });
+
+    if (sameShiftRota) {
+      // ── Same shiftName already exists — create a new separate Rota ──
+      await Rota.create({
+        ...rotaFields,
+        status: "publish",
+        history: [
+          {
+            message: `${userName} Published the rota at`,
+            userId: actionUserId,
+          },
+        ],
+      });
+    } else {
+      // ── No matching shiftName — check for a different-shiftName Rota to replace ──
+      const differentShiftRota = await Rota.findOne({
+        companyId,
+        departmentId,
+        employeeId,
+        startDate,
+      }).sort({ createdAt: -1 }); // pick latest if multiple
+
+      if (differentShiftRota) {
+        // Replace it with planned rota data, clearing stale optional fields
+        const optionalFields = [
+          "leaveType",
+          "shiftName",
+          "startTime",
+          "endTime",
+          "note",
+          "color",
+          "endDate",
+        ] as const;
+
+        const unsetFields: Record<string, ""> = {};
+        for (const field of optionalFields) {
+          if (!rotaFields[field] && differentShiftRota[field]) {
+            unsetFields[field] = "";
+          }
+        }
+
+        const updateOp: any = {
+          $set: {
+            ...rotaFields,
+            status: "publish",
+          },
+          $push: {
+            history: {
+              message: `${userName} Published and replaced the rota at`,
+              userId: actionUserId,
+            },
+          },
+        };
+
+        if (Object.keys(unsetFields).length > 0) {
+          updateOp.$unset = unsetFields;
+        }
+
+        await Rota.findByIdAndUpdate(differentShiftRota._id, updateOp, {
+          new: true,
+          runValidators: true,
+        });
+      } else {
+        // ── No existing rota at all — create fresh ──
+        await Rota.create({
+          ...rotaFields,
+          status: "publish",
+          history: [
+            {
+              message: `${userName} Published the rota at`,
+              userId: actionUserId,
+            },
+          ],
+        });
+      }
+    }
   }
 
   // ─────────────────────────────────────────────────────────────────
-  // 4. Build history entries
+  // 4. Build history entries for PlannedRota
   // ─────────────────────────────────────────────────────────────────
   const newHistoryEntries: any[] = [];
 
@@ -479,7 +501,7 @@ export const updatePlannedRotaIntoDB = async (
   });
 
   // ─────────────────────────────────────────────────────────────────
-  // 6. Batching / notification logic (unchanged)
+  // 6. Batching / notification logic
   // ─────────────────────────────────────────────────────────────────
   const shiftChanged = hasShiftChanges(payload, rota);
   const byNotice = result?.byNotice ?? false;
