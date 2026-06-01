@@ -47,6 +47,7 @@ import { MeetingMinsRoutes } from "../modules/meetingMins/meetingMins.router";
 import { LeaverRoutes } from "../modules/hr/leaver/leaver.router";
 import { CompanyPolicyRoutes } from "../modules/companyPolicy/companyPolicy.route";
 import { HealthAndSafetyRoutes } from "../modules/healthAndSafety/healthAndSafety.route";
+import { PlannedRotaRoutes } from "../modules/plannedRota/plannedRota.router";
 
 const router = Router();
 
@@ -212,6 +213,10 @@ const moduleRoutes = [
   {
     path: "/rota",
     route: RotaRoutes,
+  },
+  {
+    path: "/planned-rota",
+    route: PlannedRotaRoutes,
   },
   {
     path: "/serviceuser",
