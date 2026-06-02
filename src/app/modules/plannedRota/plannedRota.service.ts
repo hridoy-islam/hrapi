@@ -356,7 +356,7 @@ export const updatePlannedRotaIntoDB = async (
     actionUser.name || `${actionUser.firstName} ${actionUser.lastName}`.trim();
 
   // ─────────────────────────────────────────────────────────────────
-  // 3. PUBLISH FLOW
+  // 3. PUBLISH FLOW (Handles single vs multiple duplicates)
   // ─────────────────────────────────────────────────────────────────
   const isPublishing =
     payload.status === "publish" && rota.status !== "publish";
@@ -370,18 +370,65 @@ export const updatePlannedRotaIntoDB = async (
     const { _id, history, __v, createdAt, updatedAt, ...rotaFields } =
       (rota as any).toObject();
 
-    // Check if a Rota with the exact same shiftName already exists for
-    // the same employee + department + date
-    const sameShiftRota = await Rota.findOne({
+    // Find ALL published Rotas matching this slot, sorted newest to oldest
+    const existingRotas = await Rota.find({
       companyId,
       departmentId,
       employeeId,
       startDate,
-      shiftName: rota.shiftName, // exact shiftName match
-    });
+    }).sort({ createdAt: -1 });
 
-    if (sameShiftRota) {
-      // ── Same shiftName already exists — create a new separate Rota ──
+    if (existingRotas.length > 0) {
+      // Index 0 is guaranteed to be the latest record due to our sort
+      const latestRota = existingRotas[0];
+
+      // If multiple records exist, delete all of them except the latest one
+      if (existingRotas.length > 1) {
+        const duplicateIds = existingRotas.slice(1).map((r) => r._id);
+        await Rota.deleteMany({ _id: { $in: duplicateIds } });
+      }
+
+      // ── Replace the latest rota and clean up stale optional fields ──
+      const optionalFields = [
+        "leaveType",
+        "shiftName",
+        "startTime",
+        "endTime",
+        "note",
+        "color",
+        "endDate",
+      ] as const;
+
+      const unsetFields: Record<string, ""> = {};
+      for (const field of optionalFields) {
+        if (!rotaFields[field] && latestRota[field]) {
+          unsetFields[field] = "";
+        }
+      }
+
+      const updateOp: any = {
+        $set: {
+          ...rotaFields,
+          status: "publish",
+        },
+        $push: {
+          history: {
+            message: `${userName} Published the rota at`,
+            userId: actionUserId,
+          },
+        },
+      };
+
+      if (Object.keys(unsetFields).length > 0) {
+        updateOp.$unset = unsetFields;
+      }
+
+      await Rota.findByIdAndUpdate(latestRota._id, updateOp, {
+        new: true,
+        runValidators: true,
+      });
+    } else {
+      // ── No existing rota at all — create fresh ──
       await Rota.create({
         ...rotaFields,
         status: "publish",
@@ -392,68 +439,6 @@ export const updatePlannedRotaIntoDB = async (
           },
         ],
       });
-    } else {
-      // ── No matching shiftName — check for a different-shiftName Rota to replace ──
-      const differentShiftRota = await Rota.findOne({
-        companyId,
-        departmentId,
-        employeeId,
-        startDate,
-      }).sort({ createdAt: -1 }); // pick latest if multiple
-
-      if (differentShiftRota) {
-        // Replace it with planned rota data, clearing stale optional fields
-        const optionalFields = [
-          "leaveType",
-          "shiftName",
-          "startTime",
-          "endTime",
-          "note",
-          "color",
-          "endDate",
-        ] as const;
-
-        const unsetFields: Record<string, ""> = {};
-        for (const field of optionalFields) {
-          if (!rotaFields[field] && differentShiftRota[field]) {
-            unsetFields[field] = "";
-          }
-        }
-
-        const updateOp: any = {
-          $set: {
-            ...rotaFields,
-            status: "publish",
-          },
-          $push: {
-            history: {
-              message: `${userName} Published and replaced the rota at`,
-              userId: actionUserId,
-            },
-          },
-        };
-
-        if (Object.keys(unsetFields).length > 0) {
-          updateOp.$unset = unsetFields;
-        }
-
-        await Rota.findByIdAndUpdate(differentShiftRota._id, updateOp, {
-          new: true,
-          runValidators: true,
-        });
-      } else {
-        // ── No existing rota at all — create fresh ──
-        await Rota.create({
-          ...rotaFields,
-          status: "publish",
-          history: [
-            {
-              message: `${userName} Published the rota at`,
-              userId: actionUserId,
-            },
-          ],
-        });
-      }
     }
   }
 
