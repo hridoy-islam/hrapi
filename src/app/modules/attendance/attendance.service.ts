@@ -215,6 +215,114 @@ const getSingleAttendanceFromDB = async (id: string) => {
   return result;
 };
 
+// const getCompanyEmployeesLatestAttendance = async (
+//   query: Record<string, unknown>,
+// ) => {
+//   const { companyId, page = 1, limit = 10, searchTerm } = query;
+
+//   if (!companyId) {
+//     throw new AppError(httpStatus.BAD_REQUEST, "Company ID is required.");
+//   }
+
+//   // 1. Build User Match Query
+//   const userMatch: any = {
+//     company: new Types.ObjectId(companyId as string),
+//     role: "employee",
+//   };
+
+//   if (searchTerm) {
+//     userMatch.$or = [
+//       { name: { $regex: searchTerm, $options: "i" } },
+//       { email: { $regex: searchTerm, $options: "i" } },
+//       { employeeId: { $regex: searchTerm, $options: "i" } },
+//     ];
+//   }
+
+//   // 2. Fetch ALL matching users (Do not apply skip/limit here yet)
+//   const users = await User.find(userMatch)
+//     .select(
+//       "name firstName lastName email phone designationId departmentId employeeId profileImage",
+//     )
+//     .populate({ path: "designationId", select: "title" })
+//     .populate({ path: "departmentId", select: "departmentName" })
+//     .lean(); // Use .lean() to get raw JS objects for faster processing
+
+//   if (!users.length) {
+//     return {
+//       meta: {
+//         page: Number(page),
+//         limit: limit === "all" ? 0 : Number(limit),
+//         total: 0,
+//         totalPage: 0,
+//       },
+//       result: [],
+//     };
+//   }
+
+//   const userIds = users.map((user) => user._id);
+
+//   // 3. Aggregate Latest Attendance for these users
+//   const latestAttendances = await Attendance.aggregate([
+//     { $match: { userId: { $in: userIds } } },
+//     { $sort: { createdAt: -1 } }, // Sort descending to get latest first
+//     {
+//       $group: {
+//         _id: "$userId", // Group by User
+//         latestStatus: { $first: "$status" },
+//         clockIn: { $first: "$clockIn" },
+//         clockInDate: { $first: "$clockInDate" },
+//         clockOut: { $first: "$clockOut" },
+//         clockOutDate: { $first: "$clockOutDate" },
+//         lastUpdated: { $first: "$createdAt" },
+//       },
+//     },
+//   ]);
+
+//   // Create a lookup map for O(1) matching
+//   const attendanceMap = new Map();
+//   latestAttendances.forEach((record) => {
+//     attendanceMap.set(record._id.toString(), record);
+//   });
+
+//   // 4. Merge Users with Attendance Data AND filter for 'clockin' only
+//   const clockedInUsers = users.reduce((acc, user) => {
+//     const attendanceInfo = attendanceMap.get(user._id.toString());
+
+//     // Check if the user's latest status is exactly "clockin"
+//     if (attendanceInfo && attendanceInfo.latestStatus === "clockin") {
+//       (acc as any).push({
+//         ...user,
+//         latestAttendance: attendanceInfo,
+//       });
+//     }
+//     return acc;
+//   }, []);
+
+//   // 5. Apply Pagination to the filtered list
+//   const pageNumber = Number(page);
+//   const limitNumber = limit === "all" ? 0 : Number(limit);
+//   const skip = (pageNumber - 1) * limitNumber;
+
+//   const totalClockedIn = clockedInUsers.length;
+
+//   // Slice the array for the current page
+//   const paginatedResult =
+//     limitNumber === 0
+//       ? clockedInUsers
+//       : clockedInUsers.slice(skip, skip + limitNumber);
+
+//   return {
+//     meta: {
+//       page: pageNumber,
+//       limit: limitNumber === 0 ? totalClockedIn : limitNumber,
+//       total: totalClockedIn,
+//       totalPage:
+//         limitNumber === 0 ? 1 : Math.ceil(totalClockedIn / limitNumber),
+//     },
+//     result: paginatedResult,
+//   };
+// };
+
 const getCompanyEmployeesLatestAttendance = async (
   query: Record<string, unknown>,
 ) => {
@@ -238,14 +346,14 @@ const getCompanyEmployeesLatestAttendance = async (
     ];
   }
 
-  // 2. Fetch ALL matching users (Do not apply skip/limit here yet)
+  // 2. Fetch ALL matching users
   const users = await User.find(userMatch)
     .select(
       "name firstName lastName email phone designationId departmentId employeeId profileImage",
     )
     .populate({ path: "designationId", select: "title" })
     .populate({ path: "departmentId", select: "departmentName" })
-    .lean(); // Use .lean() to get raw JS objects for faster processing
+    .lean();
 
   if (!users.length) {
     return {
@@ -261,34 +369,41 @@ const getCompanyEmployeesLatestAttendance = async (
 
   const userIds = users.map((user) => user._id);
 
-  // 3. Aggregate Latest Attendance for these users
+  // 3. Aggregate Latest Attendance — also pull breakLogs to detect active break
   const latestAttendances = await Attendance.aggregate([
     { $match: { userId: { $in: userIds } } },
-    { $sort: { createdAt: -1 } }, // Sort descending to get latest first
+    { $sort: { createdAt: -1 } },
     {
       $group: {
-        _id: "$userId", // Group by User
+        _id: "$userId",
         latestStatus: { $first: "$status" },
         clockIn: { $first: "$clockIn" },
         clockInDate: { $first: "$clockInDate" },
         clockOut: { $first: "$clockOut" },
         clockOutDate: { $first: "$clockOutDate" },
         lastUpdated: { $first: "$createdAt" },
+        breakLogs: { $first: "$breakLogs" }, // ← pull breakLogs of the latest record
       },
     },
   ]);
 
-  // Create a lookup map for O(1) matching
+  // 4. Create lookup map — compute isOnBreak here
   const attendanceMap = new Map();
   latestAttendances.forEach((record) => {
-    attendanceMap.set(record._id.toString(), record);
+    const lastBreak = record.breakLogs?.[record.breakLogs.length - 1];
+    const isOnBreak = !!(lastBreak && lastBreak.breakStart && !lastBreak.breakEnd);
+
+    attendanceMap.set(record._id.toString(), {
+      ...record,
+      isOnBreak,                                          // ← true if on active break
+      activeBreakStart: isOnBreak ? lastBreak.breakStart : null, // ← when the break started
+    });
   });
 
-  // 4. Merge Users with Attendance Data AND filter for 'clockin' only
+  // 5. Merge & filter — keep only clocked-in employees (on break counts as clocked in)
   const clockedInUsers = users.reduce((acc, user) => {
     const attendanceInfo = attendanceMap.get(user._id.toString());
 
-    // Check if the user's latest status is exactly "clockin"
     if (attendanceInfo && attendanceInfo.latestStatus === "clockin") {
       (acc as any).push({
         ...user,
@@ -298,14 +413,12 @@ const getCompanyEmployeesLatestAttendance = async (
     return acc;
   }, []);
 
-  // 5. Apply Pagination to the filtered list
+  // 6. Paginate
   const pageNumber = Number(page);
   const limitNumber = limit === "all" ? 0 : Number(limit);
   const skip = (pageNumber - 1) * limitNumber;
-
   const totalClockedIn = clockedInUsers.length;
 
-  // Slice the array for the current page
   const paginatedResult =
     limitNumber === 0
       ? clockedInUsers
@@ -322,6 +435,7 @@ const getCompanyEmployeesLatestAttendance = async (
     result: paginatedResult,
   };
 };
+
 
 const getCompanyServiceUsersLatestAttendance = async (
   query: Record<string, unknown>,
