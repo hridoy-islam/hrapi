@@ -388,7 +388,7 @@ export const updatePlannedRotaIntoDB = async (
         await Rota.deleteMany({ _id: { $in: duplicateIds } });
       }
 
-      // ── Replace the latest rota and clean up stale optional fields ──
+      // ── Determine which optional fields need to be unset ──
       const optionalFields = [
         "leaveType",
         "shiftName",
@@ -406,9 +406,15 @@ export const updatePlannedRotaIntoDB = async (
         }
       }
 
+      // ✅ Remove $unset fields from rotaFields to avoid ConflictingUpdateOperators
+      const cleanRotaFields = { ...rotaFields };
+      for (const field of Object.keys(unsetFields)) {
+        delete cleanRotaFields[field as keyof typeof cleanRotaFields];
+      }
+
       const updateOp: any = {
         $set: {
-          ...rotaFields,
+          ...cleanRotaFields,
           status: "publish",
         },
         $push: {
