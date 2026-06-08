@@ -149,10 +149,39 @@ const createInductionIntoDB = async (
 
 
 
+const updateInductionLogIntoDB = async (
+  id: string,
+  logId: string,
+  payload: { document: string[] }
+) => {
+  const induction = await Induction.findById(id);
+
+  if (!induction) {
+    throw new AppError(httpStatus.NOT_FOUND, "Induction record not found");
+  }
+
+  // Use Mongoose's array .id() helper to grab the specific log subdocument
+  const log = (induction.logs as any)?.id(logId);
+
+  if (!log) {
+    throw new AppError(httpStatus.NOT_FOUND, "Induction log entry not found");
+  }
+
+  // Update the array of document strings inside the target log
+  log.document = payload.document;
+
+  // Save changes on the parent document
+  const result = await induction.save();
+  return result;
+};
+
+
+
 export const InductionServices = {
   getAllInductionFromDB,
   getSingleInductionFromDB,
   updateInductionIntoDB,
-  createInductionIntoDB
+  createInductionIntoDB,
+  updateInductionLogIntoDB
   
 };

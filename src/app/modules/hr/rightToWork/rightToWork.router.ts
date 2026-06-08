@@ -32,6 +32,11 @@ router.patch(
 RightToWorkControllers.updateRightToWork
 );
 
+router.patch(
+  "/:id/logs/:logId",
+  // auth("admin", "user", "creator", "company", "director"),
+  RightToWorkControllers.updateRightToWorkLog
+);
 
 
 export const RightToWorkRoutes = router;

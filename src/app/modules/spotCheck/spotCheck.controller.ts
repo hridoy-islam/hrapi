@@ -46,10 +46,28 @@ const createSpotCheck: RequestHandler = catchAsync(async (req, res) => {
   });
 });
 
+
+const updateSpotCheckLog = catchAsync(async (req, res) => {
+  const { id, logId } = req.params;
+
+  const result = await SpotCheckServices.updateSpotCheckLogIntoDB(
+    id,
+    logId,
+    req.body
+  );
+
+  sendResponse(res, {
+    statusCode: httpStatus.OK,
+    success: true,
+    message: "Spot check log document updated successfully",
+    data: result,
+  });
+});
 export const SpotCheckControllers = {
   getAllSpotCheck,
   getSingleSpotCheck,
   updateSpotCheck,
-  createSpotCheck
+  createSpotCheck,
+  updateSpotCheckLog
   
 };

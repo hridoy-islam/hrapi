@@ -128,12 +128,40 @@ const createQACheckIntoDB = async (
 };
 
 
+const updateQACheckLogIntoDB = async (
+  id: string,
+  logId: string,
+  payload: { document: string[] }
+) => {
+  const qaCheck = await QACheck.findById(id);
+
+  if (!qaCheck) {
+    throw new AppError(httpStatus.NOT_FOUND, "QA Check record not found");
+  }
+
+  // Use Mongoose's subdocument array .id() helper method to locate the log
+  const log = (qaCheck.logs as any)?.id(logId);
+
+  if (!log) {
+    throw new AppError(httpStatus.NOT_FOUND, "QA Check log entry not found");
+  }
+
+  // Update the array of document strings inside the target log
+  log.document = payload.document;
+
+  // Persist the changes onto the parent document
+  const result = await qaCheck.save();
+  return result;
+};
+
+
 
 
 export const QACheckServices = {
   getAllQACheckFromDB,
   getSingleQACheckFromDB,
   updateQACheckIntoDB,
-  createQACheckIntoDB
+  createQACheckIntoDB,
+  updateQACheckLogIntoDB
   
 };

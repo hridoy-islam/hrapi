@@ -81,12 +81,37 @@ const createDbsFormIntoDB = async (payload: Partial<TDbsForm> & { date?: Date; u
 };
 
 
+const updateDbsFormLogIntoDB = async (
+  id: string,
+  logId: string,
+  payload: { document: string[] }
+) => {
+  const dbsForm = await DbsForm.findById(id);
 
+  if (!dbsForm) {
+    throw new AppError(httpStatus.NOT_FOUND, "DBS Form not found");
+  }
+
+  // Find the subdocument entry inside the logs array using Mongoose's .id() method
+  const log = (dbsForm.logs as any)?.id(logId);
+
+  if (!log) {
+    throw new AppError(httpStatus.NOT_FOUND, "Log entry not found");
+  }
+
+  // Update the document array inside the target log
+  log.document = payload.document;
+
+  // Persist changes to the database
+  const result = await dbsForm.save();
+  return result;
+};
 
 export const DbsFormServices = {
   getAllDbsFormFromDB,
   getSingleDbsFormFromDB,
   updateDbsFormIntoDB,
-  createDbsFormIntoDB
+  createDbsFormIntoDB,
+  updateDbsFormLogIntoDB
   
 };

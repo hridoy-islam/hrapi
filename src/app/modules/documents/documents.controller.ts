@@ -19,7 +19,18 @@ const UploadDocument = catchAsync(async (req, res) => {
 });
 
 
+const DeleteDocument = catchAsync(async (req, res) => {
+  const { fileUrl } = req.body; // Expecting { "fileUrl": "https://..." } in the body
 
+  await UploadDocumentService.DeleteDocumentFromGCS(fileUrl);
+
+  sendResponse(res, {
+    statusCode: httpStatus.OK,
+    success: true,
+    message: "Document deleted successfully from cloud storage",
+    data: null,
+  });
+});
 // const UploadDocument = catchAsync(async (req, res) => {
 //   console.log('Uploaded file:', req.file);
 
@@ -42,5 +53,6 @@ const UploadDocument = catchAsync(async (req, res) => {
 
 
 export const UploadDocumentController = {
-  UploadDocument
+  UploadDocument,
+  DeleteDocument
 };

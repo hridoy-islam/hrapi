@@ -46,10 +46,28 @@ const createDisciplinary: RequestHandler = catchAsync(async (req, res) => {
   });
 });
 
+const updateDisciplinaryLog = catchAsync(async (req, res) => {
+  const { id, logId } = req.params;
+
+  const result = await DisciplinaryServices.updateDisciplinaryLogIntoDB(
+    id,
+    logId,
+    req.body
+  );
+
+  sendResponse(res, {
+    statusCode: httpStatus.OK,
+    success: true,
+    message: "Disciplinary log updated successfully",
+    data: result,
+  });
+});
+
 export const DisciplinaryControllers = {
   getAllDisciplinary,
   getSingleDisciplinary,
   updateDisciplinary,
-  createDisciplinary
+  createDisciplinary,
+  updateDisciplinaryLog
   
 };

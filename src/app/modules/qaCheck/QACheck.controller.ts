@@ -46,10 +46,29 @@ const createQACheck: RequestHandler = catchAsync(async (req, res) => {
   });
 });
 
+
+const updateQACheckLog = catchAsync(async (req, res) => {
+  const { id, logId } = req.params;
+
+  const result = await QACheckServices.updateQACheckLogIntoDB(
+    id,
+    logId,
+    req.body
+  );
+
+  sendResponse(res, {
+    statusCode: httpStatus.OK,
+    success: true,
+    message: "QA Check log updated successfully",
+    data: result,
+  });
+});
+
 export const QACheckControllers = {
   getAllQACheck,
   getSingleQACheck,
   updateQACheck,
-  createQACheck
+  createQACheck,
+  updateQACheckLog
   
 };

@@ -88,10 +88,38 @@ const updatePassportIntoDB = async (
 };
 
 
+const updatePassportLogIntoDB = async (
+  id: string,
+  logId: string,
+  payload: { document: string[] }
+) => {
+  const passport = await Passport.findById(id);
+
+  if (!passport) {
+    throw new AppError(httpStatus.NOT_FOUND, "Passport record not found");
+  }
+
+  // Use Mongoose's subdocument array .id() method to find the log
+  const log = (passport.logs as any)?.id(logId);
+
+  if (!log) {
+    throw new AppError(httpStatus.NOT_FOUND, "Passport log entry not found");
+  }
+
+  // Update the subdocument's document field
+  log.document = payload.document;
+
+  // Persist modifications back to the parent document
+  const result = await passport.save();
+  return result;
+};
+
+
 export const PassportServices = {
   getAllPassportFromDB,
   getSinglePassportFromDB,
   updatePassportIntoDB,
-  createPassportIntoDB
+  createPassportIntoDB,
+  updatePassportLogIntoDB
   
 };

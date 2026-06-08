@@ -23,5 +23,11 @@ router.patch(
   PassportControllers.updatePassport
 );
 
+router.patch(
+  "/:id/logs/:logId",
+  // auth("admin", "user", "creator", "company", "director"), // Uncomment when ready for auth
+  PassportControllers.updatePassportLog
+);
+
 
 export const PassportRoutes = router;

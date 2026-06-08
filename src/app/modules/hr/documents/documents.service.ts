@@ -73,6 +73,48 @@ const UploadDocumentToGCS = async (file: any, payload: any) => {
   }
 };
 
+
+const DeleteDocumentFromGCS = async (fileUrl: string) => {
+  try {
+    if (!fileUrl) {
+      console.warn("Skipping GCS deletion: No file URL provided.");
+      return { message: "Skipping operation: No URL provided" };
+    }
+
+
+    const parsedUrl = new URL(fileUrl);
+    const pathSegments = parsedUrl.pathname.split("/").filter(Boolean);
+
+    const fileName = decodeURIComponent(pathSegments.slice(1).join("/"));
+
+    // 3. Absolute safety guard against empty strings or root paths - SKIPPED ON FAILURE
+    if (!fileName || fileName.trim() === "" || fileName === "/") {
+      console.warn(`Skipping GCS deletion: Invalid URL structure for URL: ${fileUrl}`);
+      return { message: "Skipping operation: Invalid file URL structure" };
+    }
+
+    const gcsFile = bucket.file(fileName);
+
+    // 4. Verify file exists before executing deletion - SKIPPED ON FAILURE
+    const [exists] = await gcsFile.exists();
+    if (!exists) {
+      console.warn(`Skipping GCS deletion: File does not exist on GCS: ${fileName}`);
+      return { message: "Skipping operation: File not found on GCS" };
+    }
+
+    await gcsFile.delete();
+
+    return { message: "File deleted successfully from GCS" };
+  } catch (error: any) {
+    // We only log the error here. This prevents your entire request/route from crashing 
+    // if something unexpected goes wrong (like network issues with Google Cloud)
+    console.error("GCS File deletion failed entirely:", error);
+    return { message: "Skipping operation: Internal error occurred during deletion" };
+  }
+};
+
+
 export const UploadDocumentService = {
   UploadDocumentToGCS,
+  DeleteDocumentFromGCS
 };

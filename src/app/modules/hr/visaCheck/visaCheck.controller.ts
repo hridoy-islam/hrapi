@@ -48,7 +48,22 @@ const createVisaCheck = catchAsync(async (req, res) => {
   });
 });
 
+const updateVisaCheckLog = catchAsync(async (req, res) => {
+  const { id, logId } = req.params;
+  
+  const result = await VisaCheckServices.updateVisaCheckLogIntoDB(
+    id, 
+    logId, 
+    req.body
+  );
 
+  sendResponse(res, {
+    statusCode: httpStatus.OK,
+    success: true,
+    message: "Visa check log updated successfully",
+    data: result,
+  });
+});
 
 export const VisaCheckControllers = {
 
@@ -56,5 +71,6 @@ export const VisaCheckControllers = {
     getSingleVisaCheck,
     createVisaCheck,
     updateVisaCheck,    
+    updateVisaCheckLog
 };
 

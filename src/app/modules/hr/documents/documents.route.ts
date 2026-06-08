@@ -9,10 +9,13 @@ const router = express.Router();
 
 router.post(
   "/",
-  // auth("admin", "student", "user"),
   upload.single('file'),
   UploadDocumentController.UploadDocument
 );
 
+router.delete(
+  "/",
+  UploadDocumentController.DeleteDocument
+);
 
 export const UploadDocumentRoutes = router;

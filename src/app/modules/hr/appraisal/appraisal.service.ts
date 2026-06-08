@@ -123,9 +123,37 @@ const updateAppraisalIntoDB = async (
   return result;
 };
 
+
+const updateAppraisalLogIntoDB = async (
+  id: string,
+  logId: string,
+  payload: { document: string[] }
+) => {
+  const appraisal = await Appraisal.findById(id);
+
+  if (!appraisal) {
+    throw new AppError(httpStatus.NOT_FOUND, "Appraisal record not found");
+  }
+
+  // Use Mongoose's array .id() helper to grab the specific log entry
+  const log = (appraisal.logs as any)?.id(logId);
+
+  if (!log) {
+    throw new AppError(httpStatus.NOT_FOUND, "Appraisal log entry not found");
+  }
+
+  // Update the array of document strings inside the target log
+  log.document = payload.document;
+
+  // Save changes on the parent document
+  const result = await appraisal.save();
+  return result;
+};
+
 export const AppraisalServices = {
   getAllAppraisalFromDB,
   getSingleAppraisalFromDB,
   createAppraisalIntoDB,
   updateAppraisalIntoDB,
+  updateAppraisalLogIntoDB
 };

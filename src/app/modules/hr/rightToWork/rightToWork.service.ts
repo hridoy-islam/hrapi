@@ -123,9 +123,35 @@ const updateRightToWorkIntoDB = async (
   return result;
 };
 
+
+const updateRightToWorkLogIntoDB = async (
+  id: string,
+  logId: string,
+  payload: { document: string[] }
+) => {
+  const rightToWork = await RightToWork.findById(id);
+
+  if (!rightToWork) {
+    throw new AppError(httpStatus.NOT_FOUND, "RightToWork not found");
+  }
+
+  const log = (rightToWork.logs as any)?.id(logId);
+
+  if (!log) {
+    throw new AppError(httpStatus.NOT_FOUND, "Log not found");
+  }
+
+  log.document = payload.document;
+
+  const result = await rightToWork.save();
+  return result;
+};
+
+
 export const RightToWorkServices = {
   getAllRightToWorkFromDB,
   getSingleRightToWorkFromDB,
   createRightToWorkIntoDB,
   updateRightToWorkIntoDB,
+  updateRightToWorkLogIntoDB,
 };

@@ -32,6 +32,10 @@ router.patch(
 AppraisalControllers.updateAppraisal
 );
 
-
+router.patch(
+  "/:id/logs/:logId",
+  // auth("admin", "user", "creator", "company", "director"), // Uncomment when you apply authentication middleware
+  AppraisalControllers.updateAppraisalLog
+);
 
 export const AppraisalRoutes = router;

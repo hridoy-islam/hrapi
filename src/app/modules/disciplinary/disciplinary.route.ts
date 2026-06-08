@@ -23,5 +23,10 @@ router.patch(
   DisciplinaryControllers.updateDisciplinary
 );
 
+router.patch(
+  "/:id/logs/:logId",
+  // auth("admin", "user", "creator", "company", "director"), // Uncomment when ready to secure endpoints
+  DisciplinaryControllers.updateDisciplinaryLog
+);
 
 export const DisciplinaryRoutes = router;

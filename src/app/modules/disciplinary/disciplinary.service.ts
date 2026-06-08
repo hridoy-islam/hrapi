@@ -172,10 +172,38 @@ const createDisciplinaryIntoDB = async (
 };
 
 
+
+const updateDisciplinaryLogIntoDB = async (
+  id: string,
+  logId: string,
+  payload: { document: string[] }
+) => {
+  const disciplinary = await Disciplinary.findById(id);
+
+  if (!disciplinary) {
+    throw new AppError(httpStatus.NOT_FOUND, "Disciplinary record not found");
+  }
+
+  // Use Mongoose's subdocument array .id() helper method to locate the log
+  const log = (disciplinary.logs as any)?.id(logId);
+
+  if (!log) {
+    throw new AppError(httpStatus.NOT_FOUND, "Disciplinary log entry not found");
+  }
+
+  // Update the array of document strings inside the target log
+  log.document = payload.document;
+
+  // Persist the changes onto the parent document
+  const result = await disciplinary.save();
+  return result;
+};
+
 export const DisciplinaryServices = {
   getAllDisciplinaryFromDB,
   getSingleDisciplinaryFromDB,
   updateDisciplinaryIntoDB,
-  createDisciplinaryIntoDB
+  createDisciplinaryIntoDB,
+  updateDisciplinaryLogIntoDB
   
 };

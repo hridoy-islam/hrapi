@@ -46,10 +46,30 @@ const createInduction: RequestHandler = catchAsync(async (req, res) => {
   });
 });
 
+
+const updateInductionLog = catchAsync(async (req, res) => {
+  const { id, logId } = req.params;
+
+  const result = await InductionServices.updateInductionLogIntoDB(
+    id,
+    logId,
+    req.body
+  );
+
+  sendResponse(res, {
+    statusCode: httpStatus.OK,
+    success: true,
+    message: "Induction log updated successfully",
+    data: result,
+  });
+});
+
+
 export const InductionControllers = {
   getAllInduction,
   getSingleInduction,
   updateInduction,
-  createInduction
+  createInduction,
+  updateInductionLog
   
 };

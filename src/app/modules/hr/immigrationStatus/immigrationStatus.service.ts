@@ -173,9 +173,37 @@ const updateImmigrationStatusIntoDB = async (
   return result;
 };
 
+
+const updateImmigrationStatusLogIntoDB = async (
+  id: string,
+  logId: string,
+  payload: { document: string[] }
+) => {
+  const immigrationStatus = await ImmigrationStatus.findById(id);
+
+  if (!immigrationStatus) {
+    throw new AppError(httpStatus.NOT_FOUND, "Immigration status record not found");
+  }
+
+  // Use Mongoose's array .id() helper to grab the correct embedded log subdocument
+  const log = (immigrationStatus.logs as any)?.id(logId);
+
+  if (!log) {
+    throw new AppError(httpStatus.NOT_FOUND, "Immigration log entry not found");
+  }
+
+  // Update the array of strings containing your document URLs/paths
+  log.document = payload.document;
+
+  // Save changes on the parent document
+  const result = await immigrationStatus.save();
+  return result;
+};
+
 export const ImmigrationStatusServices = {
   getAllImmigrationStatusFromDB,
   getSingleImmigrationStatusFromDB,
   createImmigrationStatusIntoDB,
   updateImmigrationStatusIntoDB,
+  updateImmigrationStatusLogIntoDB
 };

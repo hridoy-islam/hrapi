@@ -14,5 +14,9 @@ router.post(
   UploadDocumentController.UploadDocument
 );
 
-
+router.delete(
+  "/",
+  // auth("admin", "student", "user"), // Uncomment if you want to protect it
+  UploadDocumentController.DeleteDocument
+);
 export const UploadDocumentRoutes = router;

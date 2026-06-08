@@ -33,5 +33,11 @@ VisaCheckControllers.updateVisaCheck
 );
 
 
+router.patch(
+  "/:id/logs/:logId",
+  // auth("admin", "user", "creator", "company", "director"), // Uncomment and adjust when ready
+  VisaCheckControllers.updateVisaCheckLog
+);
+
 
 export const VisaCheckRoutes = router;

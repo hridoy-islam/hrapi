@@ -46,10 +46,30 @@ const createDbsForm: RequestHandler = catchAsync(async (req, res) => {
   });
 });
 
+
+const updateDbsFormLog = catchAsync(async (req, res) => {
+  const { id, logId } = req.params;
+
+  const result = await DbsFormServices.updateDbsFormLogIntoDB(
+    id,
+    logId,
+    req.body
+  );
+
+  sendResponse(res, {
+    statusCode: httpStatus.OK,
+    success: true,
+    message: "DBS log document updated successfully",
+    data: result,
+  });
+});
+
+
 export const DbsFormControllers = {
   getAllDbsForm,
   getSingleDbsForm,
   updateDbsForm,
-  createDbsForm
+  createDbsForm,
+  updateDbsFormLog
   
 };

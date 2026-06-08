@@ -23,5 +23,11 @@ router.patch(
   QACheckControllers.updateQACheck
 );
 
+router.patch(
+  "/:id/logs/:logId",
+  // auth("admin", "user", "creator", "company", "director"), // Uncomment when ready to secure endpoints
+  QACheckControllers.updateQACheckLog
+);
+
 
 export const QACheckRoutes = router;

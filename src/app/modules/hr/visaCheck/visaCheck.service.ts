@@ -105,10 +105,37 @@ const updateVisaCheckIntoDB = async (
   return result;
 };
 
+const updateVisaCheckLogIntoDB = async (
+  id: string,
+  logId: string,
+  payload: { document: string[] }
+) => {
+  const visaCheck = await VisaCheck.findById(id);
+
+  if (!visaCheck) {
+    throw new AppError(httpStatus.NOT_FOUND, "VisaCheck record not found");
+  }
+
+  // Find the specific subdocument log by its ID
+  const log = (visaCheck.logs as any)?.id(logId);
+
+  if (!log) {
+    throw new AppError(httpStatus.NOT_FOUND, "Visa log not found");
+  }
+
+  // Update the documents array
+  log.document = payload.document;
+
+  // Save the parent document to persist subdocument changes
+  const result = await visaCheck.save();
+  return result;
+};
+
 
 export const VisaCheckServices = {
   getAllVisaCheckFromDB,
   getSingleVisaCheckFromDB,
   createVisaCheckIntoDB,
   updateVisaCheckIntoDB,
+  updateVisaCheckLogIntoDB
 };

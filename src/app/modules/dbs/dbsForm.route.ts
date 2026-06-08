@@ -23,5 +23,10 @@ router.patch(
   DbsFormControllers.updateDbsForm
 );
 
+router.patch(
+  "/:id/logs/:logId",
+  // auth("admin", "user", "creator", "company", "director"), // Uncomment when adding middleware
+  DbsFormControllers.updateDbsFormLog
+);
 
 export const DbsFormRoutes = router;

@@ -22,6 +22,10 @@ router.patch(
   "/:id",
   SpotCheckControllers.updateSpotCheck
 );
-
+router.patch(
+  "/:id/logs/:logId",
+  // auth("admin", "user", "creator", "company", "director"), // Uncomment when you apply authentication middleware
+  SpotCheckControllers.updateSpotCheckLog
+);
 
 export const SpotCheckRoutes = router;

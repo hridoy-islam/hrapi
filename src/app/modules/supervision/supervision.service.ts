@@ -135,11 +135,37 @@ const createSupervisionIntoDB = async (
 };
 
 
+const updateSupervisionLogIntoDB = async (
+  id: string,
+  logId: string,
+  payload: { document: string[] }
+) => {
+  const supervision = await Supervision.findById(id);
+
+  if (!supervision) {
+    throw new AppError(httpStatus.NOT_FOUND, "Supervision record not found");
+  }
+
+  // Use Mongoose's subdocument array .id() helper method to locate the log
+  const log = (supervision.logs as any)?.id(logId);
+
+  if (!log) {
+    throw new AppError(httpStatus.NOT_FOUND, "Supervision log entry not found");
+  }
+
+  // Update the array of document strings inside the target log
+  log.document = payload.document;
+
+  // Persist the changes onto the parent document
+  const result = await supervision.save();
+  return result;
+};
 
 export const SupervisionServices = {
   getAllSupervisionFromDB,
   getSingleSupervisionFromDB,
   updateSupervisionIntoDB,
-  createSupervisionIntoDB
+  createSupervisionIntoDB,
+  updateSupervisionLogIntoDB
   
 };

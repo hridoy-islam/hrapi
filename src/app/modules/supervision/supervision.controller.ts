@@ -46,10 +46,28 @@ const createSupervision: RequestHandler = catchAsync(async (req, res) => {
   });
 });
 
+const updateSupervisionLog = catchAsync(async (req, res) => {
+  const { id, logId } = req.params;
+
+  const result = await SupervisionServices.updateSupervisionLogIntoDB(
+    id,
+    logId,
+    req.body
+  );
+
+  sendResponse(res, {
+    statusCode: httpStatus.OK,
+    success: true,
+    message: "Supervision log updated successfully",
+    data: result,
+  });
+});
+
 export const SupervisionControllers = {
   getAllSupervision,
   getSingleSupervision,
   updateSupervision,
-  createSupervision
+  createSupervision,
+  updateSupervisionLog
   
 };

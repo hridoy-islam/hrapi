@@ -46,10 +46,28 @@ const createPassport: RequestHandler = catchAsync(async (req, res) => {
   });
 });
 
+const updatePassportLog = catchAsync(async (req, res) => {
+  const { id, logId } = req.params;
+
+  const result = await PassportServices.updatePassportLogIntoDB(
+    id,
+    logId,
+    req.body
+  );
+
+  sendResponse(res, {
+    statusCode: httpStatus.OK,
+    success: true,
+    message: "Passport log document updated successfully",
+    data: result,
+  });
+});
+
 export const PassportControllers = {
   getAllPassport,
   getSinglePassport,
   updatePassport,
-  createPassport
+  createPassport,
+  updatePassportLog
   
 };

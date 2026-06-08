@@ -48,13 +48,29 @@ const createImmigrationStatus = catchAsync(async (req, res) => {
   });
 });
 
+const updateImmigrationStatusLog = catchAsync(async (req, res) => {
+  const { id, logId } = req.params;
 
+  const result = await ImmigrationStatusServices.updateImmigrationStatusLogIntoDB(
+    id,
+    logId,
+    req.body
+  );
+
+  sendResponse(res, {
+    statusCode: httpStatus.OK,
+    success: true,
+    message: "Immigration log document updated successfully",
+    data: result,
+  });
+});
 
 export const ImmigrationStatusControllers = {
 
     getAllImmigrationStatus,
     getSingleImmigrationStatus,
     createImmigrationStatus,
-    updateImmigrationStatus,    
+    updateImmigrationStatus,   
+    updateImmigrationStatusLog 
 };
 

@@ -47,7 +47,22 @@ const createRightToWork = catchAsync(async (req, res) => {
     data: result,
   });
 });
+const updateRightToWorkLog = catchAsync(async (req, res) => {
+  const { id, logId } = req.params;
 
+  const result = await RightToWorkServices.updateRightToWorkLogIntoDB(
+    id,
+    logId,
+    req.body
+  );
+
+  sendResponse(res, {
+    statusCode: httpStatus.OK,
+    success: true,
+    message: "RightToWork log updated successfully",
+    data: result,
+  });
+});
 
 
 export const RightToWorkControllers = {
@@ -56,5 +71,6 @@ export const RightToWorkControllers = {
     getSingleRightToWork,
     createRightToWork,
     updateRightToWork,    
+    updateRightToWorkLog
 };
 

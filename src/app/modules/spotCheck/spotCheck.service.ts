@@ -132,12 +132,37 @@ const createSpotCheckIntoDB = async (
 };
 
 
+const updateSpotCheckLogIntoDB = async (
+  id: string,
+  logId: string,
+  payload: { document: string[] }
+) => {
+  const spotCheck = await SpotCheck.findById(id);
 
+  if (!spotCheck) {
+    throw new AppError(httpStatus.NOT_FOUND, "Spot check record not found");
+  }
+
+  // Use Mongoose's array .id() helper to grab the specific log entry
+  const log = (spotCheck.logs as any)?.id(logId);
+
+  if (!log) {
+    throw new AppError(httpStatus.NOT_FOUND, "Spot check log entry not found");
+  }
+
+  // Update the array of document strings inside the target log
+  log.document = payload.document;
+
+  // Save changes on the parent document
+  const result = await spotCheck.save();
+  return result;
+};
 
 export const SpotCheckServices = {
   getAllSpotCheckFromDB,
   getSingleSpotCheckFromDB,
   updateSpotCheckIntoDB,
-  createSpotCheckIntoDB
+  createSpotCheckIntoDB,
+  updateSpotCheckLogIntoDB
   
 };

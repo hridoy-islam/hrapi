@@ -23,5 +23,11 @@ router.patch(
   SupervisionControllers.updateSupervision
 );
 
+router.patch(
+  "/:id/logs/:logId",
+  // auth("admin", "user", "creator", "company", "director"), // Uncomment when ready to secure endpoints
+  SupervisionControllers.updateSupervisionLog
+);
+
 
 export const SupervisionRoutes = router;

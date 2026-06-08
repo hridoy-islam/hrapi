@@ -23,5 +23,11 @@ router.patch(
   InductionControllers.updateInduction
 );
 
+router.patch(
+  "/:id/logs/:logId",
+  // auth("admin", "user", "creator", "company", "director"), // Uncomment when you apply authentication middleware
+  InductionControllers.updateInductionLog
+);
+
 
 export const InductionRoutes = router;

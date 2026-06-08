@@ -48,7 +48,22 @@ const createAppraisal = catchAsync(async (req, res) => {
   });
 });
 
+const updateAppraisalLog = catchAsync(async (req, res) => {
+  const { id, logId } = req.params;
 
+  const result = await AppraisalServices.updateAppraisalLogIntoDB(
+    id,
+    logId,
+    req.body
+  );
+
+  sendResponse(res, {
+    statusCode: httpStatus.OK,
+    success: true,
+    message: "Appraisal log document updated successfully",
+    data: result,
+  });
+});
 
 export const AppraisalControllers = {
 
@@ -56,5 +71,6 @@ export const AppraisalControllers = {
     getSingleAppraisal,
     createAppraisal,
     updateAppraisal,    
+    updateAppraisalLog
 };
 

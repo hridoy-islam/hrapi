@@ -31,7 +31,11 @@ router.patch(
 //   auth("admin", "user", "creator", "company", "director"),
 ImmigrationStatusControllers.updateImmigrationStatus
 );
-
+router.patch(
+  "/:id/logs/:logId",
+  // auth("admin", "user", "creator", "company", "director"), // Uncomment when applying your RBAC system
+  ImmigrationStatusControllers.updateImmigrationStatusLog
+);
 
 
 export const ImmigrationStatusRoutes = router;
