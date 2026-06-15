@@ -6,8 +6,8 @@ import QueryBuilder from "../../builder/QueryBuilder";
 import { SignatureDoc } from "./signatureDoc.model";
 import { TSignatureDoc } from "./signatureDoc.interface";
 import { SignatureDocSearchableFields } from "./signatureDoc.constant";
-import { UploadDocumentService } from "../documents/documents.service";
 import { DocusignCredentials } from "../docusignCredentials/docusignCredentials.model";
+import { UploadDocumentService } from "../hr/documents/documents.service";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // CRUD helpers (unchanged)

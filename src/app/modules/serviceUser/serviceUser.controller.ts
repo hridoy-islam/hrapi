@@ -17,16 +17,16 @@ const getAllServiceUser: RequestHandler = catchAsync(async (req, res) => {
   });
 });
 
-// const getSingleNotice = catchAsync(async (req, res) => {
-//   const { id } = req.params;
-//   const result = await NoticeServices.getSingleNoticeFromDB(id);
-//   sendResponse(res, {
-//     statusCode: httpStatus.OK,
-//     success: true,
-//     message: "ServiceUser is retrieved succesfully",
-//     data: result,
-//   });
-// });
+const getSingleServiceUser = catchAsync(async (req, res) => {
+  const { id } = req.params;
+  const result = await ServiceUserServices.getSingleServiceUserFromDB(id);
+  sendResponse(res, {
+    statusCode: httpStatus.OK,
+    success: true,
+    message: "ServiceUser is retrieved succesfully",
+    data: result,
+  });
+});
 
 const updateServiceUser = catchAsync(async (req, res) => {
   const { id } = req.params;
@@ -55,7 +55,8 @@ const createServiceUser = catchAsync(async (req, res) => {
 export const ServiceUserControllers = {
     getAllServiceUser,
     createServiceUser,
-    updateServiceUser
+    updateServiceUser,
+    getSingleServiceUser
     
 };
 

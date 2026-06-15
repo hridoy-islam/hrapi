@@ -48,6 +48,8 @@ import { LeaverRoutes } from "../modules/hr/leaver/leaver.router";
 import { CompanyPolicyRoutes } from "../modules/companyPolicy/companyPolicy.route";
 import { HealthAndSafetyRoutes } from "../modules/healthAndSafety/healthAndSafety.route";
 import { PlannedRotaRoutes } from "../modules/plannedRota/plannedRota.router";
+import { ServiceUserDocumentRoutes } from "../modules/serviceUserDocument/serviceUserDocument.router";
+import { AuditRoutes } from "../modules/audit/audit.router";
 
 const router = Router();
 
@@ -223,6 +225,10 @@ const moduleRoutes = [
     route: ServiceUserRoutes,
   },
   {
+    path: "/serviceuser-documents",
+    route: ServiceUserDocumentRoutes,
+  },
+  {
     path: "/signature-documents",
     route: SignatureDocRoutes,
   },
@@ -249,6 +255,10 @@ const moduleRoutes = [
   {
     path: "/health-and-safety",
     route: HealthAndSafetyRoutes,
+  },
+  {
+    path: "/audit",
+    route: AuditRoutes,
   },
 ];
 

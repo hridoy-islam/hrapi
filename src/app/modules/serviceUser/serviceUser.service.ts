@@ -23,10 +23,10 @@ const getServiceUserFromDB = async (query: Record<string, unknown>) => {
   };
 };
 
-// const getSingleNoticeFromDB = async (id: string) => {
-//   const result = await ServiceUser.findById(id);
-//   return result;
-// };
+const getSingleServiceUserFromDB = async (id: string) => {
+  const result = await ServiceUser.findById(id);
+  return result;
+};
 
 const createServiceUserIntoDB = async (payload: TServiceUser) => {
   try {
@@ -78,4 +78,5 @@ export const ServiceUserServices = {
   createServiceUserIntoDB,
   getServiceUserFromDB,
   updateServiceUserIntoDB,
+  getSingleServiceUserFromDB
 };

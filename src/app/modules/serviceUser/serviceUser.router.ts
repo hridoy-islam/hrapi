@@ -12,10 +12,16 @@ router.get(
 ServiceUserControllers.getAllServiceUser
 );
 
+
 router.post(
   "/",
 //   auth("admin", "user", "director", "company", "creator"),
 ServiceUserControllers.createServiceUser
+);
+router.get(
+  "/:id",
+//   auth("admin", "company", "creator", "user", "director"),
+ServiceUserControllers.getSingleServiceUser
 );
 
 router.patch(
@@ -23,7 +29,6 @@ router.patch(
 //   auth("admin", "user", "creator", "company", "director"),
 ServiceUserControllers.updateServiceUser
 );
-
 
 
 export const ServiceUserRoutes = router;

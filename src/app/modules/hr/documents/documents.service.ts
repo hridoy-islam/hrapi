@@ -18,8 +18,14 @@ const UploadDocumentToGCS = async (file: any, payload: any) => {
   const { entityId, file_type } = payload;
   try {
     if (!file) throw new AppError(httpStatus.BAD_REQUEST, "No file provided");
+const sanitizedName = file.originalname
+  .normalize("NFKD")
+  .trim()
+  .replace(/\s+/g, "-")
+  .replace(/[^a-zA-Z0-9.\-_]/g, "");
 
-    const fileName = `${Date.now()}-${file.originalname}`;
+const fileName = `${Date.now()}-${sanitizedName}`;
+    // const fileName = `${Date.now()}-${file.originalname}`;
     const gcsFile = bucket.file(fileName);
 
     await new Promise((resolve, reject) => {
@@ -74,41 +80,100 @@ const UploadDocumentToGCS = async (file: any, payload: any) => {
 };
 
 
+const UploadBufferToGCS = async (buffer: Buffer, originalName: string, mimetype: string = "application/pdf") => {
+  try {
+    if (!buffer) throw new AppError(httpStatus.BAD_REQUEST, "No buffer provided");
+
+    const fileName = `${Date.now()}-signed-${originalName}`;
+    const gcsFile = bucket.file(fileName);
+
+    await new Promise((resolve, reject) => {
+      const stream = gcsFile.createWriteStream({
+        metadata: { contentType: mimetype }, 
+        
+      });
+
+      stream.on("error", (err) => {
+        console.error("Error during buffer upload:", err);
+        reject(err);
+      });
+
+      stream.on("finish", async () => {
+        try {
+          // Make the file publicly accessible just like your other function
+          await gcsFile.makePublic();
+          resolve(true);
+        } catch (err) {
+          console.error("Error making the buffer file public:", err);
+          reject(err);
+        }
+      });
+
+      // Send the raw buffer to GCS
+      stream.end(buffer);
+    });
+
+    const fileUrl = `https://storage.googleapis.com/${bucketName}/${fileName}`;
+    return fileUrl;
+
+  } catch (error) {
+    console.error("Buffer upload failed:", error);
+    throw new AppError(httpStatus.INTERNAL_SERVER_ERROR, "Buffer upload failed");
+  }
+};
+
+
+
 const DeleteDocumentFromGCS = async (fileUrl: string) => {
   try {
     if (!fileUrl) {
-      console.warn("Skipping GCS deletion: No file URL provided.");
+      console.warn("[GCS] Skipping GCS deletion: No file URL provided.");
       return { message: "Skipping operation: No URL provided" };
     }
 
-
+    // 1. Convert URL to string and parse safely
     const parsedUrl = new URL(fileUrl);
-    const pathSegments = parsedUrl.pathname.split("/").filter(Boolean);
+    
+    // 2. Extract everything after the bucket name cleanly using the bucketName variable
+    // This safely extracts paths even if your file is inside sub-folders like /folder/image.jpg
+    const bucketPrefix = `/${bucketName}/`;
+    let fileName = parsedUrl.pathname;
 
-    const fileName = decodeURIComponent(pathSegments.slice(1).join("/"));
+    if (fileName.startsWith(bucketPrefix)) {
+      fileName = fileName.replace(bucketPrefix, "");
+    } else {
+      // Fallback fallback if pathname layout differs: take everything after the first directory segment
+      const segments = fileName.split("/").filter(Boolean);
+      fileName = segments.slice(1).join("/");
+    }
 
-    // 3. Absolute safety guard against empty strings or root paths - SKIPPED ON FAILURE
-    if (!fileName || fileName.trim() === "" || fileName === "/") {
-      console.warn(`Skipping GCS deletion: Invalid URL structure for URL: ${fileUrl}`);
+    // 3. Decode the URL string so it restores literal spaces and symbols matching GCS records
+    fileName = decodeURIComponent(fileName).trim();
+
+    // console.log(`[DEBUG DELETION] Extracted Filename for GCS: "${fileName}"`);
+
+    // 4. Safety guard against root directory deletion hazards
+    if (!fileName || fileName === "/" || fileName === "") {
+      console.warn(`[GCS] Skipping deletion: Invalid file path extracted from URL: ${fileUrl}`);
       return { message: "Skipping operation: Invalid file URL structure" };
     }
 
     const gcsFile = bucket.file(fileName);
 
-    // 4. Verify file exists before executing deletion - SKIPPED ON FAILURE
+    // 5. Check existence and log the true response status
     const [exists] = await gcsFile.exists();
     if (!exists) {
-      console.warn(`Skipping GCS deletion: File does not exist on GCS: ${fileName}`);
+      console.warn(`[GCS WARNING] File "${fileName}" was not found on GCS. It might have been manually deleted or named differently.`);
       return { message: "Skipping operation: File not found on GCS" };
     }
 
+    // 6. Execute actual cloud deletion
     await gcsFile.delete();
+    // console.log(`[GCS SUCCESS] Successfully deleted physical asset: "${fileName}"`);
 
     return { message: "File deleted successfully from GCS" };
   } catch (error: any) {
-    // We only log the error here. This prevents your entire request/route from crashing 
-    // if something unexpected goes wrong (like network issues with Google Cloud)
-    console.error("GCS File deletion failed entirely:", error);
+    // console.error("[GCS CRITICAL ERROR] File deletion failed entirely:", error);
     return { message: "Skipping operation: Internal error occurred during deletion" };
   }
 };
@@ -116,5 +181,6 @@ const DeleteDocumentFromGCS = async (fileUrl: string) => {
 
 export const UploadDocumentService = {
   UploadDocumentToGCS,
-  DeleteDocumentFromGCS
+  DeleteDocumentFromGCS,
+  UploadBufferToGCS
 };
