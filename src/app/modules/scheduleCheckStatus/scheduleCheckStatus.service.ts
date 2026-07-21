@@ -1316,25 +1316,46 @@ const getSpotCheckComplianceList = async (companyId: string) => {
 
 const getSupervisionComplianceList = async (companyId: string) => {
   const thresholdDate = await getSettingsAndThreshold(companyId, "supervision");
-  const leaverIds = await getLeaverIds(companyId); // <--- Added
+  const leaverIds = await getLeaverIds(companyId);
 
   const compliantIds = await Supervision.distinct("employeeId", {
     scheduledDate: { $gt: thresholdDate },
+    isClosed: { $ne: true },
   });
 
   const nonCompliantUsers = await User.find({
     company: companyId,
     role: "employee",
-    _id: { $nin: [...compliantIds, ...leaverIds] }, // <--- Added leaverIds
+    _id: { $nin: [...compliantIds, ...leaverIds] },
   })
     .select("firstName lastName email designationId departmentId avatar")
     .populate("departmentId designationId");
 
+  const nonCompliantIds = nonCompliantUsers.map((u) => u._id);
+
+  // Exclude users whose ALL Supervision records are closed
+  const userHasAnyRecords = await Supervision.distinct("employeeId", {
+    employeeId: { $in: nonCompliantIds },
+  });
+  const userHasOpenRecords = await Supervision.distinct("employeeId", {
+    employeeId: { $in: nonCompliantIds },
+    isClosed: { $ne: true },
+  });
+  const onlyClosedIds = new Set(
+    userHasAnyRecords
+      .filter((id) => !userHasOpenRecords.some((oid) => oid.equals(id)))
+      .map((id) => id.toString()),
+  );
+  const filteredUsers = nonCompliantUsers.filter(
+    (u) => !onlyClosedIds.has(u._id.toString()),
+  );
+
   const expiringDocs = await Supervision.find({
-    employeeId: { $in: nonCompliantUsers.map((u) => u._id) },
+    employeeId: { $in: filteredUsers.map((u) => u._id) },
+    isClosed: { $ne: true },
   });
 
-  return nonCompliantUsers.map((user) => {
+  return filteredUsers.map((user) => {
     const doc = expiringDocs.find(
       (d) => d.employeeId.toString() === user._id.toString(),
     );
@@ -1440,25 +1461,46 @@ const getDisciplinaryComplianceList = async (companyId: string) => {
 
 const getQaComplianceList = async (companyId: string) => {
   const thresholdDate = await getSettingsAndThreshold(companyId, "qa");
-  const leaverIds = await getLeaverIds(companyId); // <--- Added
+  const leaverIds = await getLeaverIds(companyId);
 
   const compliantIds = await QACheck.distinct("employeeId", {
     scheduledDate: { $gt: thresholdDate },
+    isClosed: { $ne: true },
   });
 
   const nonCompliantUsers = await User.find({
     company: companyId,
     role: "employee",
-    _id: { $nin: [...compliantIds, ...leaverIds] }, // <--- Added leaverIds
+    _id: { $nin: [...compliantIds, ...leaverIds] },
   })
     .select("firstName lastName email designationId departmentId avatar")
     .populate("departmentId designationId");
 
+  const nonCompliantIds = nonCompliantUsers.map((u) => u._id);
+
+  // Exclude users whose ALL QA Check records are closed
+  const userHasAnyRecords = await QACheck.distinct("employeeId", {
+    employeeId: { $in: nonCompliantIds },
+  });
+  const userHasOpenRecords = await QACheck.distinct("employeeId", {
+    employeeId: { $in: nonCompliantIds },
+    isClosed: { $ne: true },
+  });
+  const onlyClosedIds = new Set(
+    userHasAnyRecords
+      .filter((id) => !userHasOpenRecords.some((oid) => oid.equals(id)))
+      .map((id) => id.toString()),
+  );
+  const filteredUsers = nonCompliantUsers.filter(
+    (u) => !onlyClosedIds.has(u._id.toString()),
+  );
+
   const qaDocs = await QACheck.find({
-    employeeId: { $in: nonCompliantUsers.map((u) => u._id) },
+    employeeId: { $in: filteredUsers.map((u) => u._id) },
+    isClosed: { $ne: true },
   });
 
-  return nonCompliantUsers.map((user) => {
+  return filteredUsers.map((user) => {
     const doc = qaDocs.find(
       (d) => d.employeeId.toString() === user._id.toString(),
     );
@@ -1640,10 +1682,12 @@ const getCompanyComplianceStats = async (companyId: string) => {
     Supervision.distinct("employeeId", {
       employeeId: { $in: employeeIds },
       scheduledDate: { $gt: getSafeThreshold(intervals.supervision) },
+      isClosed: { $ne: true },
     }),
     QACheck.distinct("employeeId", {
       employeeId: { $in: employeeIds },
       scheduledDate: { $gt: getSafeThreshold(intervals.qa) },
+      isClosed: { $ne: true },
     }),
     Induction.distinct("employeeId", {
       employeeId: { $in: employeeIds },
@@ -1718,6 +1762,29 @@ const getCompanyComplianceStats = async (companyId: string) => {
     }
   });
 
+  // Exclude employees whose ALL Supervision/QA records are closed
+  const allSupervisionEmp = await Supervision.distinct("employeeId", {
+    employeeId: { $in: employeeIds },
+  });
+  const openSupervisionEmp = await Supervision.distinct("employeeId", {
+    employeeId: { $in: employeeIds },
+    isClosed: { $ne: true },
+  });
+  const onlyClosedSupervisionCount = allSupervisionEmp.filter(
+    (id) => !openSupervisionEmp.some((oid) => oid.equals(id)),
+  ).length;
+
+  const allQAEmp = await QACheck.distinct("employeeId", {
+    employeeId: { $in: employeeIds },
+  });
+  const openQAEmp = await QACheck.distinct("employeeId", {
+    employeeId: { $in: employeeIds },
+    isClosed: { $ne: true },
+  });
+  const onlyClosedQACount = allQAEmp.filter(
+    (id) => !openQAEmp.some((oid) => oid.equals(id)),
+  ).length;
+
   return {
     passport: rtwRequiredEmployeeIds.length - compliantPassportIds.length,
     visa: rtwRequiredEmployeeIds.length - compliantVisaIds.length,
@@ -1726,9 +1793,9 @@ const getCompanyComplianceStats = async (companyId: string) => {
     dbs: totalEmployees - compliantDbsIds.length,
     appraisal: totalEmployees - compliantAppraisalIds.length,
     spot: totalEmployees - compliantSpotCheckIds.length,
-    supervision: totalEmployees - compliantSupervisionIds.length,
+    supervision: Math.max(0, totalEmployees - compliantSupervisionIds.length - onlyClosedSupervisionCount),
     induction: totalEmployees - compliantInductionIds.length,
-    qa: totalEmployees - compliantQaIds.length,
+    qa: Math.max(0, totalEmployees - compliantQaIds.length - onlyClosedQACount),
     disciplinary: activeDisciplinaryIssues,
     training: nonCompliantTrainingIds.length,
     employeeDocument: employeeDocumentNonCompliantCount, 

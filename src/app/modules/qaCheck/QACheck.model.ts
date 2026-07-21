@@ -10,6 +10,19 @@ const LogEntrySchema = new Schema<TLogEntry>(
     updatedBy: { type: Schema.Types.ObjectId, ref: "User" },
     document: [{ type: String }],
     note: { type: String },
+    scheduledDate: { 
+      type: Date, 
+      
+    },
+     completionDate: { 
+      type: Date 
+    },
+    action: { 
+      type: String, 
+      enum: ['update', 'close', 'reopen', 'create'] 
+    },
+    previousStatus: { type: Boolean },
+    newStatus: { type: Boolean },
   }
 );
 
@@ -32,6 +45,11 @@ const QACheckSchema = new Schema<TQACheck>(
     
     completionDate: { 
       type: Date 
+    },
+
+    isClosed:{
+      type:Boolean,
+      default:false
     },
 
     logs: [LogEntrySchema],

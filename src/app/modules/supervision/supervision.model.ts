@@ -8,6 +8,11 @@ const LogEntrySchema = new Schema<TLogEntry>({
   updatedBy: { type: Schema.Types.ObjectId, ref: "User", required: true },
   document: [{ type: String }],
   note: { type: String },
+  scheduledDate: { type: Date },
+  completionDate: { type: Date },
+  action: { type: String, enum: ['update', 'close', 'reopen', 'create'] },
+  previousStatus: { type: Boolean },
+  newStatus: { type: Boolean },
 });
 
 const SupervisionSchema = new Schema<TSupervision>(
@@ -30,7 +35,10 @@ const SupervisionSchema = new Schema<TSupervision>(
     sessionNote: {
       type: String,
     },
-
+isClosed:{
+      type:Boolean,
+      default:false
+    },
     logs: [LogEntrySchema],
   },
   { timestamps: true }, // Handles createdAt and updatedAt automatically
