@@ -12,6 +12,11 @@ router.get(
 AttendanceControllers.getAllAttendance
 );
 router.get(
+  "/unschedule-attendance",
+//   auth("admin", "company", "creator", "user", "director"),
+AttendanceControllers.getUnscheduledAttendance
+);
+router.get(
   "/employee-status",
   AttendanceControllers.getCompanyEmployeesLatestAttendance
 );

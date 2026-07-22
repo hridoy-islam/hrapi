@@ -193,6 +193,443 @@ const getAttendanceFromDB = async (query: Record<string, unknown>) => {
   };
 };
 
+
+
+const getUnscheduledAttendanceFromDB = async (query: Record<string, unknown>) => {
+  const {
+    month,
+    year,
+    fromDate,
+    toDate,
+    designationId,
+    departmentId,
+    companyId,
+    userId,
+    page,
+    limit,
+    sort,
+    fields,
+    searchTerm,
+    isApproved,
+    ...filters
+  } = query;
+
+  // =========================================================
+  // 1. Prepare Filters for List (User Relationships)
+  // =========================================================
+  if (companyId) {
+    filters.companyId = new Types.ObjectId(companyId as string);
+  }
+
+  if (isApproved !== undefined) {
+    const isApprovedBool = isApproved === "true" || isApproved === true;
+    if (isApprovedBool) {
+      filters.isApproved = true;
+    } else {
+      filters.isApproved = { $ne: true };
+    }
+  }
+
+  if (filters.userType !== "visitor" && filters.userType !== "service_user") {
+    let listTargetUserIds: Types.ObjectId[] = [];
+    const listUserFilter: Record<string, unknown> = {};
+
+    if (companyId)
+      listUserFilter.company = new Types.ObjectId(companyId as string);
+    if (designationId)
+      listUserFilter.designationId = new Types.ObjectId(designationId as string);
+    if (departmentId)
+      listUserFilter.departmentId = new Types.ObjectId(departmentId as string);
+    if (userId) listUserFilter._id = new Types.ObjectId(userId as string);
+
+    if (companyId || designationId || userId || departmentId) {
+      const filteredUsers = await User.find(listUserFilter).select("_id");
+
+      if (filteredUsers.length === 0) {
+        return {
+          meta: { page: 1, limit: 0, total: 0, totalPage: 1 },
+          result: [],
+        };
+      }
+      listTargetUserIds = filteredUsers.map((u) => u._id);
+      filters.userId = { $in: listTargetUserIds };
+    }
+
+    // Note: unlike getAttendanceFromDB, we deliberately do NOT filter by
+    // departmentId -> Rota -> rotaId here, since these records by
+    // definition have no rotaId at all (that's the whole point of this
+    // endpoint). departmentId filtering for these records happens via
+    // the user's own departmentId (already applied above through
+    // listUserFilter), not via a rota lookup.
+  }
+
+  // =========================================================
+  // 2. Build Query & Apply Filters (NO PAGINATION YET)
+  // =========================================================
+  const isUnlimited = limit === "all" || !limit;
+  const pageNumber = Number(page || 1);
+  const limitNumber = isUnlimited ? 0 : Number(limit);
+
+  const queryBuilderParams = {
+    ...filters,
+    searchTerm,
+    page: isUnlimited ? 1 : pageNumber,
+    limit: limitNumber,
+    sort,
+    fields,
+  };
+
+  const attendanceQuery = new QueryBuilder(
+    Attendance.find({
+      // ✅ Core condition for this service: only attendance with no rotaId,
+      // whether the field is missing entirely or explicitly null.
+      $or: [{ rotaId: { $exists: false } }, { rotaId: null }],
+    })
+      .populate({
+        path: "userId",
+        select: "name firstName lastName email phone designationId departmentId employeeId",
+        populate: [
+          { path: "designationId", select: "title" },
+          { path: "departmentId", select: "departmentName" },
+        ],
+      })
+      .populate({
+        path: "serviceUserId",
+        select: "name room",
+      }),
+    queryBuilderParams,
+  )
+    .search(["clockInDate", "visitorName"])
+    .filter(queryBuilderParams)
+    .sort()
+    .fields();
+
+  // =========================================================
+  // 3. Handle Date Filters (UPDATED FOR ISO STRINGS)
+  // =========================================================
+  if (month && year) {
+    // Force the boundaries to cover the entire start and end days
+    const startString = moment(`${year}-${month}-01`, "YYYY-MM-DD")
+      .startOf("month")
+      .format("YYYY-MM-DDTHH:mm:ss.SSS[Z]");
+    const endOfMonthString = moment(`${year}-${month}-01`, "YYYY-MM-DD")
+      .endOf("month")
+      .format("YYYY-MM-DDTHH:mm:ss.SSS[Z]");
+
+    attendanceQuery.modelQuery
+      .where("clockIn")
+      .gte(startString as any)
+      .lte(endOfMonthString as any);
+  } else if (fromDate && toDate) {
+    // Append time to properly encapsulate the full date range
+    const startISO = `${fromDate}T00:00:00.000Z`;
+    const endISO = `${toDate}T23:59:59.999Z`;
+
+    attendanceQuery.modelQuery
+      .where("clockIn")
+      .gte(startISO as any)
+      .lte(endISO as any);
+  }
+
+  // =========================================================
+  // 4. Calculate True Total Count
+  // =========================================================
+  const currentFilters = attendanceQuery.modelQuery.getFilter();
+  const total = await Attendance.countDocuments(currentFilters);
+
+  // =========================================================
+  // 5. Apply Pagination and Execute
+  // =========================================================
+  if (!isUnlimited) {
+    attendanceQuery.paginate();
+  }
+
+  const result = await attendanceQuery.modelQuery;
+
+  return {
+    meta: {
+      page: pageNumber,
+      limit: isUnlimited ? total : limitNumber,
+      total: total,
+      totalPage: isUnlimited ? 1 : Math.ceil(total / (limitNumber || 1)),
+    },
+    result,
+  };
+};
+
+// const getUnscheduledAttendanceFromDB = async (query: Record<string, unknown>) => {
+//   const {
+//     month,
+//     year,
+//     fromDate,
+//     toDate,
+//     designationId,
+//     departmentId,
+//     companyId,
+//     userId,
+//     page,
+//     limit,
+//     sort,
+//     fields,
+//     searchTerm,
+//     isApproved,
+//     ...filters
+//   } = query;
+
+//   // =========================================================
+//   // 1. Prepare Filters for List (User Relationships)
+//   // =========================================================
+//   if (companyId) {
+//     filters.companyId = new Types.ObjectId(companyId as string);
+//   }
+
+//   if (isApproved !== undefined) {
+//     const isApprovedBool = isApproved === "true" || isApproved === true;
+//     if (isApprovedBool) {
+//       filters.isApproved = true;
+//     } else {
+//       filters.isApproved = { $ne: true };
+//     }
+//   }
+
+//   if (filters.userType !== "visitor" && filters.userType !== "service_user") {
+//     let listTargetUserIds: Types.ObjectId[] = [];
+//     const listUserFilter: Record<string, unknown> = {};
+
+//     if (companyId)
+//       listUserFilter.company = new Types.ObjectId(companyId as string);
+//     if (designationId)
+//       listUserFilter.designationId = new Types.ObjectId(designationId as string);
+//     if (departmentId)
+//       listUserFilter.departmentId = new Types.ObjectId(departmentId as string);
+//     if (userId) listUserFilter._id = new Types.ObjectId(userId as string);
+
+//     if (companyId || designationId || userId || departmentId) {
+//       const filteredUsers = await User.find(listUserFilter).select("_id");
+
+//       if (filteredUsers.length === 0) {
+//         return {
+//           meta: { page: 1, limit: 0, total: 0, totalPage: 1 },
+//           result: [],
+//         };
+//       }
+//       listTargetUserIds = filteredUsers.map((u) => u._id);
+//       filters.userId = { $in: listTargetUserIds };
+//     }
+//   }
+
+//   // =========================================================
+//   // 2. Build Query (fetch full candidate set — NO pagination yet,
+//   //    since final total depends on the rota-overlap check below)
+//   // =========================================================
+//   const isUnlimited = limit === "all" || !limit;
+//   const pageNumber = Number(page || 1);
+//   const limitNumber = isUnlimited ? 0 : Number(limit);
+
+//   const queryBuilderParams = {
+//     ...filters,
+//     searchTerm,
+//     page: 1,
+//     limit: 0, // fetch everything at this stage; pagination applied after filtering below
+//     sort,
+//     fields,
+//   };
+
+//   const attendanceQuery = new QueryBuilder(
+//     Attendance.find({
+//       $or: [{ rotaId: { $exists: false } }, { rotaId: null }],
+//     })
+//       .populate({
+//         path: "userId",
+//         select: "name firstName lastName email phone designationId departmentId employeeId",
+//         populate: [
+//           { path: "designationId", select: "title" },
+//           { path: "departmentId", select: "departmentName" },
+//         ],
+//       })
+//       .populate({
+//         path: "serviceUserId",
+//         select: "name room",
+//       }),
+//     queryBuilderParams,
+//   )
+//     .search(["clockInDate", "visitorName"])
+//     .filter(queryBuilderParams)
+//     .sort()
+//     .fields();
+
+//   // =========================================================
+//   // 3. Handle Date Filters (UPDATED FOR ISO STRINGS)
+//   // =========================================================
+//   let rotaDateGte: string | undefined;
+//   let rotaDateLte: string | undefined;
+
+//   if (month && year) {
+//     const startString = moment(`${year}-${month}-01`, "YYYY-MM-DD")
+//       .startOf("month")
+//       .format("YYYY-MM-DDTHH:mm:ss.SSS[Z]");
+//     const endOfMonthString = moment(`${year}-${month}-01`, "YYYY-MM-DD")
+//       .endOf("month")
+//       .format("YYYY-MM-DDTHH:mm:ss.SSS[Z]");
+
+//     attendanceQuery.modelQuery
+//       .where("clockIn")
+//       .gte(startString as any)
+//       .lte(endOfMonthString as any);
+
+//     // Same window, but as plain "YYYY-MM-DD" for matching Rota.startDate below
+//     rotaDateGte = moment(`${year}-${month}-01`, "YYYY-MM-DD").startOf("month").format("YYYY-MM-DD");
+//     rotaDateLte = moment(`${year}-${month}-01`, "YYYY-MM-DD").endOf("month").format("YYYY-MM-DD");
+//   } else if (fromDate && toDate) {
+//     const startISO = `${fromDate}T00:00:00.000Z`;
+//     const endISO = `${toDate}T23:59:59.999Z`;
+
+//     attendanceQuery.modelQuery
+//       .where("clockIn")
+//       .gte(startISO as any)
+//       .lte(endISO as any);
+
+//     rotaDateGte = fromDate as string;
+//     rotaDateLte = toDate as string;
+//   }
+
+//   // =========================================================
+//   // 4. Fetch all unscheduled candidates (unpaginated)
+//   // =========================================================
+//   const allCandidates = await attendanceQuery.modelQuery;
+
+//   if (allCandidates.length === 0) {
+//     return {
+//       meta: { page: 1, limit: 0, total: 0, totalPage: 1 },
+//       result: [],
+//     };
+//   }
+
+//   // =========================================================
+//   // 5. Check each candidate's clock-in time against existing rotas
+//   //    for that same employee — if a rota window covers the
+//   //    clock-in time, it's not "unscheduled," it's just missing
+//   //    the rotaId link, so exclude it from this result set.
+//   // =========================================================
+
+//   // Combine "YYYY-MM-DD" + "HH:mm" into a Date via Date.UTC (server-timezone independent)
+//   const combineDateTime = (dateStr?: string, timeStr?: string): Date | null => {
+//     if (!dateStr || !timeStr) return null;
+
+//     const dateMatch = /^(\d{4})-(\d{2})-(\d{2})/.exec(dateStr.trim());
+//     if (!dateMatch) return null;
+
+//     const timeMatch = /^(\d{1,2}):(\d{2})/.exec(timeStr.trim());
+//     if (!timeMatch) return null;
+
+//     const [, year_, month_, day_] = dateMatch;
+//     const hours = parseInt(timeMatch[1], 10);
+//     const minutes = parseInt(timeMatch[2], 10);
+//     if (isNaN(hours) || isNaN(minutes)) return null;
+
+//     return new Date(Date.UTC(+year_, +month_ - 1, +day_, hours, minutes, 0, 0));
+//   };
+
+//   // Pull "YYYY-MM-DD" and "HH:mm" straight off a full ISO datetime string
+//   const splitIsoDateTime = (iso?: string): { date: string; time: string } | null => {
+//     if (!iso) return null;
+//     const match = /^(\d{4}-\d{2}-\d{2})T(\d{2}):(\d{2})/.exec(iso.trim());
+//     if (!match) return null;
+//     return { date: match[1], time: `${match[2]}:${match[3]}` };
+//   };
+
+//   const parseAttendanceDateTime = (a: any): Date | null => {
+//     const parts = splitIsoDateTime(a.clockIn || a.clockInDate);
+//     if (!parts) return null;
+//     return combineDateTime(parts.date, parts.time);
+//   };
+
+//   // Employees present among the candidates, so we only fetch relevant rotas
+//   const candidateEmployeeIds = [
+//     ...new Set(
+//       allCandidates
+//         .filter((a: any) => a.userId)
+//         .map((a: any) => (a.userId._id ? a.userId._id.toString() : a.userId.toString())),
+//     ),
+//   ];
+
+//   const rotaFilter: Record<string, any> = {
+//     employeeId: { $in: candidateEmployeeIds },
+//     status: "publish",
+//   };
+//   if (companyId) {
+//     rotaFilter.companyId = new Types.ObjectId(companyId as string);
+//   }
+//   if (rotaDateGte || rotaDateLte) {
+//     rotaFilter.startDate = {};
+//     if (rotaDateGte) rotaFilter.startDate.$gte = rotaDateGte;
+//     if (rotaDateLte) rotaFilter.startDate.$lte = rotaDateLte;
+//   }
+
+//   const candidateRotas = candidateEmployeeIds.length
+//     ? await Rota.find(rotaFilter, {
+//         employeeId: 1,
+//         startDate: 1,
+//         endDate: 1,
+//         startTime: 1,
+//         endTime: 1,
+//       }).lean()
+//     : [];
+
+//   // Pre-parse rota windows once
+//   const parsedRotas = candidateRotas
+//     .map((r: any) => {
+//       const rotaStart = combineDateTime(r.startDate, r.startTime);
+//       let rotaEnd = combineDateTime(r.endDate || r.startDate, r.endTime);
+//       if (rotaStart && rotaEnd && rotaEnd <= rotaStart) {
+//         rotaEnd = new Date(rotaEnd.getTime() + 24 * 60 * 60 * 1000);
+//       }
+//       return {
+//         empId: r.employeeId?.toString(),
+//         rotaStart,
+//         rotaEnd,
+//       };
+//     })
+//     .filter((r) => r.empId && r.rotaStart && r.rotaEnd);
+
+//   const isCoveredByExistingRota = (attendance: any): boolean => {
+//     const empId = attendance.userId?._id
+//       ? attendance.userId._id.toString()
+//       : attendance.userId?.toString();
+//     if (!empId) return false;
+
+//     const clockInDateTime = parseAttendanceDateTime(attendance);
+//     if (!clockInDateTime) return false;
+
+//     return parsedRotas.some(
+//       (r) =>
+//         r.empId === empId &&
+//         clockInDateTime >= r.rotaStart! &&
+//         clockInDateTime <= r.rotaEnd!,
+//     );
+//   };
+
+//   const trulyUnscheduled = allCandidates.filter((a: any) => !isCoveredByExistingRota(a));
+
+//   // =========================================================
+//   // 6. Apply pagination manually over the filtered list
+//   // =========================================================
+//   const total = trulyUnscheduled.length;
+//   const result = isUnlimited
+//     ? trulyUnscheduled
+//     : trulyUnscheduled.slice((pageNumber - 1) * limitNumber, pageNumber * limitNumber);
+
+//   return {
+//     meta: {
+//       page: pageNumber,
+//       limit: isUnlimited ? total : limitNumber,
+//       total: total,
+//       totalPage: isUnlimited ? 1 : Math.ceil(total / (limitNumber || 1)),
+//     },
+//     result,
+//   };
+// };
+
 const getSingleAttendanceFromDB = async (id: string) => {
   const result = await Attendance.findById(id)
     .populate({
@@ -1975,4 +2412,5 @@ export const AttendanceServices = {
   getCompanyEmployeesLatestAttendance,
   getCompanyVisitorsLatestAttendance,
   getCompanyServiceUsersLatestAttendance,
+  getUnscheduledAttendanceFromDB
 };

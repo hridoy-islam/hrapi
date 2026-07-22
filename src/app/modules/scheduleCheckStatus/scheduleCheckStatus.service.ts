@@ -1285,21 +1285,42 @@ const getSpotCheckComplianceList = async (companyId: string) => {
 
   const compliantIds = await SpotCheck.distinct("employeeId", {
     scheduledDate: { $gt: thresholdDate },
+    isClosed: { $ne: true },
   });
 
   const nonCompliantUsers = await User.find({
     company: companyId,
     role: "employee",
-    _id: { $nin: [...compliantIds, ...leaverIds] }, // <--- Added leaverIds
+    _id: { $nin: [...compliantIds, ...leaverIds] },
   })
     .select("firstName lastName email designationId departmentId avatar")
     .populate("departmentId designationId");
 
+  const nonCompliantIds = nonCompliantUsers.map((u) => u._id);
+
+  // Exclude users whose ALL SpotCheck records are closed
+  const userHasAnyRecords = await SpotCheck.distinct("employeeId", {
+    employeeId: { $in: nonCompliantIds },
+  });
+  const userHasOpenRecords = await SpotCheck.distinct("employeeId", {
+    employeeId: { $in: nonCompliantIds },
+    isClosed: { $ne: true },
+  });
+  const onlyClosedIds = new Set(
+    userHasAnyRecords
+      .filter((id) => !userHasOpenRecords.some((oid) => oid.equals(id)))
+      .map((id) => id.toString()),
+  );
+  const filteredUsers = nonCompliantUsers.filter(
+    (u) => !onlyClosedIds.has(u._id.toString()),
+  );
+
   const expiringDocs = await SpotCheck.find({
-    employeeId: { $in: nonCompliantUsers.map((u) => u._id) },
+    employeeId: { $in: filteredUsers.map((u) => u._id) },
+    isClosed: { $ne: true },
   });
 
-  return nonCompliantUsers.map((user) => {
+  return filteredUsers.map((user) => {
     const doc = expiringDocs.find(
       (d) => d.employeeId.toString() === user._id.toString(),
     );
@@ -1678,6 +1699,7 @@ const getCompanyComplianceStats = async (companyId: string) => {
     SpotCheck.distinct("employeeId", {
       employeeId: { $in: employeeIds },
       scheduledDate: { $gt: getSafeThreshold(intervals.spot) },
+      isClosed: { $ne: true },
     }),
     Supervision.distinct("employeeId", {
       employeeId: { $in: employeeIds },
@@ -1785,6 +1807,17 @@ const getCompanyComplianceStats = async (companyId: string) => {
     (id) => !openQAEmp.some((oid) => oid.equals(id)),
   ).length;
 
+  const allSpotCheckEmp = await SpotCheck.distinct("employeeId", {
+    employeeId: { $in: employeeIds },
+  });
+  const openSpotCheckEmp = await SpotCheck.distinct("employeeId", {
+    employeeId: { $in: employeeIds },
+    isClosed: { $ne: true },
+  });
+  const onlyClosedSpotCheckCount = allSpotCheckEmp.filter(
+    (id) => !openSpotCheckEmp.some((oid) => oid.equals(id)),
+  ).length;
+
   return {
     passport: rtwRequiredEmployeeIds.length - compliantPassportIds.length,
     visa: rtwRequiredEmployeeIds.length - compliantVisaIds.length,
@@ -1792,7 +1825,7 @@ const getCompanyComplianceStats = async (companyId: string) => {
     rtw: rtwRequiredEmployeeIds.length - compliantRTWIds.length,
     dbs: totalEmployees - compliantDbsIds.length,
     appraisal: totalEmployees - compliantAppraisalIds.length,
-    spot: totalEmployees - compliantSpotCheckIds.length,
+    spot: Math.max(0, totalEmployees - compliantSpotCheckIds.length - onlyClosedSpotCheckCount),
     supervision: Math.max(0, totalEmployees - compliantSupervisionIds.length - onlyClosedSupervisionCount),
     induction: totalEmployees - compliantInductionIds.length,
     qa: Math.max(0, totalEmployees - compliantQaIds.length - onlyClosedQACount),

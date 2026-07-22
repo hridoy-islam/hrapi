@@ -15,6 +15,15 @@ const getAllAttendance: RequestHandler = catchAsync(async (req, res) => {
     data: result,
   });
 });
+const getUnscheduledAttendance: RequestHandler = catchAsync(async (req, res) => {
+  const result = await AttendanceServices.getUnscheduledAttendanceFromDB(req.query);
+  sendResponse(res, {
+    statusCode: httpStatus.OK,
+    success: true,
+    message: "Unschedule Attendances retrived succesfully",
+    data: result,
+  });
+});
 
 const getSingleAttendance = catchAsync(async (req, res) => {
   const { id } = req.params;
@@ -97,6 +106,7 @@ export const AttendanceControllers = {
     updateAttendance,
     getCompanyEmployeesLatestAttendance,
     getCompanyServiceUsersLatestAttendance,
-    getCompanyVisitorsLatestAttendance
+    getCompanyVisitorsLatestAttendance,
+    getUnscheduledAttendance
 };
 
