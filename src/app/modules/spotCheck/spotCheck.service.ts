@@ -50,19 +50,25 @@ const updateSpotCheckIntoDB = async (
   };
 
   // Log scheduledDate change
-  if (updateData.scheduledDate && !areDatesEqual(updateData.scheduledDate, spotCheck.scheduledDate)) {
+  if (updateData.scheduledDate !== undefined && !areDatesEqual(updateData.scheduledDate, spotCheck.scheduledDate)) {
     const oldDate = spotCheck.scheduledDate
       ? moment(spotCheck.scheduledDate).format("DD MMM YYYY")
       : "N/A";
-    const newDate = moment(updateData.scheduledDate).format("DD MMM YYYY");
+    const newDate = updateData.scheduledDate
+      ? moment(updateData.scheduledDate).format("DD MMM YYYY")
+      : null;
 
     logsToAdd.push({
-      title: `Spot Check scheduled date updated from ${oldDate} to ${newDate}`,
+      title: newDate
+        ? spotCheck.scheduledDate
+          ? `Spot Check scheduled date updated from ${oldDate} to ${newDate}`
+          : `Spot Check Scheduled for ${newDate}`
+        : `Spot Check scheduled date removed (was ${oldDate})`,
       date: new Date(),
       updatedBy,
       document: Array.isArray(document) ? document : [],
       note: note || "",
-      scheduledDate: updateData.scheduledDate,
+      scheduledDate: updateData.scheduledDate || null,
       completionDate: spotCheck.completionDate || null,
     });
   }
@@ -117,12 +123,16 @@ const updateSpotCheckIntoDB = async (
 
   // Handle isClosed toggle
   if (updateData.isClosed !== undefined && updateData.isClosed !== spotCheck.isClosed) {
-    const schedStr = moment(spotCheck.scheduledDate).format("DD MMM YYYY");
+    const schedDate = spotCheck.scheduledDate
+      ? moment(spotCheck.scheduledDate).format("DD MMM YYYY")
+      : null;
     const now = new Date();
     const actionLabel = updateData.isClosed ? 'closed' : 'opened';
 
     logsToAdd.push({
-      title: `Spot Check for ${schedStr} was ${actionLabel} on ${moment(now).format("DD MMM YYYY")}`,
+      title: schedDate
+        ? `Spot Check for ${schedDate} was ${actionLabel} on ${moment(now).format("DD MMM YYYY")}`
+        : `Spot Check is ${actionLabel} on ${moment(now).format("DD MMM YYYY")}`,
       date: now,
       updatedBy,
       document: Array.isArray(document) ? document : [],
@@ -159,25 +169,70 @@ const createSpotCheckIntoDB = async (
 ) => {
   const { updatedBy, note, document, ...spotCheckData } = payload;
 
-  // 1. Prepare Initial Log
+  // 1. Prepare Initial Log(s)
   const scheduledDateStr = spotCheckData.scheduledDate
     ? moment(spotCheckData.scheduledDate).format("DD MMM YYYY")
-    : "Not Set";
+    : null;
 
-  const initialLog = {
-    title: `Spot Check Scheduled for ${scheduledDateStr}`,
-    date: new Date(),
-    updatedBy: updatedBy,
-    document: !document ? [] : Array.isArray(document) ? document : [document],
-    note: note || "",
-    scheduledDate: spotCheckData.scheduledDate || null,
-    completionDate: spotCheckData.completionDate || null,
-  };
+  const logsToCreate: any[] = [];
 
-  // 2. Create Record with Log
+  const todayStr = moment().format("DD MMM YYYY");
+
+  if (spotCheckData.isClosed && scheduledDateStr) {
+    logsToCreate.push({
+      title: `Spot Check Scheduled for ${scheduledDateStr}`,
+      date: new Date(),
+      updatedBy: updatedBy,
+      document: !document ? [] : Array.isArray(document) ? document : [document],
+      note: note || "",
+      scheduledDate: spotCheckData.scheduledDate,
+      completionDate: spotCheckData.completionDate || null,
+    });
+    logsToCreate.push({
+      title: `Spot Check closed on ${todayStr}`,
+      date: new Date(),
+      updatedBy: updatedBy,
+      document: !document ? [] : Array.isArray(document) ? document : [document],
+      note: note || "",
+      scheduledDate: spotCheckData.scheduledDate,
+      completionDate: spotCheckData.completionDate || null,
+    });
+  } else if (spotCheckData.isClosed) {
+    logsToCreate.push({
+      title: `Spot Check closed on ${todayStr}`,
+      date: new Date(),
+      updatedBy: updatedBy,
+      document: !document ? [] : Array.isArray(document) ? document : [document],
+      note: note || "",
+      scheduledDate: spotCheckData.scheduledDate || null,
+      completionDate: spotCheckData.completionDate || null,
+    });
+  } else if (scheduledDateStr) {
+    logsToCreate.push({
+      title: `Spot Check Scheduled for ${scheduledDateStr}`,
+      date: new Date(),
+      updatedBy: updatedBy,
+      document: !document ? [] : Array.isArray(document) ? document : [document],
+      note: note || "",
+      scheduledDate: spotCheckData.scheduledDate,
+      completionDate: spotCheckData.completionDate || null,
+    });
+  } else {
+    logsToCreate.push({
+      title: `Spot Check opened on ${todayStr}`,
+      date: new Date(),
+      updatedBy: updatedBy,
+      document: !document ? [] : Array.isArray(document) ? document : [document],
+      note: note || "",
+      scheduledDate: null,
+      completionDate: spotCheckData.completionDate || null,
+    });
+  }
+
+  // 2. Create Record with Logs
   const result = await SpotCheck.create({
     ...spotCheckData,
-    logs: [initialLog],
+    logs: logsToCreate,
     spotCheckNote: note || "",
   });
 
@@ -235,20 +290,37 @@ const updateSpotCheckLogIntoDB = async (
   if (payload.note !== undefined) log.note = payload.note;
   if (payload.date !== undefined) log.date = payload.date;
 
-  const schedStr = newScheduled || oldScheduled || "N/A";
   const dateStr = newDate || oldDate || moment(log.date).format("DD MMM YYYY");
 
   // Auto-generate title when dates change
-  if (log.action === 'close' || log.action === 'reopen') {
+  if (newCompleted !== oldCompleted) {
+    const schedDate = newScheduled || oldScheduled;
+    if (newCompleted) {
+      log.title = schedDate
+        ? `Spot Check scheduled for ${schedDate} completed on ${newCompleted}`
+        : `Spot Check completed on ${newCompleted}`;
+    } else {
+      log.title = schedDate
+        ? `Spot Check completion date removed for ${schedDate}`
+        : `Spot Check completion date removed`;
+    }
+  } else if (log.action === 'close' || log.action === 'reopen') {
     const actionLabel = log.action === 'close' ? 'closed' : 'opened';
-    if ((newScheduled && newScheduled !== oldScheduled) || (newDate && newDate !== oldDate)) {
-      log.title = `Spot Check for ${schedStr} was ${actionLabel} on ${dateStr}`;
+    const schedDate = newScheduled || oldScheduled;
+    if (newScheduled !== oldScheduled || (newDate && newDate !== oldDate)) {
+      log.title = schedDate
+        ? `Spot Check for ${schedDate} was ${actionLabel} on ${dateStr}`
+        : `Spot Check is ${actionLabel} on ${dateStr}`;
     }
   } else if (!log.action || log.action === 'update') {
-    if (newCompleted && newCompleted !== oldCompleted) {
-      log.title = `Spot Check scheduled for ${schedStr} completed on ${newCompleted}`;
-    } else if (newScheduled && newScheduled !== oldScheduled) {
-      log.title = `Spot Check scheduled date updated from ${oldScheduled || "N/A"} to ${newScheduled}`;
+    if (newScheduled !== oldScheduled) {
+      if (newScheduled) {
+        log.title = oldScheduled
+          ? `Spot Check scheduled date updated from ${oldScheduled} to ${newScheduled}`
+          : `Spot Check scheduled date set to ${newScheduled}`;
+      } else {
+        log.title = `Spot Check scheduled date removed (was ${oldScheduled || "not set"})`;
+      }
     }
   }
 

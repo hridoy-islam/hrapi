@@ -50,19 +50,25 @@ const updateQACheckIntoDB = async (
   };
 
   // Log scheduledDate change
-  if (updateData.scheduledDate && !areDatesEqual(updateData.scheduledDate, qaCheck.scheduledDate)) {
+  if (updateData.scheduledDate !== undefined && !areDatesEqual(updateData.scheduledDate, qaCheck.scheduledDate)) {
     const oldDate = qaCheck.scheduledDate
       ? moment(qaCheck.scheduledDate).format("DD MMM YYYY")
       : "N/A";
-    const newDate = moment(updateData.scheduledDate).format("DD MMM YYYY");
+    const newDate = updateData.scheduledDate
+      ? moment(updateData.scheduledDate).format("DD MMM YYYY")
+      : null;
 
     logsToAdd.push({
-      title: `QA Check scheduled date updated from ${oldDate} to ${newDate}`,
+      title: newDate
+        ? qaCheck.scheduledDate
+          ? `QA Check scheduled date updated from ${oldDate} to ${newDate}`
+          : `QA Check Scheduled for ${newDate}`
+        : `QA Check scheduled date removed (was ${oldDate})`,
       date: new Date(),
       updatedBy,
       document: Array.isArray(document) ? document : [],
       note: note || "",
-      scheduledDate: updateData.scheduledDate,
+      scheduledDate: updateData.scheduledDate || null,
       completionDate: qaCheck.completionDate || null,
     });
   }
@@ -71,8 +77,13 @@ const updateQACheckIntoDB = async (
   if (updateData.completionDate !== undefined) {
     if (updateData.completionDate) {
       // Real completion — log it and calculate next schedule date
+      const schedDateStrCompletion = qaCheck.scheduledDate
+        ? moment(qaCheck.scheduledDate).format("DD MMM YYYY")
+        : null;
       const newLogEntry = {
-        title: `QA Check scheduled for ${moment(qaCheck.scheduledDate).format("DD MMM YYYY")} completed on ${moment(updateData.completionDate).format("DD MMM YYYY")}`,
+        title: schedDateStrCompletion
+          ? `QA Check scheduled for ${schedDateStrCompletion} completed on ${moment(updateData.completionDate).format("DD MMM YYYY")}`
+          : `QA Check completed on ${moment(updateData.completionDate).format("DD MMM YYYY")}`,
         date: new Date(),
         updatedBy,
         document: Array.isArray(document) ? document : [],
@@ -119,12 +130,16 @@ const updateQACheckIntoDB = async (
 
   // Handle isClosed toggle
   if (updateData.isClosed !== undefined && updateData.isClosed !== qaCheck.isClosed) {
-    const schedStr = moment(qaCheck.scheduledDate).format("DD MMM YYYY");
+    const schedDate = qaCheck.scheduledDate
+      ? moment(qaCheck.scheduledDate).format("DD MMM YYYY")
+      : null;
     const now = new Date();
     const actionLabel = updateData.isClosed ? 'closed' : 'opened';
 
     logsToAdd.push({
-      title: `QA Check for ${schedStr} was ${actionLabel} on ${moment(now).format("DD MMM YYYY")}`,
+      title: schedDate
+        ? `QA Check for ${schedDate} was ${actionLabel} on ${moment(now).format("DD MMM YYYY")}`
+        : `QA Check is ${actionLabel} on ${moment(now).format("DD MMM YYYY")}`,
       date: now,
       updatedBy,
       document: Array.isArray(document) ? document : [],
@@ -163,21 +178,66 @@ const createQACheckIntoDB = async (
 
   const scheduledDateStr = QACheckData.scheduledDate
     ? moment(QACheckData.scheduledDate).format("DD MMM YYYY")
-    : "Not Set";
+    : null;
 
-  const initialLog = {
-    title: `QA Check scheduled for ${scheduledDateStr}`,
-    date: new Date(),
-    updatedBy: updatedBy,
-    document: Array.isArray(document) ? document : [],
-    note: note || "",
-    scheduledDate: QACheckData.scheduledDate || null,
-    completionDate: QACheckData.completionDate || null,
-  };
+  const todayStr = moment().format("DD MMM YYYY");
+
+  const logsToCreate: any[] = [];
+
+  if (QACheckData.isClosed && scheduledDateStr) {
+    logsToCreate.push({
+      title: `QA Check Scheduled for ${scheduledDateStr}`,
+      date: new Date(),
+      updatedBy: updatedBy,
+      document: Array.isArray(document) ? document : [],
+      note: note || "",
+      scheduledDate: QACheckData.scheduledDate,
+      completionDate: QACheckData.completionDate || null,
+    });
+    logsToCreate.push({
+      title: `QA Check closed on ${todayStr}`,
+      date: new Date(),
+      updatedBy: updatedBy,
+      document: Array.isArray(document) ? document : [],
+      note: note || "",
+      scheduledDate: QACheckData.scheduledDate,
+      completionDate: QACheckData.completionDate || null,
+    });
+  } else if (QACheckData.isClosed) {
+    logsToCreate.push({
+      title: `QA Check closed on ${todayStr}`,
+      date: new Date(),
+      updatedBy: updatedBy,
+      document: Array.isArray(document) ? document : [],
+      note: note || "",
+      scheduledDate: QACheckData.scheduledDate || null,
+      completionDate: QACheckData.completionDate || null,
+    });
+  } else if (scheduledDateStr) {
+    logsToCreate.push({
+      title: `QA Check Scheduled for ${scheduledDateStr}`,
+      date: new Date(),
+      updatedBy: updatedBy,
+      document: Array.isArray(document) ? document : [],
+      note: note || "",
+      scheduledDate: QACheckData.scheduledDate,
+      completionDate: QACheckData.completionDate || null,
+    });
+  } else {
+    logsToCreate.push({
+      title: `QA Check opened on ${todayStr}`,
+      date: new Date(),
+      updatedBy: updatedBy,
+      document: Array.isArray(document) ? document : [],
+      note: note || "",
+      scheduledDate: null,
+      completionDate: QACheckData.completionDate || null,
+    });
+  }
 
   const result = await QACheck.create({
     ...QACheckData,
-    logs: [initialLog],
+    logs: logsToCreate,
     QACheckNote: note || "", 
   });
 
@@ -235,20 +295,37 @@ const updateQACheckLogIntoDB = async (
   if (payload.note !== undefined) log.note = payload.note;
   if (payload.date !== undefined) log.date = payload.date;
 
-  const schedStr = newScheduled || oldScheduled || "N/A";
   const dateStr = newDate || oldDate || moment(log.date).format("DD MMM YYYY");
 
   // Auto-generate title when dates change
-  if (log.action === 'close' || log.action === 'reopen') {
+  if (newCompleted !== oldCompleted) {
+    const schedDate = newScheduled || oldScheduled;
+    if (newCompleted) {
+      log.title = schedDate
+        ? `QA Check scheduled for ${schedDate} completed on ${newCompleted}`
+        : `QA Check completed on ${newCompleted}`;
+    } else {
+      log.title = schedDate
+        ? `QA Check completion date removed for ${schedDate}`
+        : `QA Check completion date removed`;
+    }
+  } else if (log.action === 'close' || log.action === 'reopen') {
     const actionLabel = log.action === 'close' ? 'closed' : 'opened';
-    if ((newScheduled && newScheduled !== oldScheduled) || (newDate && newDate !== oldDate)) {
-      log.title = `QA Check for ${schedStr} was ${actionLabel} on ${dateStr}`;
+    const schedDate = newScheduled || oldScheduled;
+    if (newScheduled !== oldScheduled || (newDate && newDate !== oldDate)) {
+      log.title = schedDate
+        ? `QA Check for ${schedDate} was ${actionLabel} on ${dateStr}`
+        : `QA Check is ${actionLabel} on ${dateStr}`;
     }
   } else if (!log.action || log.action === 'update') {
-    if (newCompleted && newCompleted !== oldCompleted) {
-      log.title = `QA Check scheduled for ${schedStr} completed on ${newCompleted}`;
-    } else if (newScheduled && newScheduled !== oldScheduled) {
-      log.title = `QA Check scheduled date updated from ${oldScheduled || "N/A"} to ${newScheduled}`;
+    if (newScheduled !== oldScheduled) {
+      if (newScheduled) {
+        log.title = oldScheduled
+          ? `QA Check scheduled date updated from ${oldScheduled} to ${newScheduled}`
+          : `QA Check scheduled date set to ${newScheduled}`;
+      } else {
+        log.title = `QA Check scheduled date removed (was ${oldScheduled || "not set"})`;
+      }
     }
   }
 

@@ -50,19 +50,25 @@ const updateSupervisionIntoDB = async (
   };
 
   // Log scheduledDate change
-  if (updateData.scheduledDate && !areDatesEqual(updateData.scheduledDate, supervision.scheduledDate)) {
+  if (updateData.scheduledDate !== undefined && !areDatesEqual(updateData.scheduledDate, supervision.scheduledDate)) {
     const oldDate = supervision.scheduledDate
       ? moment(supervision.scheduledDate).format("DD MMM YYYY")
       : "N/A";
-    const newDate = moment(updateData.scheduledDate).format("DD MMM YYYY");
+    const newDate = updateData.scheduledDate
+      ? moment(updateData.scheduledDate).format("DD MMM YYYY")
+      : null;
 
     logsToAdd.push({
-      title: `Supervision scheduled date updated from ${oldDate} to ${newDate}`,
+      title: newDate
+        ? supervision.scheduledDate
+          ? `Supervision scheduled date updated from ${oldDate} to ${newDate}`
+          : `Supervision Scheduled for ${newDate}`
+        : `Supervision scheduled date removed (was ${oldDate})`,
       date: new Date(),
       updatedBy,
       document: Array.isArray(document) ? document : [],
       note: note || "",
-      scheduledDate: updateData.scheduledDate,
+      scheduledDate: updateData.scheduledDate || null,
       completionDate: supervision.completionDate || null,
     });
   }
@@ -71,8 +77,13 @@ const updateSupervisionIntoDB = async (
   if (updateData.completionDate !== undefined) {
     if (updateData.completionDate) {
       // Real completion — log it and calculate next schedule date
+      const schedDateStrCompletion = supervision.scheduledDate
+        ? moment(supervision.scheduledDate).format("DD MMM YYYY")
+        : null;
       const newLogEntry = {
-        title: `Supervision scheduled for ${moment(supervision.scheduledDate).format("DD MMM YYYY")} completed on ${moment(updateData.completionDate).format("DD MMM YYYY")}`,
+        title: schedDateStrCompletion
+          ? `Supervision scheduled for ${schedDateStrCompletion} completed on ${moment(updateData.completionDate).format("DD MMM YYYY")}`
+          : `Supervision completed on ${moment(updateData.completionDate).format("DD MMM YYYY")}`,
         date: new Date(),
         updatedBy,
         document: Array.isArray(document) ? document : [],
@@ -119,12 +130,16 @@ const updateSupervisionIntoDB = async (
 
   // Handle isClosed toggle
   if (updateData.isClosed !== undefined && updateData.isClosed !== supervision.isClosed) {
-    const schedStr = moment(supervision.scheduledDate).format("DD MMM YYYY");
+    const schedDate = supervision.scheduledDate
+      ? moment(supervision.scheduledDate).format("DD MMM YYYY")
+      : null;
     const now = new Date();
     const actionLabel = updateData.isClosed ? 'closed' : 'opened';
 
     logsToAdd.push({
-      title: `Supervision for ${schedStr} was ${actionLabel} on ${moment(now).format("DD MMM YYYY")}`,
+      title: schedDate
+        ? `Supervision for ${schedDate} was ${actionLabel} on ${moment(now).format("DD MMM YYYY")}`
+        : `Supervision is ${actionLabel} on ${moment(now).format("DD MMM YYYY")}`,
       date: now,
       updatedBy,
       document: Array.isArray(document) ? document : [],
@@ -162,21 +177,66 @@ const createSupervisionIntoDB = async (
 
   const scheduledDateStr = supervisionData.scheduledDate
     ? moment(supervisionData.scheduledDate).format("DD MMM YYYY")
-    : "Not Set";
+    : null;
 
-  const initialLog = {
-    title: `Supervision Scheduled for ${scheduledDateStr}`,
-    date: new Date(),
-    updatedBy: updatedBy,
-    document: Array.isArray(document) ? document : [],
-    note: note || "",
-    scheduledDate: supervisionData.scheduledDate || null,
-    completionDate: supervisionData.completionDate || null,
-  };
+  const todayStr = moment().format("DD MMM YYYY");
+
+  const logsToCreate: any[] = [];
+
+  if (supervisionData.isClosed && scheduledDateStr) {
+    logsToCreate.push({
+      title: `Supervision Scheduled for ${scheduledDateStr}`,
+      date: new Date(),
+      updatedBy: updatedBy,
+      document: Array.isArray(document) ? document : [],
+      note: note || "",
+      scheduledDate: supervisionData.scheduledDate,
+      completionDate: supervisionData.completionDate || null,
+    });
+    logsToCreate.push({
+      title: `Supervision closed on ${todayStr}`,
+      date: new Date(),
+      updatedBy: updatedBy,
+      document: Array.isArray(document) ? document : [],
+      note: note || "",
+      scheduledDate: supervisionData.scheduledDate,
+      completionDate: supervisionData.completionDate || null,
+    });
+  } else if (supervisionData.isClosed) {
+    logsToCreate.push({
+      title: `Supervision closed on ${todayStr}`,
+      date: new Date(),
+      updatedBy: updatedBy,
+      document: Array.isArray(document) ? document : [],
+      note: note || "",
+      scheduledDate: supervisionData.scheduledDate || null,
+      completionDate: supervisionData.completionDate || null,
+    });
+  } else if (scheduledDateStr) {
+    logsToCreate.push({
+      title: `Supervision Scheduled for ${scheduledDateStr}`,
+      date: new Date(),
+      updatedBy: updatedBy,
+      document: Array.isArray(document) ? document : [],
+      note: note || "",
+      scheduledDate: supervisionData.scheduledDate,
+      completionDate: supervisionData.completionDate || null,
+    });
+  } else {
+    logsToCreate.push({
+      title: `Supervision opened on ${todayStr}`,
+      date: new Date(),
+      updatedBy: updatedBy,
+      document: Array.isArray(document) ? document : [],
+      note: note || "",
+      scheduledDate: null,
+      completionDate: supervisionData.completionDate || null,
+    });
+  }
 
   const result = await Supervision.create({
     ...supervisionData,
-    logs: [initialLog],
+    logs: logsToCreate,
     sessionNote: note || "",
   });
 
@@ -233,20 +293,37 @@ const updateSupervisionLogIntoDB = async (
   if (payload.note !== undefined) log.note = payload.note;
   if (payload.date !== undefined) log.date = payload.date;
 
-  const schedStr = newScheduled || oldScheduled || "N/A";
   const dateStr = newDate || oldDate || moment(log.date).format("DD MMM YYYY");
 
   // Auto-generate title when dates change
-  if (log.action === 'close' || log.action === 'reopen') {
+  if (newCompleted !== oldCompleted) {
+    const schedDate = newScheduled || oldScheduled;
+    if (newCompleted) {
+      log.title = schedDate
+        ? `Supervision scheduled for ${schedDate} completed on ${newCompleted}`
+        : `Supervision completed on ${newCompleted}`;
+    } else {
+      log.title = schedDate
+        ? `Supervision completion date removed for ${schedDate}`
+        : `Supervision completion date removed`;
+    }
+  } else if (log.action === 'close' || log.action === 'reopen') {
     const actionLabel = log.action === 'close' ? 'closed' : 'opened';
-    if ((newScheduled && newScheduled !== oldScheduled) || (newDate && newDate !== oldDate)) {
-      log.title = `Supervision for ${schedStr} was ${actionLabel} on ${dateStr}`;
+    const schedDate = newScheduled || oldScheduled;
+    if (newScheduled !== oldScheduled || (newDate && newDate !== oldDate)) {
+      log.title = schedDate
+        ? `Supervision for ${schedDate} was ${actionLabel} on ${dateStr}`
+        : `Supervision is ${actionLabel} on ${dateStr}`;
     }
   } else if (!log.action || log.action === 'update') {
-    if (newCompleted && newCompleted !== oldCompleted) {
-      log.title = `Supervision scheduled for ${schedStr} completed on ${newCompleted}`;
-    } else if (newScheduled && newScheduled !== oldScheduled) {
-      log.title = `Supervision scheduled date updated from ${oldScheduled || "N/A"} to ${newScheduled}`;
+    if (newScheduled !== oldScheduled) {
+      if (newScheduled) {
+        log.title = oldScheduled
+          ? `Supervision scheduled date updated from ${oldScheduled} to ${newScheduled}`
+          : `Supervision scheduled date set to ${newScheduled}`;
+      } else {
+        log.title = `Supervision scheduled date removed (was ${oldScheduled || "not set"})`;
+      }
     }
   }
 
