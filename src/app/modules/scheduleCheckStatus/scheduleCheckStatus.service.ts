@@ -1457,11 +1457,12 @@ const getInductionComplianceList = async (companyId: string) => {
 
 const getDisciplinaryComplianceList = async (companyId: string) => {
   const thresholdDate = await getSettingsAndThreshold(companyId, "disciplinary");
-  const leaverIds = await getLeaverIds(companyId); // <--- Added
+  const leaverIds = await getLeaverIds(companyId);
 
   const activeIssues = await Disciplinary.find({
     issueDeadline: { $exists: true, $lte: thresholdDate },
-    employeeId: { $nin: leaverIds }, // <--- Added
+    isClosed: { $ne: true },
+    employeeId: { $nin: leaverIds },
   }).populate({
     path: "employeeId",
     match: { company: companyId, role: "employee" },
@@ -1716,7 +1717,8 @@ const getCompanyComplianceStats = async (companyId: string) => {
       inductionDate: { $exists: true },
     }),
     Disciplinary.find({
-      employeeId: { $in: employeeIds }, // already scoped to non-leavers via employeeIds
+      employeeId: { $in: employeeIds },
+      isClosed: { $ne: true },
       issueDeadline: { $exists: true, $lte: getSafeThreshold(intervals.disciplinary) },
     }).countDocuments(),
     trainingNonComplianceConditions.length > 0

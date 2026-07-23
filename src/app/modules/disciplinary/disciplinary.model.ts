@@ -7,7 +7,12 @@ const LogEntrySchema = new Schema<TLogEntry>({
   date: { type: Date, default: Date.now },
   updatedBy: { type: Schema.Types.ObjectId, ref: "User" },
   document: [{ type: String }],
-  note:{type: String}
+  note: { type: String },
+  issueDeadline: { type: Date },
+  extendDeadline: { type: Date },
+  action: { type: String, enum: ['update', 'close', 'reopen', 'create'] },
+  previousStatus: { type: Boolean },
+  newStatus: { type: Boolean },
 });
 
 const DisciplinarySchema = new Schema<TDisciplinary>(
@@ -17,14 +22,16 @@ const DisciplinarySchema = new Schema<TDisciplinary>(
       ref: "User",
       required: true,
     },
-
     issueDeadline: {
       type: Date,
     },
     extendDeadline: {
       type: Date,
     },
+    issueDocument: { type: String },
+    issueNote: { type: String },
     action: { type: String },
+    isClosed: { type: Boolean, default: false },
     logs: [LogEntrySchema],
   },
   { timestamps: true },
