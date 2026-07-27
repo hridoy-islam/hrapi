@@ -1218,21 +1218,27 @@ const getAllMissedRotaFromDB = async (query: Record<string, unknown>) => {
     return new Date(Date.UTC(+year, +month - 1, +day, hours, minutes, 0, 0));
   };
 
-  // clockIn / clockInDate are stored as full ISO datetime strings
-  // (e.g. "2026-07-22T09:36:06.938Z"). Pull the "YYYY-MM-DD" and "HH:mm"
-  // parts straight off that string — same shape as rota.startDate /
-  // rota.startTime — so both sides get built through the same
-  // combineDateTime() and compared on equal footing (literal clock time,
-  // no UTC/local conversion applied to either side).
-  const splitIsoDateTime = (iso?: string): { date: string; time: string } | null => {
+  // clockIn / clockInDate are stored as full ISO datetime strings in UTC
+  // (e.g. "2026-07-27T13:22:41.202Z"), while rota.startTime / endTime are
+  // UK LOCAL wall-clock times (e.g. "14:00"). To compare them on equal
+  // footing we convert the UTC attendance timestamp into Europe/London
+  // wall-clock date/time parts (moment.tz.setDefault above handles the
+  // BST/GMT offset automatically) before feeding both sides through the
+  // same combineDateTime().
+  const getUkDateTimeParts = (iso?: string): { date: string; time: string } | null => {
     if (!iso) return null;
-    const match = /^(\d{4}-\d{2}-\d{2})T(\d{2}):(\d{2})/.exec(iso.trim());
-    if (!match) return null;
-    return { date: match[1], time: `${match[2]}:${match[3]}` };
+
+    const m = moment(iso); // parses the UTC ISO string, displays in Europe/London
+    if (!m.isValid()) return null;
+
+    return {
+      date: m.format("YYYY-MM-DD"),
+      time: m.format("HH:mm"),
+    };
   };
 
   const parseAttendanceDateTime = (a: any): Date | null => {
-    const parts = splitIsoDateTime(a.clockIn || a.clockInDate);
+    const parts = getUkDateTimeParts(a.clockIn || a.clockInDate);
     if (!parts) return null;
     return combineDateTime(parts.date, parts.time);
   };
@@ -1256,15 +1262,13 @@ const getAllMissedRotaFromDB = async (query: Record<string, unknown>) => {
     const rotaStart = combineDateTime(rota.startDate, rota.startTime);
     if (!rotaStart) return false;
 
-   const end = combineDateTime(rota.endDate || rota.startDate, rota.endTime);
-if (!end) return false;
+    const end = combineDateTime(rota.endDate || rota.startDate, rota.endTime);
+    if (!end) return false;
 
-const rotaEnd =
-  end <= rotaStart
-    ? new Date(end.getTime() + 24 * 60 * 60 * 1000)
-    : end;
-
-    
+    const rotaEnd =
+      end <= rotaStart
+        ? new Date(end.getTime() + 24 * 60 * 60 * 1000)
+        : end;
 
     return parsedAttendances.some(
       (a) =>
