@@ -99,6 +99,23 @@ const createLeaveIntoDB = async (payload: TLeave) => {
     }
     payload.leaveDays = leaveDays;
 
+    // Keep leaveDays strictly inside the requested date range
+    const rangeStart = start.format("YYYY-MM-DD");
+    const rangeEnd = end.format("YYYY-MM-DD");
+    payload.leaveDays = payload.leaveDays.filter((day: any) => {
+      const dayStr = moment(day.leaveDate).format("YYYY-MM-DD");
+      return dayStr >= rangeStart && dayStr <= rangeEnd;
+    });
+
+    const isPaidType = payload.holidayType === "holiday";
+    if (isPaidType && payload.leaveDays.length > 0) {
+      const daySum = payload.leaveDays.reduce(
+        (acc: number, day: any) => acc + (Number(day.duration) || 0),
+        0,
+      );
+      if (daySum > 0) payload.totalHours = daySum;
+    }
+
     const finalTotalHours = payload.totalHours || 0;
     const isPaid = payload.holidayType === "holiday";
 
@@ -429,9 +446,9 @@ const generateRotaAndAttendanceForLeave = async (
 
   if (updatedLeave.holidayType === "holiday") {
     primaryShiftType = "AL";
-  } else if (updatedLeave.holidayType === "absence") {
-    primaryShiftType = "DO";
-  } else if (updatedLeave.holidayType === "sick") {
+  } else if (updatedLeave.holidayType === "absence" || updatedLeave.holidayType === "family") {
+  primaryShiftType = "DO";
+} else if (updatedLeave.holidayType === "sick") {
     primaryShiftType = "S";
   }
 
@@ -797,6 +814,30 @@ export const updateLeaveIntoDB = async (
       current.add(1, "day");
     }
     payload.leaveDays = newLeaveDays;
+  }
+
+  // Reconcile leaveDays with the effective date range: any day outside
+  // startDate/endDate must be dropped (otherwise a stale day persists in
+  // the DB and keeps counting toward totals)
+  if (payload.leaveDays && Array.isArray(payload.leaveDays) && payload.leaveDays.length > 0) {
+    const effectiveStart = payload.startDate || leave.startDate;
+    const effectiveEnd = payload.endDate || leave.endDate;
+    const rangeStart = moment(effectiveStart).format("YYYY-MM-DD");
+    const rangeEnd = moment(effectiveEnd).format("YYYY-MM-DD");
+
+    payload.leaveDays = payload.leaveDays.filter((day: any) => {
+      const dayStr = moment(day.leaveDate).format("YYYY-MM-DD");
+      return dayStr >= rangeStart && dayStr <= rangeEnd;
+    });
+
+    const isHoliday = (payload.holidayType || leave.holidayType) === "holiday";
+    if (isHoliday && payload.leaveDays.length > 0) {
+      const daySum = payload.leaveDays.reduce(
+        (acc: number, day: any) => acc + (Number(day.duration) || 0),
+        0,
+      );
+      if (daySum > 0) payload.totalHours = daySum;
+    }
   }
 
   let actionMessage = `${userName} updated the leave request`;
