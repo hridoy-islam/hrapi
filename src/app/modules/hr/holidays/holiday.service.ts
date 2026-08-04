@@ -135,8 +135,8 @@ const bucketLeaveHours = (allLeaves: any[]) => {
   };
 };
 
-const recalculateUserHoliday = async (
-  employeeId: Types.ObjectId | string,
+export const recalculateUserHoliday = async (
+  employeeId: Types.ObjectId | string | any,
   year: string
 ) => {
   const empId = employeeId.toString();
@@ -484,4 +484,5 @@ export const HolidayServices = {
   getSingleHolidayFromDB,
   updateHolidayIntoDB,
   createHolidayIntoDB,
+  recalculateUserHoliday
 };
