@@ -1285,6 +1285,28 @@ const getAllMissedRotaFromDB = async (query: Record<string, unknown>) => {
     }))
     .filter((a) => a.clockInDateTime !== null);
 
+  // ✅ FIX (bug 3): the stored rota.endDate is often left equal to
+  // rota.startDate even for overnight shifts (endTime < startTime), so the
+  // rota's displayed endDate is wrong. Derive the correct calendar endDate
+  // from the time comparison itself, so it's consistent between the
+  // time-window match below AND the rota details actually returned to the
+  // client further down.
+  const getCorrectedEndDate = (rota: any): string => {
+    const start = rota.startDate;
+    const storedEnd = rota.endDate || rota.startDate;
+
+    // Only override when the stored endDate wasn't already explicitly set to
+    // a later date (multi-day rotas keep whatever was stored) — this only
+    // kicks in for the same-day-but-overnight case.
+    if (storedEnd === start && rota.startTime && rota.endTime && rota.endTime <= rota.startTime) {
+      const d = new Date(`${start}T00:00:00.000Z`);
+      d.setUTCDate(d.getUTCDate() + 1);
+      return d.toISOString().split("T")[0];
+    }
+
+    return storedEnd;
+  };
+
   const isCoveredByAttendanceTimeWindow = (rota: any): boolean => {
     const empId = rota.employeeId?._id
       ? rota.employeeId._id.toString()
@@ -1294,13 +1316,13 @@ const getAllMissedRotaFromDB = async (query: Record<string, unknown>) => {
     const rotaStart = combineDateTime(rota.startDate, rota.startTime);
     if (!rotaStart) return false;
 
-    const end = combineDateTime(rota.endDate || rota.startDate, rota.endTime);
+    const end = combineDateTime(getCorrectedEndDate(rota), rota.endTime);
     if (!end) return false;
 
-    const rotaEnd =
-      end <= rotaStart
-        ? new Date(end.getTime() + 24 * 60 * 60 * 1000)
-        : end;
+    // getCorrectedEndDate already rolls the date forward for overnight
+    // shifts, but keep this as a safety net for any edge case it doesn't
+    // catch (e.g. missing startTime/endTime).
+    const rotaEnd = end <= rotaStart ? new Date(end.getTime() + 24 * 60 * 60 * 1000) : end;
 
     return parsedAttendances.some(
       (a) =>
@@ -1334,9 +1356,16 @@ const getAllMissedRotaFromDB = async (query: Record<string, unknown>) => {
     return true;
   });
 
+  // ✅ Return rota details with the corrected endDate so overnight shifts
+  // (endTime < startTime) show the next calendar day, not the stored value.
+  const missedRotasWithCorrectedEndDate = missedRotas.map((rota: any) => ({
+    ...rota,
+    endDate: getCorrectedEndDate(rota),
+  }));
+
   return {
-    meta: { total: missedRotas.length },
-    result: missedRotas,
+    meta: { total: missedRotasWithCorrectedEndDate.length },
+    result: missedRotasWithCorrectedEndDate,
   };
 };
 

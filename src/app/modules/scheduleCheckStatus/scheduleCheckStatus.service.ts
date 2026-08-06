@@ -1,3 +1,11 @@
+
+
+
+
+
+
+
+
 // import httpStatus from "http-status";
 // import moment from '../../utils/moment-setup';
 // import { User } from "../user/user.model";
@@ -20,6 +28,12 @@
 // import { MeetingMins } from "../meetingMins/meetingMins.model";
 // import { CompanyPolicy } from "../companyPolicy/companyPolicy.model";
 // import { HealthAndSafety } from "../healthAndSafety/healthAndSafety.model";
+// import { Leaver } from "../hr/leaver/leaver.model";
+
+// // --- Helper: Get leaver userIds for a company ---
+// const getLeaverIds = async (companyId: string) => {
+//   return Leaver.distinct("userId", { companyId });
+// };
 
 // const getSettingsAndThreshold = async (
 //   companyId: string,
@@ -47,10 +61,9 @@
 //     spot: 30,
 //     supervision: 30,
 //     disciplinary: 30,
-//     qa: 30, // ← added
+//     qa: 30,
 //   };
 
-//   // Map type to field name in ScheduleCheck
 //   const fieldMap: Record<string, keyof any> = {
 //     passport: "passportCheckDate",
 //     visa: "visaCheckDate",
@@ -75,37 +88,32 @@
 // // --- 1. Passport Compliance Service ---
 // const getPassportComplianceList = async (companyId: string) => {
 //   const thresholdDate = await getSettingsAndThreshold(companyId, "passport");
+//   const leaverIds = await getLeaverIds(companyId); // <--- Added
 
-//   // A. Find IDs of employees who are COMPLIANT (Expiry > Threshold)
 //   const compliantIds = await Passport.distinct("userId", {
 //     passportExpiryDate: { $gt: thresholdDate },
 //   });
 
-//   // B. Find Users who are NOT compliant (includes Missing AND Expiring)
 //   const nonCompliantUsers = await User.find({
 //     company: companyId,
 //     role: "employee",
 //     noRtwCheck: { $ne: true },
-//     _id: { $nin: compliantIds },
+//     _id: { $nin: [...compliantIds, ...leaverIds] }, // <--- Added leaverIds
 //   })
 //     .select("firstName lastName email designationId departmentId avatar")
-//     .populate("departmentId designationId"); // Populate to get names for frontend
+//     .populate("departmentId designationId");
 
-//   // C. Fetch the expiring documents for these users (if they exist)
 //   const expiringDocs = await Passport.find({
 //     userId: { $in: nonCompliantUsers.map((u) => u._id) },
 //   });
 
-//   // D. Merge User data with Document data (or null if missing)
 //   return nonCompliantUsers.map((user) => {
 //     const doc = expiringDocs.find(
 //       (d) => d.userId.toString() === user._id.toString(),
 //     );
 //     if (doc) {
-//       // Return document with populated user
 //       return { ...doc.toObject(), userId: user };
 //     }
-//     // Return "Missing" record structure
 //     return {
 //       userId: user,
 //       passportExpiryDate: null,
@@ -117,6 +125,7 @@
 // // --- 2. Visa Compliance Service ---
 // const getVisaComplianceList = async (companyId: string) => {
 //   const thresholdDate = await getSettingsAndThreshold(companyId, "visa");
+//   const leaverIds = await getLeaverIds(companyId); // <--- Added
 
 //   const compliantIds = await VisaCheck.distinct("employeeId", {
 //     expiryDate: { $gt: thresholdDate },
@@ -126,7 +135,7 @@
 //     company: companyId,
 //     role: "employee",
 //     noRtwCheck: { $ne: true },
-//     _id: { $nin: compliantIds },
+//     _id: { $nin: [...compliantIds, ...leaverIds] }, // <--- Added leaverIds
 //   })
 //     .select("firstName lastName email designationId departmentId avatar")
 //     .populate("departmentId designationId");
@@ -153,6 +162,7 @@
 // // --- 3. DBS Compliance Service ---
 // const getDbsComplianceList = async (companyId: string) => {
 //   const thresholdDate = await getSettingsAndThreshold(companyId, "dbs");
+//   const leaverIds = await getLeaverIds(companyId); // <--- Added
 
 //   const compliantIds = await DbsForm.distinct("userId", {
 //     expiryDate: { $gt: thresholdDate },
@@ -161,7 +171,7 @@
 //   const nonCompliantUsers = await User.find({
 //     company: companyId,
 //     role: "employee",
-//     _id: { $nin: compliantIds },
+//     _id: { $nin: [...compliantIds, ...leaverIds] }, // <--- Added leaverIds
 //   })
 //     .select("firstName lastName email designationId departmentId avatar")
 //     .populate("departmentId designationId");
@@ -188,6 +198,7 @@
 // // --- 4. Immigration Compliance Service ---
 // const getImmigrationComplianceList = async (companyId: string) => {
 //   const thresholdDate = await getSettingsAndThreshold(companyId, "immigration");
+//   const leaverIds = await getLeaverIds(companyId); // <--- Added
 
 //   const compliantIds = await ImmigrationStatus.distinct("employeeId", {
 //     nextCheckDate: { $gt: thresholdDate },
@@ -197,7 +208,7 @@
 //     company: companyId,
 //     noRtwCheck: { $ne: true },
 //     role: "employee",
-//     _id: { $nin: compliantIds },
+//     _id: { $nin: [...compliantIds, ...leaverIds] }, // <--- Added leaverIds
 //   })
 //     .select("firstName lastName email designationId departmentId avatar")
 //     .populate("departmentId designationId");
@@ -224,6 +235,7 @@
 // // --- 5. Appraisal Compliance Service ---
 // const getAppraisalComplianceList = async (companyId: string) => {
 //   const thresholdDate = await getSettingsAndThreshold(companyId, "appraisal");
+//   const leaverIds = await getLeaverIds(companyId); // <--- Added
 
 //   const compliantIds = await Appraisal.distinct("employeeId", {
 //     nextCheckDate: { $gt: thresholdDate },
@@ -232,7 +244,7 @@
 //   const nonCompliantUsers = await User.find({
 //     company: companyId,
 //     role: "employee",
-//     _id: { $nin: compliantIds },
+//     _id: { $nin: [...compliantIds, ...leaverIds] }, // <--- Added leaverIds
 //   })
 //     .select("firstName lastName email designationId departmentId avatar")
 //     .populate("departmentId designationId");
@@ -259,6 +271,7 @@
 // // --- 6. Right To Work (RTW) Compliance Service ---
 // const getRtwComplianceList = async (companyId: string) => {
 //   const thresholdDate = await getSettingsAndThreshold(companyId, "rtw");
+//   const leaverIds = await getLeaverIds(companyId); // <--- Added
 
 //   const compliantIds = await RightToWork.distinct("employeeId", {
 //     nextCheckDate: { $gt: thresholdDate },
@@ -268,7 +281,7 @@
 //     company: companyId,
 //     role: "employee",
 //     noRtwCheck: { $ne: true },
-//     _id: { $nin: compliantIds },
+//     _id: { $nin: [...compliantIds, ...leaverIds] }, // <--- Added leaverIds
 //   })
 //     .select("firstName lastName email designationId departmentId avatar")
 //     .populate("departmentId designationId");
@@ -294,27 +307,46 @@
 
 // const getSpotCheckComplianceList = async (companyId: string) => {
 //   const thresholdDate = await getSettingsAndThreshold(companyId, "spot");
+//   const leaverIds = await getLeaverIds(companyId); // <--- Added
 
-//   // A. Find IDs of employees who are SAFE (Have a schedule > Threshold)
 //   const compliantIds = await SpotCheck.distinct("employeeId", {
 //     scheduledDate: { $gt: thresholdDate },
+//     isClosed: { $ne: true },
 //   });
 
-//   // B. Find Users who are NOT compliant (includes Missing AND Due Soon/Overdue)
 //   const nonCompliantUsers = await User.find({
 //     company: companyId,
 //     role: "employee",
-//     _id: { $nin: compliantIds },
+//     _id: { $nin: [...compliantIds, ...leaverIds] },
 //   })
 //     .select("firstName lastName email designationId departmentId avatar")
 //     .populate("departmentId designationId");
 
-//   // C. Fetch documents for these users (to distinguish between Missing vs Due Soon)
+//   const nonCompliantIds = nonCompliantUsers.map((u) => u._id);
+
+//   // Exclude users whose ALL SpotCheck records are closed
+//   const userHasAnyRecords = await SpotCheck.distinct("employeeId", {
+//     employeeId: { $in: nonCompliantIds },
+//   });
+//   const userHasOpenRecords = await SpotCheck.distinct("employeeId", {
+//     employeeId: { $in: nonCompliantIds },
+//     isClosed: { $ne: true },
+//   });
+//   const onlyClosedIds = new Set(
+//     userHasAnyRecords
+//       .filter((id) => !userHasOpenRecords.some((oid) => oid.equals(id)))
+//       .map((id) => id.toString()),
+//   );
+//   const filteredUsers = nonCompliantUsers.filter(
+//     (u) => !onlyClosedIds.has(u._id.toString()),
+//   );
+
 //   const expiringDocs = await SpotCheck.find({
-//     employeeId: { $in: nonCompliantUsers.map((u) => u._id) },
+//     employeeId: { $in: filteredUsers.map((u) => u._id) },
+//     isClosed: { $ne: true },
 //   });
 
-//   return nonCompliantUsers.map((user) => {
+//   return filteredUsers.map((user) => {
 //     const doc = expiringDocs.find(
 //       (d) => d.employeeId.toString() === user._id.toString(),
 //     );
@@ -331,25 +363,46 @@
 
 // const getSupervisionComplianceList = async (companyId: string) => {
 //   const thresholdDate = await getSettingsAndThreshold(companyId, "supervision");
+//   const leaverIds = await getLeaverIds(companyId);
 
-//   // A. Find IDs of employees who are SAFE (Have a schedule > Threshold)
 //   const compliantIds = await Supervision.distinct("employeeId", {
 //     scheduledDate: { $gt: thresholdDate },
+//     isClosed: { $ne: true },
 //   });
 
 //   const nonCompliantUsers = await User.find({
 //     company: companyId,
 //     role: "employee",
-//     _id: { $nin: compliantIds },
+//     _id: { $nin: [...compliantIds, ...leaverIds] },
 //   })
 //     .select("firstName lastName email designationId departmentId avatar")
 //     .populate("departmentId designationId");
 
+//   const nonCompliantIds = nonCompliantUsers.map((u) => u._id);
+
+//   // Exclude users whose ALL Supervision records are closed
+//   const userHasAnyRecords = await Supervision.distinct("employeeId", {
+//     employeeId: { $in: nonCompliantIds },
+//   });
+//   const userHasOpenRecords = await Supervision.distinct("employeeId", {
+//     employeeId: { $in: nonCompliantIds },
+//     isClosed: { $ne: true },
+//   });
+//   const onlyClosedIds = new Set(
+//     userHasAnyRecords
+//       .filter((id) => !userHasOpenRecords.some((oid) => oid.equals(id)))
+//       .map((id) => id.toString()),
+//   );
+//   const filteredUsers = nonCompliantUsers.filter(
+//     (u) => !onlyClosedIds.has(u._id.toString()),
+//   );
+
 //   const expiringDocs = await Supervision.find({
-//     employeeId: { $in: nonCompliantUsers.map((u) => u._id) },
+//     employeeId: { $in: filteredUsers.map((u) => u._id) },
+//     isClosed: { $ne: true },
 //   });
 
-//   return nonCompliantUsers.map((user) => {
+//   return filteredUsers.map((user) => {
 //     const doc = expiringDocs.find(
 //       (d) => d.employeeId.toString() === user._id.toString(),
 //     );
@@ -365,14 +418,14 @@
 // };
 
 // const getTrainingComplianceList = async (companyId: string) => {
-//   // 1. Fetch all trainings for this company to get individual reminder settings
+//   const leaverIds = await getLeaverIds(companyId); // <--- Added
+
 //   const companyTrainings = await Training.find({ companyId }).select(
 //     "_id name reminderBeforeDays",
 //   );
 
 //   if (companyTrainings.length === 0) return [];
 
-//   // 2. Build the OR condition for "Bad" trainings
 //   const trainingNonComplianceConditions = companyTrainings.map((t) => ({
 //     trainingId: t._id,
 //     expireDate: {
@@ -382,9 +435,9 @@
 //     },
 //   }));
 
-//   // 3. Find EmployeeTraining records matching any of these "Bad" conditions
 //   const expiringDocs = await EmployeeTraining.find({
 //     $or: trainingNonComplianceConditions,
+//     employeeId: { $nin: leaverIds }, // <--- Added
 //   })
 //     .populate({
 //       path: "employeeId",
@@ -392,7 +445,7 @@
 //       select: "firstName lastName email designationId departmentId avatar",
 //       populate: { path: "departmentId designationId" },
 //     })
-//     .populate("trainingId", "name"); // Also populate training details
+//     .populate("trainingId", "name");
 
 //   const validDocs = expiringDocs.filter((doc) => doc.employeeId);
 
@@ -407,21 +460,20 @@
 // };
 
 // const getInductionComplianceList = async (companyId: string) => {
-//   // A. Find Employees who have an induction date set
+//   const leaverIds = await getLeaverIds(companyId); // <--- Added
+
 //   const compliantIds = await Induction.distinct("employeeId", {
 //     inductionDate: { $exists: true },
 //   });
 
-//   // B. Find Users who are Missing induction (NOT in compliant list)
 //   const missingInductionUsers = await User.find({
 //     company: companyId,
 //     role: "employee",
-//     _id: { $nin: compliantIds },
+//     _id: { $nin: [...compliantIds, ...leaverIds] }, // <--- Added leaverIds
 //   })
 //     .select("firstName lastName email designationId departmentId avatar")
 //     .populate("departmentId designationId");
 
-//   // Return standard format (missing status)
 //   return missingInductionUsers.map((user) => ({
 //     employeeId: user,
 //     inductionDate: null,
@@ -430,13 +482,13 @@
 // };
 
 // const getDisciplinaryComplianceList = async (companyId: string) => {
-//   const thresholdDate = await getSettingsAndThreshold(
-//     companyId,
-//     "disciplinary",
-//   );
+//   const thresholdDate = await getSettingsAndThreshold(companyId, "disciplinary");
+//   const leaverIds = await getLeaverIds(companyId);
 
 //   const activeIssues = await Disciplinary.find({
 //     issueDeadline: { $exists: true, $lte: thresholdDate },
+//     isClosed: { $ne: true },
+//     employeeId: { $nin: leaverIds },
 //   }).populate({
 //     path: "employeeId",
 //     match: { company: companyId, role: "employee" },
@@ -444,11 +496,9 @@
 //     populate: { path: "departmentId designationId" },
 //   });
 
-//   // Filter out any where user didn't match company
 //   const validDocs = activeIssues.filter((doc) => doc.employeeId);
 
 //   return validDocs.map((doc) => {
-//     // Determine specific status for frontend details if needed
 //     const isOverdue = moment(doc.issueDeadline).isBefore(new Date());
 //     return {
 //       ...doc.toObject(),
@@ -459,25 +509,46 @@
 
 // const getQaComplianceList = async (companyId: string) => {
 //   const thresholdDate = await getSettingsAndThreshold(companyId, "qa");
+//   const leaverIds = await getLeaverIds(companyId);
 
 //   const compliantIds = await QACheck.distinct("employeeId", {
 //     scheduledDate: { $gt: thresholdDate },
+//     isClosed: { $ne: true },
 //   });
 
 //   const nonCompliantUsers = await User.find({
 //     company: companyId,
 //     role: "employee",
-//     _id: { $nin: compliantIds },
+//     _id: { $nin: [...compliantIds, ...leaverIds] },
 //   })
 //     .select("firstName lastName email designationId departmentId avatar")
 //     .populate("departmentId designationId");
 
-//   // C. Fetch existing QA records for these users
+//   const nonCompliantIds = nonCompliantUsers.map((u) => u._id);
+
+//   // Exclude users whose ALL QA Check records are closed
+//   const userHasAnyRecords = await QACheck.distinct("employeeId", {
+//     employeeId: { $in: nonCompliantIds },
+//   });
+//   const userHasOpenRecords = await QACheck.distinct("employeeId", {
+//     employeeId: { $in: nonCompliantIds },
+//     isClosed: { $ne: true },
+//   });
+//   const onlyClosedIds = new Set(
+//     userHasAnyRecords
+//       .filter((id) => !userHasOpenRecords.some((oid) => oid.equals(id)))
+//       .map((id) => id.toString()),
+//   );
+//   const filteredUsers = nonCompliantUsers.filter(
+//     (u) => !onlyClosedIds.has(u._id.toString()),
+//   );
+
 //   const qaDocs = await QACheck.find({
-//     employeeId: { $in: nonCompliantUsers.map((u) => u._id) },
+//     employeeId: { $in: filteredUsers.map((u) => u._id) },
+//     isClosed: { $ne: true },
 //   });
 
-//   return nonCompliantUsers.map((user) => {
+//   return filteredUsers.map((user) => {
 //     const doc = qaDocs.find(
 //       (d) => d.employeeId.toString() === user._id.toString(),
 //     );
@@ -492,28 +563,25 @@
 //   });
 // };
 
-
-
-
 // const getEmployeeDocumentComplianceList = async (companyId: string) => {
-//   // 1. Fetch all employees in the company
+//   const leaverIds = await getLeaverIds(companyId); // <--- Added
+
 //   const employees = await User.find({
 //     company: companyId,
 //     role: "employee",
+//     _id: { $nin: leaverIds }, 
 //   })
-//     .select("firstName lastName email designationId departmentId avatar isBritish") // <--- Added isBritish
+//     .select("firstName lastName email designationId departmentId avatar isBritish")
 //     .populate("departmentId designationId");
 
 //   if (employees.length === 0) return [];
 
 //   const employeeIds = employees.map((e) => e._id);
 
-//   // 2. Fetch ALL documents for these employees in one go (Performance optimization)
 //   const allDocs = await EmployeeDocument.find({
 //     employeeId: { $in: employeeIds },
 //   }).select("employeeId documentTitle");
 
-//   // 3. Iterate through employees and check their documents against the list
 //   const nonCompliantList = employees
 //     .map((user) => {
 //       const userDocs = allDocs.filter(
@@ -532,12 +600,10 @@
 //         );
 //       } 
 
-//       // Check for missing mandatory documents against dynamically generated list
 //       const missing = requiredForThisUser.filter(
 //         (req) => !uploadedTitles.includes(req.toLowerCase()),
 //       );
 
-//       // Check Reference Logic (Min 2)
 //       const refCount = uploadedTitles.filter(
 //         (t) => t.includes("reference") && !t.includes("dbs"),
 //       ).length;
@@ -562,205 +628,25 @@
 //   return nonCompliantList;
 // };
 
-// // const getCompanyComplianceStats = async (companyId: string) => {
-// //   const employees = await User.find({
-// //     company: companyId,
-// //     role: "employee",
-// //   }).select("_id noRtwCheck isBritish"); 
-  
-// //   const employeeIds = employees.map((user) => user._id);
-// //   const totalEmployees = employeeIds.length;
-  
-// //   // Create restricted list of employees who actually need RTW checks
-// //   const rtwRequiredEmployeeIds = employees.filter((user) => !user.noRtwCheck).map((u) => u._id);
-
-// //   if (totalEmployees === 0) {
-// //     return {
-// //       passport: 0, rtw: 0, visa: 0, dbs: 0, immigration: 0, appraisal: 0,
-// //       spot: 0, supervision: 0, training: 0, induction: 0, disciplinary: 0, employeeDocument: 0, meeting: 0,
-// //     };
-// //   }
-
-// //   const settings = await ScheduleCheck.findOne({ companyId });
-// //   const defaults = {
-// //     passport: 30, visa: 30, dbs: 30, immigration: 30, appraisal: 30,
-// //     rtw: 30, spot: 30, supervision: 30, disciplinary: 30, qa: 30, meeting: 3,
-// //   };
-
-// //   const intervals = {
-// //     passport: settings?.passportCheckDate || defaults.passport,
-// //     visa: settings?.visaCheckDate || defaults.visa,
-// //     dbs: settings?.dbsCheckDate || defaults.dbs,
-// //     immigration: settings?.immigrationCheckDate || defaults.immigration,
-// //     appraisal: settings?.appraisalCheckDate || defaults.appraisal,
-// //     rtw: settings?.rtwCheckDate || defaults.rtw,
-// //     spot: settings?.spotCheckDate || defaults.spot,
-// //     supervision: settings?.supervisionCheckDate || defaults.supervision,
-// //     disciplinary: settings?.disciplinaryCheckDate || defaults.disciplinary,
-// //     qa: settings?.qaCheckDate || defaults.qa,
-// //     meeting: settings?.meetingCheckDate || defaults.meeting,
-// //   };
-
-// //   const getSafeThreshold = (days: number) => moment().add(days, "days").toDate();
-
-// //   // Training Conditions
-// //   const companyTrainings = await Training.find({ companyId }).select("_id reminderBeforeDays");
-// //   const trainingNonComplianceConditions = companyTrainings.map((t) => ({
-// //     trainingId: t._id,
-// //     expireDate: { $lte: moment().add(t.reminderBeforeDays || 30, "days").toDate() },
-// //   }));
-
-// //   const [
-// //     compliantPassportIds,
-// //     compliantVisaIds,
-// //     compliantImmigrationIds,  
-// //     compliantRTWIds,         
-// //     compliantDbsIds,         
-// //     compliantAppraisalIds,  
-// //     compliantSpotCheckIds,
-// //     compliantSupervisionIds,
-// //     compliantQaIds,
-// //     compliantInductionIds,
-// //     activeDisciplinaryIssues,
-// //     nonCompliantTrainingIds,
-// //     allEmployeeDocs,
-// //     meetingNonCompliantCount, // <--- Added here
-// //   ] = await Promise.all([
-// //     Passport.distinct("userId", {
-// //       userId: { $in: rtwRequiredEmployeeIds },
-// //       passportExpiryDate: { $gt: getSafeThreshold(intervals.passport) },
-// //     }),
-// //     VisaCheck.distinct("employeeId", {
-// //       employeeId: { $in: rtwRequiredEmployeeIds },
-// //       expiryDate: { $gt: getSafeThreshold(intervals.visa) },
-// //     }),
-// //     ImmigrationStatus.distinct("employeeId", {
-// //       employeeId: { $in: rtwRequiredEmployeeIds },
-// //       nextCheckDate: { $gt: getSafeThreshold(intervals.immigration) },
-// //     }),
-// //     RightToWork.distinct("employeeId", {
-// //       employeeId: { $in: rtwRequiredEmployeeIds },
-// //       nextCheckDate: { $gt: getSafeThreshold(intervals.rtw) },
-// //     }),
-
-// //     DbsForm.distinct("userId", {
-// //       userId: { $in: employeeIds },
-// //       expiryDate: { $gt: getSafeThreshold(intervals.dbs) },
-// //     }),
-// //     Appraisal.distinct("employeeId", {
-// //       employeeId: { $in: employeeIds },
-// //       nextCheckDate: { $gt: getSafeThreshold(intervals.appraisal) },
-// //     }),
-// //     SpotCheck.distinct("employeeId", {
-// //       employeeId: { $in: employeeIds },
-// //       scheduledDate: { $gt: getSafeThreshold(intervals.spot) },
-// //     }),
-// //     Supervision.distinct("employeeId", {
-// //       employeeId: { $in: employeeIds },
-// //       scheduledDate: { $gt: getSafeThreshold(intervals.supervision) },
-// //     }),
-// //     QACheck.distinct("employeeId", {
-// //       employeeId: { $in: employeeIds },
-// //       scheduledDate: { $gt: getSafeThreshold(intervals.qa) },
-// //     }),
-// //     Induction.distinct("employeeId", {
-// //       employeeId: { $in: employeeIds },
-// //       inductionDate: { $exists: true },
-// //     }),
-// //     Disciplinary.find({
-// //       employeeId: { $in: employeeIds },
-// //       issueDeadline: { $exists: true, $lte: getSafeThreshold(intervals.disciplinary) },
-// //     }).countDocuments(),
-// //     trainingNonComplianceConditions.length > 0
-// //       ? EmployeeTraining.distinct("employeeId", {
-// //           employeeId: { $in: employeeIds },
-// //           $or: trainingNonComplianceConditions,
-// //         })
-// //       : Promise.resolve([]),
-// //     EmployeeDocument.find({
-// //       employeeId: { $in: employeeIds },
-// //     }).select("employeeId documentTitle"),
-   
-// //     MeetingMins.countDocuments({
-// //       companyId: companyId,
-// //       $or: [
-// //         { nextMeetingDate: { $exists: false } },
-// //         { nextMeetingDate: null },
-// //         { nextMeetingDate: { $lte: getSafeThreshold(intervals.meeting) } }
-// //       ]
-// //     })
-// //   ]);
-
-// //   let employeeDocumentNonCompliantCount = 0;
-
-// //   employees.forEach((user) => {
-// //     const userDocs = allEmployeeDocs.filter(
-// //       (d) => d.employeeId.toString() === user._id.toString(),
-// //     );
-// //     const uploadedTitles = userDocs.map((d) =>
-// //       d.documentTitle.trim().toLowerCase(),
-// //     );
-
-// //     let requiredForThisUser = [...REQUIRED_DOCUMENTS_LIST];
-// //     if (user.noRtwCheck) {
-// //       requiredForThisUser = requiredForThisUser.filter(
-// //         (req) => !["Immigration Status", "Passport","Right to Work"].includes(req)
-// //       );
-// //     } else {
-// //       requiredForThisUser = requiredForThisUser.filter(
-// //         (req) => req !== "Ni number/Driving licence"
-// //       );
-// //     }
-
-// //     const isMissingRequired = requiredForThisUser.some(
-// //       (req) => !uploadedTitles.includes(req.toLowerCase()),
-// //     );
-
-// //     const refCount = uploadedTitles.filter(
-// //       (t) => t.includes("reference") && !t.includes("dbs"),
-// //     ).length;
-
-// //     if (isMissingRequired || refCount < MIN_REFERENCE_COUNT) {
-// //       employeeDocumentNonCompliantCount++;
-// //     }
-// //   });
-
-// //   return {
-// //     passport: rtwRequiredEmployeeIds.length - compliantPassportIds.length,
-// //     visa: rtwRequiredEmployeeIds.length - compliantVisaIds.length,
-// //     immigration: rtwRequiredEmployeeIds.length - compliantImmigrationIds.length,
-// //     rtw: rtwRequiredEmployeeIds.length - compliantRTWIds.length,
-// //     dbs: totalEmployees - compliantDbsIds.length,
-// //     appraisal: totalEmployees - compliantAppraisalIds.length,
-// //     spot: totalEmployees - compliantSpotCheckIds.length,
-// //     supervision: totalEmployees - compliantSupervisionIds.length,
-// //     induction: totalEmployees - compliantInductionIds.length,
-// //     qa: totalEmployees - compliantQaIds.length,
-// //     disciplinary: activeDisciplinaryIssues,
-// //     training: nonCompliantTrainingIds.length,
-// //     employeeDocument: employeeDocumentNonCompliantCount, 
-// //     meeting: meetingNonCompliantCount, 
-// //   };
-// // };
-
-
 // const getCompanyComplianceStats = async (companyId: string) => {
+//   const leaverIds = await getLeaverIds(companyId); // <--- Added
+
 //   const employees = await User.find({
 //     company: companyId,
 //     role: "employee",
+//     _id: { $nin: leaverIds }, // <--- Added
 //   }).select("_id noRtwCheck isBritish"); 
   
 //   const employeeIds = employees.map((user) => user._id);
 //   const totalEmployees = employeeIds.length;
   
-//   // Create restricted list of employees who actually need RTW checks
 //   const rtwRequiredEmployeeIds = employees.filter((user) => !user.noRtwCheck).map((u) => u._id);
 
 //   if (totalEmployees === 0) {
 //     return {
 //       passport: 0, rtw: 0, visa: 0, dbs: 0, immigration: 0, appraisal: 0,
 //       spot: 0, supervision: 0, training: 0, induction: 0, disciplinary: 0, employeeDocument: 0, meeting: 0,
-//       policy: 0, healthAndSafety: 0, // <--- Added here
+//       policy: 0, healthAndSafety: 0,
 //     };
 //   }
 
@@ -768,7 +654,7 @@
 //   const defaults = {
 //     passport: 30, visa: 30, dbs: 30, immigration: 30, appraisal: 30,
 //     rtw: 30, spot: 30, supervision: 30, disciplinary: 30, qa: 30, meeting: 3,
-//     policy: 30, healthAndSafety: 30, // <--- Added here
+//     policy: 30, healthAndSafety: 30,
 //   };
 
 //   const intervals = {
@@ -783,13 +669,12 @@
 //     disciplinary: settings?.disciplinaryCheckDate || defaults.disciplinary,
 //     qa: settings?.qaCheckDate || defaults.qa,
 //     meeting: settings?.meetingCheckDate || defaults.meeting,
-//     policy: settings?.policyCheckDate || defaults.policy, // <--- Added here
-//     healthAndSafety: settings?.healthAndSafetyCheckDate || defaults.healthAndSafety, // <--- Added here
+//     policy: settings?.policyCheckDate || defaults.policy,
+//     healthAndSafety: settings?.healthAndSafetyCheckDate || defaults.healthAndSafety,
 //   };
 
 //   const getSafeThreshold = (days: number) => moment().add(days, "days").toDate();
 
-//   // Training Conditions
 //   const companyTrainings = await Training.find({ companyId }).select("_id reminderBeforeDays");
 //   const trainingNonComplianceConditions = companyTrainings.map((t) => ({
 //     trainingId: t._id,
@@ -811,8 +696,8 @@
 //     nonCompliantTrainingIds,
 //     allEmployeeDocs,
 //     meetingNonCompliantCount, 
-//     policyNonCompliantCount, // <--- Added here
-//     healthAndSafetyNonCompliantCount, // <--- Added here
+//     policyNonCompliantCount,
+//     healthAndSafetyNonCompliantCount,
 //   ] = await Promise.all([
 //     Passport.distinct("userId", {
 //       userId: { $in: rtwRequiredEmployeeIds },
@@ -830,7 +715,6 @@
 //       employeeId: { $in: rtwRequiredEmployeeIds },
 //       nextCheckDate: { $gt: getSafeThreshold(intervals.rtw) },
 //     }),
-
 //     DbsForm.distinct("userId", {
 //       userId: { $in: employeeIds },
 //       expiryDate: { $gt: getSafeThreshold(intervals.dbs) },
@@ -842,14 +726,17 @@
 //     SpotCheck.distinct("employeeId", {
 //       employeeId: { $in: employeeIds },
 //       scheduledDate: { $gt: getSafeThreshold(intervals.spot) },
+//       isClosed: { $ne: true },
 //     }),
 //     Supervision.distinct("employeeId", {
 //       employeeId: { $in: employeeIds },
 //       scheduledDate: { $gt: getSafeThreshold(intervals.supervision) },
+//       isClosed: { $ne: true },
 //     }),
 //     QACheck.distinct("employeeId", {
 //       employeeId: { $in: employeeIds },
 //       scheduledDate: { $gt: getSafeThreshold(intervals.qa) },
+//       isClosed: { $ne: true },
 //     }),
 //     Induction.distinct("employeeId", {
 //       employeeId: { $in: employeeIds },
@@ -857,6 +744,7 @@
 //     }),
 //     Disciplinary.find({
 //       employeeId: { $in: employeeIds },
+//       isClosed: { $ne: true },
 //       issueDeadline: { $exists: true, $lte: getSafeThreshold(intervals.disciplinary) },
 //     }).countDocuments(),
 //     trainingNonComplianceConditions.length > 0
@@ -868,7 +756,6 @@
 //     EmployeeDocument.find({
 //       employeeId: { $in: employeeIds },
 //     }).select("employeeId documentTitle"),
-   
 //     MeetingMins.countDocuments({
 //       companyId: companyId,
 //       $or: [
@@ -877,19 +764,15 @@
 //         { nextMeetingDate: { $lte: getSafeThreshold(intervals.meeting) } }
 //       ]
 //     }),
-
 //     CompanyPolicy.countDocuments({
 //       companyId: companyId,
 //       $or: [
-   
 //         { expiryDate: { $lte: getSafeThreshold(intervals.policy) } }
 //       ]
 //     }),
-
 //     HealthAndSafety.countDocuments({
 //       companyId: companyId,
 //       $or: [
-     
 //         { expiryDate: { $lte: getSafeThreshold(intervals.healthAndSafety) } }
 //       ]
 //     })
@@ -929,6 +812,40 @@
 //     }
 //   });
 
+//   // Exclude employees whose ALL Supervision/QA records are closed
+//   const allSupervisionEmp = await Supervision.distinct("employeeId", {
+//     employeeId: { $in: employeeIds },
+//   });
+//   const openSupervisionEmp = await Supervision.distinct("employeeId", {
+//     employeeId: { $in: employeeIds },
+//     isClosed: { $ne: true },
+//   });
+//   const onlyClosedSupervisionCount = allSupervisionEmp.filter(
+//     (id) => !openSupervisionEmp.some((oid) => oid.equals(id)),
+//   ).length;
+
+//   const allQAEmp = await QACheck.distinct("employeeId", {
+//     employeeId: { $in: employeeIds },
+//   });
+//   const openQAEmp = await QACheck.distinct("employeeId", {
+//     employeeId: { $in: employeeIds },
+//     isClosed: { $ne: true },
+//   });
+//   const onlyClosedQACount = allQAEmp.filter(
+//     (id) => !openQAEmp.some((oid) => oid.equals(id)),
+//   ).length;
+
+//   const allSpotCheckEmp = await SpotCheck.distinct("employeeId", {
+//     employeeId: { $in: employeeIds },
+//   });
+//   const openSpotCheckEmp = await SpotCheck.distinct("employeeId", {
+//     employeeId: { $in: employeeIds },
+//     isClosed: { $ne: true },
+//   });
+//   const onlyClosedSpotCheckCount = allSpotCheckEmp.filter(
+//     (id) => !openSpotCheckEmp.some((oid) => oid.equals(id)),
+//   ).length;
+
 //   return {
 //     passport: rtwRequiredEmployeeIds.length - compliantPassportIds.length,
 //     visa: rtwRequiredEmployeeIds.length - compliantVisaIds.length,
@@ -936,10 +853,10 @@
 //     rtw: rtwRequiredEmployeeIds.length - compliantRTWIds.length,
 //     dbs: totalEmployees - compliantDbsIds.length,
 //     appraisal: totalEmployees - compliantAppraisalIds.length,
-//     spot: totalEmployees - compliantSpotCheckIds.length,
-//     supervision: totalEmployees - compliantSupervisionIds.length,
+//     spot: Math.max(0, totalEmployees - compliantSpotCheckIds.length - onlyClosedSpotCheckCount),
+//     supervision: Math.max(0, totalEmployees - compliantSupervisionIds.length - onlyClosedSupervisionCount),
 //     induction: totalEmployees - compliantInductionIds.length,
-//     qa: totalEmployees - compliantQaIds.length,
+//     qa: Math.max(0, totalEmployees - compliantQaIds.length - onlyClosedQACount),
 //     disciplinary: activeDisciplinaryIssues,
 //     training: nonCompliantTrainingIds.length,
 //     employeeDocument: employeeDocumentNonCompliantCount, 
@@ -947,6 +864,124 @@
 //     policy: policyNonCompliantCount, 
 //     healthAndSafety: healthAndSafetyNonCompliantCount, 
 //   };
+// };
+
+// // --- Employee Matrix: Training (module 1 of 15) ---
+// // Filter options: trainingId (optional), employeeId (optional), status
+// // status values: all | pending | in-progress | completed | expired | missing
+// const getTrainingMatrix = async (
+//   companyId: string,
+//   query: { trainingId?: string; employeeId?: string; status?: string },
+// ) => {
+//   const leaverIds = await getLeaverIds(companyId);
+
+//   const employeeFilter: any = {
+//     company: companyId,
+//     role: "employee",
+//     _id: { $nin: leaverIds },
+//   };
+//   if (query.employeeId) {
+//     employeeFilter._id = query.employeeId;
+//   }
+
+//   const employees = await User.find(employeeFilter)
+//     .select("firstName lastName email avatar designationId departmentId")
+//     .populate("departmentId designationId")
+//     .sort({ firstName: 1, lastName: 1 });
+
+//   const employeeIds = employees.map((e) => e._id);
+
+//   const recordFilter: any = { employeeId: { $in: employeeIds } };
+//   if (query.trainingId) {
+//     recordFilter.trainingId = query.trainingId;
+//   }
+
+//   const records = await EmployeeTraining.find(recordFilter)
+//     .populate("trainingId", "name description validityDays reminderBeforeDays")
+//     .sort({ assignedDate: -1, createdAt: -1 });
+
+//   const recordsByEmployee = new Map<string, any[]>();
+//   records.forEach((rec) => {
+//     const key = rec.employeeId.toString();
+//     if (!recordsByEmployee.has(key)) recordsByEmployee.set(key, []);
+//     recordsByEmployee.get(key)!.push(rec);
+//   });
+
+//   const requestedStatus = query.status || "all";
+
+//   // Matches the status logic used in the frontend training details page:
+//   //  - completed       → stored status is "completed"
+//   //  - in-progress     → optional / no expiry date / outside reminder window
+//   //  - expiring-soon   → within reminderBeforeDays before expiry
+//   //  - expired         → past the expiry date
+//   const getEffectiveStatus = (rec: any) => {
+//     if (rec.status === "completed") return "completed";
+//     if (rec.isOptional || !rec.expireDate) return "in-progress";
+
+//     const today = moment.utc().startOf("day");
+//     const expiry = moment.utc(rec.expireDate).startOf("day");
+//     const reminderDays = rec.trainingId?.reminderBeforeDays || 30;
+//     const reminderDate = moment
+//       .utc(rec.expireDate)
+//       .subtract(reminderDays, "days")
+//       .startOf("day");
+
+//     if (today.isAfter(expiry, "day")) return "expired";
+//     if (today.isSameOrAfter(reminderDate, "day")) return "expiring-soon";
+//     return "in-progress";
+//   };
+
+//   const rows: any[] = [];
+
+//   employees.forEach((user) => {
+//     const userRecords = recordsByEmployee.get(user._id.toString()) || [];
+
+//     const pushRow = (rec: any) => {
+//       const effective = getEffectiveStatus(rec);
+//       if (requestedStatus !== "all" && effective !== requestedStatus) return;
+//       rows.push({
+//         _id: rec._id,
+//         employeeId: user,
+//         trainingId: rec.trainingId,
+//         assignedDate: rec.assignedDate,
+//         expireDate: rec.expireDate,
+//         certificate: rec.certificate,
+//         isOptional: rec.isOptional,
+//         status: effective,
+//         completionHistory: rec.completionHistory || [],
+//       });
+//     };
+
+//     const pushMissingRow = () => {
+//       if (requestedStatus !== "all" && requestedStatus !== "missing") return;
+//       rows.push({
+//         _id: null,
+//         employeeId: user,
+//         trainingId: null,
+//         assignedDate: null,
+//         expireDate: null,
+//         status: "missing",
+//         completionHistory: [],
+//       });
+//     };
+
+//     if (query.trainingId) {
+//       const rec = userRecords.find(
+//         (r) => r.trainingId?._id?.toString() === query.trainingId,
+//       );
+//       if (rec) {
+//         pushRow(rec);
+//       } else {
+//         pushMissingRow();
+//       }
+//     } else if (userRecords.length === 0) {
+//       pushMissingRow();
+//     } else {
+//       userRecords.forEach((rec) => pushRow(rec));
+//     }
+//   });
+
+//   return rows;
 // };
 
 // export const ScheduleCheckStatuServices = {
@@ -964,21 +999,8 @@
 //   getDisciplinaryComplianceList,
 //   getQaComplianceList,
 //   getEmployeeDocumentComplianceList,
+//   getTrainingMatrix,
 // };
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 import httpStatus from "http-status";
 import moment from '../../utils/moment-setup';
@@ -1003,6 +1025,8 @@ import { MeetingMins } from "../meetingMins/meetingMins.model";
 import { CompanyPolicy } from "../companyPolicy/companyPolicy.model";
 import { HealthAndSafety } from "../healthAndSafety/healthAndSafety.model";
 import { Leaver } from "../hr/leaver/leaver.model";
+
+export const UserStatus = ["block", "active"];
 
 // --- Helper: Get leaver userIds for a company ---
 const getLeaverIds = async (companyId: string) => {
@@ -1062,7 +1086,7 @@ const getSettingsAndThreshold = async (
 // --- 1. Passport Compliance Service ---
 const getPassportComplianceList = async (companyId: string) => {
   const thresholdDate = await getSettingsAndThreshold(companyId, "passport");
-  const leaverIds = await getLeaverIds(companyId); // <--- Added
+  const leaverIds = await getLeaverIds(companyId);
 
   const compliantIds = await Passport.distinct("userId", {
     passportExpiryDate: { $gt: thresholdDate },
@@ -1071,8 +1095,9 @@ const getPassportComplianceList = async (companyId: string) => {
   const nonCompliantUsers = await User.find({
     company: companyId,
     role: "employee",
+    status: "active", // <--- Added
     noRtwCheck: { $ne: true },
-    _id: { $nin: [...compliantIds, ...leaverIds] }, // <--- Added leaverIds
+    _id: { $nin: [...compliantIds, ...leaverIds] },
   })
     .select("firstName lastName email designationId departmentId avatar")
     .populate("departmentId designationId");
@@ -1099,7 +1124,7 @@ const getPassportComplianceList = async (companyId: string) => {
 // --- 2. Visa Compliance Service ---
 const getVisaComplianceList = async (companyId: string) => {
   const thresholdDate = await getSettingsAndThreshold(companyId, "visa");
-  const leaverIds = await getLeaverIds(companyId); // <--- Added
+  const leaverIds = await getLeaverIds(companyId);
 
   const compliantIds = await VisaCheck.distinct("employeeId", {
     expiryDate: { $gt: thresholdDate },
@@ -1108,8 +1133,9 @@ const getVisaComplianceList = async (companyId: string) => {
   const nonCompliantUsers = await User.find({
     company: companyId,
     role: "employee",
+    status: "active", // <--- Added
     noRtwCheck: { $ne: true },
-    _id: { $nin: [...compliantIds, ...leaverIds] }, // <--- Added leaverIds
+    _id: { $nin: [...compliantIds, ...leaverIds] },
   })
     .select("firstName lastName email designationId departmentId avatar")
     .populate("departmentId designationId");
@@ -1136,7 +1162,7 @@ const getVisaComplianceList = async (companyId: string) => {
 // --- 3. DBS Compliance Service ---
 const getDbsComplianceList = async (companyId: string) => {
   const thresholdDate = await getSettingsAndThreshold(companyId, "dbs");
-  const leaverIds = await getLeaverIds(companyId); // <--- Added
+  const leaverIds = await getLeaverIds(companyId);
 
   const compliantIds = await DbsForm.distinct("userId", {
     expiryDate: { $gt: thresholdDate },
@@ -1145,7 +1171,8 @@ const getDbsComplianceList = async (companyId: string) => {
   const nonCompliantUsers = await User.find({
     company: companyId,
     role: "employee",
-    _id: { $nin: [...compliantIds, ...leaverIds] }, // <--- Added leaverIds
+    status: "active", // <--- Added
+    _id: { $nin: [...compliantIds, ...leaverIds] },
   })
     .select("firstName lastName email designationId departmentId avatar")
     .populate("departmentId designationId");
@@ -1172,7 +1199,7 @@ const getDbsComplianceList = async (companyId: string) => {
 // --- 4. Immigration Compliance Service ---
 const getImmigrationComplianceList = async (companyId: string) => {
   const thresholdDate = await getSettingsAndThreshold(companyId, "immigration");
-  const leaverIds = await getLeaverIds(companyId); // <--- Added
+  const leaverIds = await getLeaverIds(companyId);
 
   const compliantIds = await ImmigrationStatus.distinct("employeeId", {
     nextCheckDate: { $gt: thresholdDate },
@@ -1180,9 +1207,10 @@ const getImmigrationComplianceList = async (companyId: string) => {
 
   const nonCompliantUsers = await User.find({
     company: companyId,
-    noRtwCheck: { $ne: true },
     role: "employee",
-    _id: { $nin: [...compliantIds, ...leaverIds] }, // <--- Added leaverIds
+    status: "active", // <--- Added
+    noRtwCheck: { $ne: true },
+    _id: { $nin: [...compliantIds, ...leaverIds] },
   })
     .select("firstName lastName email designationId departmentId avatar")
     .populate("departmentId designationId");
@@ -1209,7 +1237,7 @@ const getImmigrationComplianceList = async (companyId: string) => {
 // --- 5. Appraisal Compliance Service ---
 const getAppraisalComplianceList = async (companyId: string) => {
   const thresholdDate = await getSettingsAndThreshold(companyId, "appraisal");
-  const leaverIds = await getLeaverIds(companyId); // <--- Added
+  const leaverIds = await getLeaverIds(companyId);
 
   const compliantIds = await Appraisal.distinct("employeeId", {
     nextCheckDate: { $gt: thresholdDate },
@@ -1218,7 +1246,8 @@ const getAppraisalComplianceList = async (companyId: string) => {
   const nonCompliantUsers = await User.find({
     company: companyId,
     role: "employee",
-    _id: { $nin: [...compliantIds, ...leaverIds] }, // <--- Added leaverIds
+    status: "active", // <--- Added
+    _id: { $nin: [...compliantIds, ...leaverIds] },
   })
     .select("firstName lastName email designationId departmentId avatar")
     .populate("departmentId designationId");
@@ -1245,7 +1274,7 @@ const getAppraisalComplianceList = async (companyId: string) => {
 // --- 6. Right To Work (RTW) Compliance Service ---
 const getRtwComplianceList = async (companyId: string) => {
   const thresholdDate = await getSettingsAndThreshold(companyId, "rtw");
-  const leaverIds = await getLeaverIds(companyId); // <--- Added
+  const leaverIds = await getLeaverIds(companyId);
 
   const compliantIds = await RightToWork.distinct("employeeId", {
     nextCheckDate: { $gt: thresholdDate },
@@ -1254,8 +1283,9 @@ const getRtwComplianceList = async (companyId: string) => {
   const nonCompliantUsers = await User.find({
     company: companyId,
     role: "employee",
+    status: "active", // <--- Added
     noRtwCheck: { $ne: true },
-    _id: { $nin: [...compliantIds, ...leaverIds] }, // <--- Added leaverIds
+    _id: { $nin: [...compliantIds, ...leaverIds] },
   })
     .select("firstName lastName email designationId departmentId avatar")
     .populate("departmentId designationId");
@@ -1281,7 +1311,7 @@ const getRtwComplianceList = async (companyId: string) => {
 
 const getSpotCheckComplianceList = async (companyId: string) => {
   const thresholdDate = await getSettingsAndThreshold(companyId, "spot");
-  const leaverIds = await getLeaverIds(companyId); // <--- Added
+  const leaverIds = await getLeaverIds(companyId);
 
   const compliantIds = await SpotCheck.distinct("employeeId", {
     scheduledDate: { $gt: thresholdDate },
@@ -1291,6 +1321,7 @@ const getSpotCheckComplianceList = async (companyId: string) => {
   const nonCompliantUsers = await User.find({
     company: companyId,
     role: "employee",
+    status: "active", // <--- Added
     _id: { $nin: [...compliantIds, ...leaverIds] },
   })
     .select("firstName lastName email designationId departmentId avatar")
@@ -1298,7 +1329,6 @@ const getSpotCheckComplianceList = async (companyId: string) => {
 
   const nonCompliantIds = nonCompliantUsers.map((u) => u._id);
 
-  // Exclude users whose ALL SpotCheck records are closed
   const userHasAnyRecords = await SpotCheck.distinct("employeeId", {
     employeeId: { $in: nonCompliantIds },
   });
@@ -1347,6 +1377,7 @@ const getSupervisionComplianceList = async (companyId: string) => {
   const nonCompliantUsers = await User.find({
     company: companyId,
     role: "employee",
+    status: "active", // <--- Added
     _id: { $nin: [...compliantIds, ...leaverIds] },
   })
     .select("firstName lastName email designationId departmentId avatar")
@@ -1354,7 +1385,6 @@ const getSupervisionComplianceList = async (companyId: string) => {
 
   const nonCompliantIds = nonCompliantUsers.map((u) => u._id);
 
-  // Exclude users whose ALL Supervision records are closed
   const userHasAnyRecords = await Supervision.distinct("employeeId", {
     employeeId: { $in: nonCompliantIds },
   });
@@ -1392,7 +1422,7 @@ const getSupervisionComplianceList = async (companyId: string) => {
 };
 
 const getTrainingComplianceList = async (companyId: string) => {
-  const leaverIds = await getLeaverIds(companyId); // <--- Added
+  const leaverIds = await getLeaverIds(companyId);
 
   const companyTrainings = await Training.find({ companyId }).select(
     "_id name reminderBeforeDays",
@@ -1411,11 +1441,11 @@ const getTrainingComplianceList = async (companyId: string) => {
 
   const expiringDocs = await EmployeeTraining.find({
     $or: trainingNonComplianceConditions,
-    employeeId: { $nin: leaverIds }, // <--- Added
+    employeeId: { $nin: leaverIds },
   })
     .populate({
       path: "employeeId",
-      match: { company: companyId, role: "employee" },
+      match: { company: companyId, role: "employee", status: "active" }, // <--- Added status
       select: "firstName lastName email designationId departmentId avatar",
       populate: { path: "departmentId designationId" },
     })
@@ -1434,7 +1464,7 @@ const getTrainingComplianceList = async (companyId: string) => {
 };
 
 const getInductionComplianceList = async (companyId: string) => {
-  const leaverIds = await getLeaverIds(companyId); // <--- Added
+  const leaverIds = await getLeaverIds(companyId);
 
   const compliantIds = await Induction.distinct("employeeId", {
     inductionDate: { $exists: true },
@@ -1443,7 +1473,8 @@ const getInductionComplianceList = async (companyId: string) => {
   const missingInductionUsers = await User.find({
     company: companyId,
     role: "employee",
-    _id: { $nin: [...compliantIds, ...leaverIds] }, // <--- Added leaverIds
+    status: "active", // <--- Added
+    _id: { $nin: [...compliantIds, ...leaverIds] },
   })
     .select("firstName lastName email designationId departmentId avatar")
     .populate("departmentId designationId");
@@ -1465,7 +1496,7 @@ const getDisciplinaryComplianceList = async (companyId: string) => {
     employeeId: { $nin: leaverIds },
   }).populate({
     path: "employeeId",
-    match: { company: companyId, role: "employee" },
+    match: { company: companyId, role: "employee", status: "active" }, // <--- Added status
     select: "firstName lastName email designationId departmentId avatar",
     populate: { path: "departmentId designationId" },
   });
@@ -1493,6 +1524,7 @@ const getQaComplianceList = async (companyId: string) => {
   const nonCompliantUsers = await User.find({
     company: companyId,
     role: "employee",
+    status: "active", // <--- Added
     _id: { $nin: [...compliantIds, ...leaverIds] },
   })
     .select("firstName lastName email designationId departmentId avatar")
@@ -1500,7 +1532,6 @@ const getQaComplianceList = async (companyId: string) => {
 
   const nonCompliantIds = nonCompliantUsers.map((u) => u._id);
 
-  // Exclude users whose ALL QA Check records are closed
   const userHasAnyRecords = await QACheck.distinct("employeeId", {
     employeeId: { $in: nonCompliantIds },
   });
@@ -1538,14 +1569,15 @@ const getQaComplianceList = async (companyId: string) => {
 };
 
 const getEmployeeDocumentComplianceList = async (companyId: string) => {
-  const leaverIds = await getLeaverIds(companyId); // <--- Added
+  const leaverIds = await getLeaverIds(companyId);
 
   const employees = await User.find({
     company: companyId,
     role: "employee",
+    status: "active", // <--- Added
     _id: { $nin: leaverIds }, 
   })
-    .select("firstName lastName email designationId departmentId avatar isBritish")
+    .select("firstName lastName email designationId departmentId avatar isBritish noRtwCheck")
     .populate("departmentId designationId");
 
   if (employees.length === 0) return [];
@@ -1603,12 +1635,13 @@ const getEmployeeDocumentComplianceList = async (companyId: string) => {
 };
 
 const getCompanyComplianceStats = async (companyId: string) => {
-  const leaverIds = await getLeaverIds(companyId); // <--- Added
+  const leaverIds = await getLeaverIds(companyId);
 
   const employees = await User.find({
     company: companyId,
     role: "employee",
-    _id: { $nin: leaverIds }, // <--- Added
+    status: "active", // <--- Added
+    _id: { $nin: leaverIds },
   }).select("_id noRtwCheck isBritish"); 
   
   const employeeIds = employees.map((user) => user._id);
@@ -1786,7 +1819,6 @@ const getCompanyComplianceStats = async (companyId: string) => {
     }
   });
 
-  // Exclude employees whose ALL Supervision/QA records are closed
   const allSupervisionEmp = await Supervision.distinct("employeeId", {
     employeeId: { $in: employeeIds },
   });
@@ -1841,8 +1873,6 @@ const getCompanyComplianceStats = async (companyId: string) => {
 };
 
 // --- Employee Matrix: Training (module 1 of 15) ---
-// Filter options: trainingId (optional), employeeId (optional), status
-// status values: all | pending | in-progress | completed | expired | missing
 const getTrainingMatrix = async (
   companyId: string,
   query: { trainingId?: string; employeeId?: string; status?: string },
@@ -1852,7 +1882,7 @@ const getTrainingMatrix = async (
   const employeeFilter: any = {
     company: companyId,
     role: "employee",
-    _id: { $nin: leaverIds },
+  
   };
   if (query.employeeId) {
     employeeFilter._id = query.employeeId;
@@ -1883,11 +1913,6 @@ const getTrainingMatrix = async (
 
   const requestedStatus = query.status || "all";
 
-  // Matches the status logic used in the frontend training details page:
-  //  - completed       → stored status is "completed"
-  //  - in-progress     → optional / no expiry date / outside reminder window
-  //  - expiring-soon   → within reminderBeforeDays before expiry
-  //  - expired         → past the expiry date
   const getEffectiveStatus = (rec: any) => {
     if (rec.status === "completed") return "completed";
     if (rec.isOptional || !rec.expireDate) return "in-progress";
