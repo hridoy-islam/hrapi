@@ -1840,6 +1840,124 @@ const getCompanyComplianceStats = async (companyId: string) => {
   };
 };
 
+// --- Employee Matrix: Training (module 1 of 15) ---
+// Filter options: trainingId (optional), employeeId (optional), status
+// status values: all | pending | in-progress | completed | expired | missing
+const getTrainingMatrix = async (
+  companyId: string,
+  query: { trainingId?: string; employeeId?: string; status?: string },
+) => {
+  const leaverIds = await getLeaverIds(companyId);
+
+  const employeeFilter: any = {
+    company: companyId,
+    role: "employee",
+    _id: { $nin: leaverIds },
+  };
+  if (query.employeeId) {
+    employeeFilter._id = query.employeeId;
+  }
+
+  const employees = await User.find(employeeFilter)
+    .select("firstName lastName email avatar designationId departmentId")
+    .populate("departmentId designationId")
+    .sort({ firstName: 1, lastName: 1 });
+
+  const employeeIds = employees.map((e) => e._id);
+
+  const recordFilter: any = { employeeId: { $in: employeeIds } };
+  if (query.trainingId) {
+    recordFilter.trainingId = query.trainingId;
+  }
+
+  const records = await EmployeeTraining.find(recordFilter)
+    .populate("trainingId", "name description validityDays reminderBeforeDays")
+    .sort({ assignedDate: -1, createdAt: -1 });
+
+  const recordsByEmployee = new Map<string, any[]>();
+  records.forEach((rec) => {
+    const key = rec.employeeId.toString();
+    if (!recordsByEmployee.has(key)) recordsByEmployee.set(key, []);
+    recordsByEmployee.get(key)!.push(rec);
+  });
+
+  const requestedStatus = query.status || "all";
+
+  // Matches the status logic used in the frontend training details page:
+  //  - completed       → stored status is "completed"
+  //  - in-progress     → optional / no expiry date / outside reminder window
+  //  - expiring-soon   → within reminderBeforeDays before expiry
+  //  - expired         → past the expiry date
+  const getEffectiveStatus = (rec: any) => {
+    if (rec.status === "completed") return "completed";
+    if (rec.isOptional || !rec.expireDate) return "in-progress";
+
+    const today = moment.utc().startOf("day");
+    const expiry = moment.utc(rec.expireDate).startOf("day");
+    const reminderDays = rec.trainingId?.reminderBeforeDays || 30;
+    const reminderDate = moment
+      .utc(rec.expireDate)
+      .subtract(reminderDays, "days")
+      .startOf("day");
+
+    if (today.isAfter(expiry, "day")) return "expired";
+    if (today.isSameOrAfter(reminderDate, "day")) return "expiring-soon";
+    return "in-progress";
+  };
+
+  const rows: any[] = [];
+
+  employees.forEach((user) => {
+    const userRecords = recordsByEmployee.get(user._id.toString()) || [];
+
+    const pushRow = (rec: any) => {
+      const effective = getEffectiveStatus(rec);
+      if (requestedStatus !== "all" && effective !== requestedStatus) return;
+      rows.push({
+        _id: rec._id,
+        employeeId: user,
+        trainingId: rec.trainingId,
+        assignedDate: rec.assignedDate,
+        expireDate: rec.expireDate,
+        certificate: rec.certificate,
+        isOptional: rec.isOptional,
+        status: effective,
+        completionHistory: rec.completionHistory || [],
+      });
+    };
+
+    const pushMissingRow = () => {
+      if (requestedStatus !== "all" && requestedStatus !== "missing") return;
+      rows.push({
+        _id: null,
+        employeeId: user,
+        trainingId: null,
+        assignedDate: null,
+        expireDate: null,
+        status: "missing",
+        completionHistory: [],
+      });
+    };
+
+    if (query.trainingId) {
+      const rec = userRecords.find(
+        (r) => r.trainingId?._id?.toString() === query.trainingId,
+      );
+      if (rec) {
+        pushRow(rec);
+      } else {
+        pushMissingRow();
+      }
+    } else if (userRecords.length === 0) {
+      pushMissingRow();
+    } else {
+      userRecords.forEach((rec) => pushRow(rec));
+    }
+  });
+
+  return rows;
+};
+
 export const ScheduleCheckStatuServices = {
   getCompanyComplianceStats,
   getPassportComplianceList,
@@ -1855,4 +1973,5 @@ export const ScheduleCheckStatuServices = {
   getDisciplinaryComplianceList,
   getQaComplianceList,
   getEmployeeDocumentComplianceList,
+  getTrainingMatrix,
 };

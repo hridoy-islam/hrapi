@@ -181,6 +181,23 @@ const getRequiredDocumentStatusList: RequestHandler = catchAsync(async (req, res
   });
 });
 
+// --- Employee Matrix: Training ---
+const getTrainingMatrixList: RequestHandler = catchAsync(async (req, res) => {
+  const { companyId } = req.params;
+  const { trainingId, employeeId, status } = req.query;
+  const result = await ScheduleCheckStatuServices.getTrainingMatrix(companyId, {
+    trainingId: trainingId as string | undefined,
+    employeeId: employeeId as string | undefined,
+    status: status as string | undefined,
+  });
+
+  sendResponse(res, {
+    statusCode: httpStatus.OK,
+    success: true,
+    message: "Employee training matrix retrieved successfully",
+    data: result,
+  });
+});
 
 export const ScheduleCheckStatusControllers = {
   getAllScheduleCheckStatus,
@@ -196,5 +213,6 @@ export const ScheduleCheckStatusControllers = {
   getInductionStatusList,
   getDisciplinaryStatusList,
   getQAStatusList,
-  getRequiredDocumentStatusList
+  getRequiredDocumentStatusList,
+  getTrainingMatrixList
 };

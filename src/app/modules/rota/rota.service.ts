@@ -1082,7 +1082,7 @@ const getAllMissedRotaFromDB = async (query: Record<string, unknown>) => {
   // ✅ Track current time to check against future dates
   const now = new Date();
   const todayStr = now.toISOString().split('T')[0]; // Format: YYYY-MM-DD
-  
+
   // Detect if query dates are strings or Date objects to apply matching formats
   const isStringFormat = typeof startDate === 'string' || typeof endDate === 'string' || typeof attendanceDate === 'string';
   const currentMaxDate = isStringFormat ? todayStr : now;
@@ -1114,12 +1114,14 @@ const getAllMissedRotaFromDB = async (query: Record<string, unknown>) => {
   dateFilter.leaveType = { $in: [null, undefined, ""] };
 
   // ✅ Date range filter on rota startDate (strictly capped to exclude future dates)
+  // rota.startDate is stored as a plain "YYYY-MM-DD" string on both sides here, so
+  // lexicographic comparison is safe and unchanged.
   if (attendanceDate) {
     dateFilter.startDate = attendanceDate;
   } else if (startDate || endDate) {
     dateFilter.startDate = {};
     if (startDate) dateFilter.startDate.$gte = startDate;
-    
+
     if (endDate) {
       // Cap the endDate so it never allows querying into the future
       dateFilter.startDate.$lte = endDate < currentMaxDate ? endDate : currentMaxDate;
@@ -1131,71 +1133,8 @@ const getAllMissedRotaFromDB = async (query: Record<string, unknown>) => {
     dateFilter.startDate = { $lte: currentMaxDate };
   }
 
-  // ✅ Build attendance date filter to find who already clocked in
-  const attendanceDateFilter: Record<string, any> = {};
-
-  // Add the same user/company filters to the Attendance query for performance
-  if (targetEmployeeId) {
-    attendanceDateFilter.userId = targetEmployeeId; // Assuming Attendance schema uses userId
-  }
-  if (companyId) {
-    attendanceDateFilter.companyId = companyId;
-  }
-
-  if (attendanceDate) {
-    attendanceDateFilter.clockIn = attendanceDate;
-  } else if (startDate || endDate) {
-    attendanceDateFilter.clockIn = {};
-    if (startDate) attendanceDateFilter.clockIn.$gte = startDate;
-    if (endDate) attendanceDateFilter.clockIn.$lte = endDate;
-  }
-
-  // ✅ Strategy 1: attended via rotaId (direct link)
-  const attendedByRotaId = await Attendance.distinct("rotaId", {
-    ...attendanceDateFilter,
-    rotaId: { $exists: true, $ne: null },
-  });
-
-  // ✅ Strategy 2: attended via userId+date match (no rotaId on attendance)
-  // NOTE: added clockInDate to the projection — it's needed both for the existing
-  // Set-key logic below (which already reads a.clockInDate) and for the new
-  // time-window check (Strategy 3) added further down. No existing behavior changes.
-  const attendanceRecords = await Attendance.find(attendanceDateFilter, {
-    userId: 1,
-    clockIn: 1,
-    clockInDate: 1,
-  }).lean();
-
-  // Build a Set of "employeeId_date" pairs for fast lookup
-  const attendedEmployeeDateSet = new Set(
-    attendanceRecords
-      .filter((a) => a.userId)
-      .map((a:any) => `${a.userId.toString()}_${a.clockInDate}`),
-  );
-
-  // ✅ Fetch candidate rotas (now properly filtered by employeeId and companyId!)
-  const candidateRotas = await Rota.find({
-    ...dateFilter,
-    _id: { $nin: attendedByRotaId },
-  })
-    .populate({
-      path:"departmentId",
-      select:"departmentName"
-    })
-    .populate({
-      path: "employeeId",
-      select: "firstName lastName email",
-    })
-    .lean();
-
-  // ✅ Strategy 3 (new): time-window match.
-  // Handles cases where an employee clocked in without a rotaId AND their
-  // clockInDate doesn't line up exactly with the rota's startDate (e.g. an
-  // overnight shift, or a clock-in logged a day off from the rota's date),
-  // but the actual clock-in TIME falls within the rota's startTime–endTime
-  // window. In that case the rota should NOT be treated as missed.
-  // This is purely additive — it only ever removes rotas that Strategy 1/2
-  // would have otherwise flagged as missed; it never adds rotas back in.
+  // --- Helpers moved up: needed both for the padded attendance query below
+  // and for the precise UK-local matching further down (Strategy 2 & 3). ---
 
   // Combine a "YYYY-MM-DD" date string with an "HH:mm" time string into a Date.
   // Uses Date.UTC explicitly (not setHours) so the result doesn't depend on
@@ -1222,8 +1161,7 @@ const getAllMissedRotaFromDB = async (query: Record<string, unknown>) => {
   // (e.g. "2026-07-27T13:22:41.202Z"), while rota.startTime / endTime are
   // UK LOCAL wall-clock times (e.g. "14:00"). To compare them on equal
   // footing we convert the UTC attendance timestamp into Europe/London
-  // wall-clock date/time parts (moment.tz.setDefault above handles the
-  // BST/GMT offset automatically) before feeding both sides through the
+  // wall-clock date/time parts before feeding both sides through the
   // same combineDateTime().
   const getUkDateTimeParts = (iso?: string): { date: string; time: string } | null => {
     if (!iso) return null;
@@ -1236,6 +1174,100 @@ const getAllMissedRotaFromDB = async (query: Record<string, unknown>) => {
       time: m.format("HH:mm"),
     };
   };
+
+  // ✅ FIX (bug 1): `clockIn`/`clockInDate` are stored as *full* ISO datetime
+  // strings (String schema type), so comparing them against plain "YYYY-MM-DD"
+  // boundaries with $gte/$lte is a lexicographic string comparison that
+  // silently excludes same-day records (e.g. "...T08:40:30.251Z" <= "2026-07-19"
+  // evaluates to false, even though that clock-in IS on 2026-07-19).
+  //
+  // Fix: build the Mongo-level range from full-length ISO strings, padded by
+  // a day on each side to safely absorb the UTC/Europe-London (BST) offset.
+  // This is intentionally a wide/safe net for the DB query only — the exact,
+  // timezone-correct match happens afterwards in JS via getUkDateTimeParts().
+  const toIsoBoundary = (dateStr: string, endOfDay: boolean, padDays: number): string => {
+    const base = new Date(`${dateStr}T00:00:00.000Z`);
+    base.setUTCDate(base.getUTCDate() + padDays);
+    if (endOfDay) {
+      base.setUTCHours(23, 59, 59, 999);
+    }
+    return base.toISOString();
+  };
+
+  // ✅ Build attendance date filter to find who already clocked in
+  const attendanceDateFilter: Record<string, any> = {};
+
+  // Add the same user/company filters to the Attendance query for performance
+  if (targetEmployeeId) {
+    attendanceDateFilter.userId = targetEmployeeId; // Assuming Attendance schema uses userId
+  }
+  if (companyId) {
+    attendanceDateFilter.companyId = companyId;
+  }
+
+  if (attendanceDate) {
+    const d = attendanceDate as string;
+    attendanceDateFilter.clockIn = {
+      $gte: toIsoBoundary(d, false, -1),
+      $lte: toIsoBoundary(d, true, 1),
+    };
+  } else if (startDate || endDate) {
+    attendanceDateFilter.clockIn = {};
+    if (startDate) attendanceDateFilter.clockIn.$gte = toIsoBoundary(startDate as string, false, -1);
+    if (endDate) attendanceDateFilter.clockIn.$lte = toIsoBoundary(endDate as string, true, 1);
+  }
+
+  // ✅ Strategy 1: attended via rotaId (direct link)
+  const attendedByRotaId = await Attendance.distinct("rotaId", {
+    ...attendanceDateFilter,
+    rotaId: { $exists: true, $ne: null },
+  });
+
+  // ✅ Strategy 2: attended via userId+date match (no rotaId on attendance)
+  const attendanceRecords = await Attendance.find(attendanceDateFilter, {
+    userId: 1,
+    clockIn: 1,
+    clockInDate: 1,
+  }).lean();
+
+  // ✅ FIX (bug 2): `clockInDate` is actually stored as a full ISO datetime
+  // (same as `clockIn`), not a plain "YYYY-MM-DD" string — so keying the Set
+  // off the raw field never matched rota.startDate ("YYYY-MM-DD"), and this
+  // strategy was silently a no-op. Build the key from the UK-local calendar
+  // date instead, same as Strategy 3 already does below.
+  const attendedEmployeeDateSet = new Set(
+    attendanceRecords
+      .filter((a: any) => a.userId)
+      .map((a: any) => {
+        const parts = getUkDateTimeParts(a.clockIn || a.clockInDate);
+        const dateKey = parts ? parts.date : a.clockInDate;
+        return `${a.userId.toString()}_${dateKey}`;
+      }),
+  );
+
+  // ✅ Fetch candidate rotas (now properly filtered by employeeId and companyId!)
+  const candidateRotas = await Rota.find({
+    ...dateFilter,
+    _id: { $nin: attendedByRotaId },
+  })
+    .populate({
+      path: "departmentId",
+      select: "departmentName",
+    })
+    .populate({
+      path: "employeeId",
+      select: "firstName lastName email",
+    })
+    .lean();
+
+  // ✅ Strategy 3: time-window match.
+  // Handles cases where an employee clocked in without a rotaId AND their
+  // clockInDate doesn't line up exactly with the rota's startDate (e.g. an
+  // overnight shift, or a clock-in logged a day off from the rota's date),
+  // but the actual clock-in TIME falls within the rota's startTime–endTime
+  // window. In that case the rota should NOT be treated as missed.
+  // This is purely additive — it only ever removes rotas that Strategy 1/2
+  // would have otherwise flagged as missed; it never adds rotas back in.
 
   const parseAttendanceDateTime = (a: any): Date | null => {
     const parts = getUkDateTimeParts(a.clockIn || a.clockInDate);
@@ -1293,7 +1325,7 @@ const getAllMissedRotaFromDB = async (query: Record<string, unknown>) => {
       return false;
     }
 
-    // ✅ New: also exclude if attendance's clock-in time falls within this
+    // ✅ Also exclude if attendance's clock-in time falls within this
     // rota's shift window, even though the date-key match above missed it.
     if (isCoveredByAttendanceTimeWindow(rota)) {
       return false;

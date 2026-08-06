@@ -94,4 +94,10 @@ router.get(
   ScheduleCheckStatusControllers.getRequiredDocumentStatusList,
 );
 
+router.get(
+  "/:companyId/employee-matrix/training",
+  auth("admin", "company","companyAdmin"),
+  ScheduleCheckStatusControllers.getTrainingMatrixList,
+);
+
 export const ScheduleCheckStatusRoutes = router;
