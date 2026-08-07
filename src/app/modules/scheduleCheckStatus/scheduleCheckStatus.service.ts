@@ -1700,7 +1700,7 @@ const getCompanyComplianceStats = async (companyId: string) => {
     compliantQaIds,
     compliantInductionIds,
     activeDisciplinaryIssues,
-    nonCompliantTrainingIds,
+    nonCompliantTrainingCount,
     allEmployeeDocs,
     meetingNonCompliantCount, 
     policyNonCompliantCount,
@@ -1755,11 +1755,11 @@ const getCompanyComplianceStats = async (companyId: string) => {
       issueDeadline: { $exists: true, $lte: getSafeThreshold(intervals.disciplinary) },
     }).countDocuments(),
     trainingNonComplianceConditions.length > 0
-      ? EmployeeTraining.distinct("employeeId", {
-          employeeId: { $in: employeeIds },
-          $or: trainingNonComplianceConditions,
-        })
-      : Promise.resolve([]),
+  ? EmployeeTraining.countDocuments({
+      employeeId: { $in: employeeIds },
+      $or: trainingNonComplianceConditions,
+    })
+  : Promise.resolve(0),
     EmployeeDocument.find({
       employeeId: { $in: employeeIds },
     }).select("employeeId documentTitle"),
@@ -1864,7 +1864,7 @@ const getCompanyComplianceStats = async (companyId: string) => {
     induction: totalEmployees - compliantInductionIds.length,
     qa: Math.max(0, totalEmployees - compliantQaIds.length - onlyClosedQACount),
     disciplinary: activeDisciplinaryIssues,
-    training: nonCompliantTrainingIds.length,
+     training: nonCompliantTrainingCount,
     employeeDocument: employeeDocumentNonCompliantCount, 
     meeting: meetingNonCompliantCount, 
     policy: policyNonCompliantCount, 
@@ -1983,6 +1983,1273 @@ const getTrainingMatrix = async (
   return rows;
 };
 
+
+// --- Employee Matrix: RTW (Right to Work) ---
+// Filter options: employeeId (optional), status
+// status values: all | active | expiring-soon | expired | missing
+const getRtwMatrix = async (
+  companyId: string,
+  query: { employeeId?: string; status?: string },
+) => {
+  const leaverIds = await getLeaverIds(companyId);
+
+  // Build employee filter
+  const employeeFilter: any = {
+    company: companyId,
+    role: "employee",
+    status: "active",
+    _id: { $nin: leaverIds },
+    noRtwCheck: { $ne: true }, // Exclude employees with no RTW check required
+  };
+  if (query.employeeId) {
+    employeeFilter._id = query.employeeId;
+  }
+
+  const employees = await User.find(employeeFilter)
+    .select("firstName lastName email avatar designationId departmentId noRtwCheck")
+    .populate("departmentId designationId")
+    .sort({ firstName: 1, lastName: 1 });
+
+  if (employees.length === 0) {
+    return [];
+  }
+
+  const employeeIds = employees.map((e) => e._id);
+
+  // Get RTW records for these employees
+  const rtwRecords = await RightToWork.find({
+    employeeId: { $in: employeeIds },
+  }).sort({ createdAt: -1 });
+
+  const recordsByEmployee = new Map<string, any>();
+  rtwRecords.forEach((rec) => {
+    const key = rec.employeeId.toString();
+    // If multiple records exist, keep the most recent one (or the one with nextCheckDate)
+    if (!recordsByEmployee.has(key) || 
+        (rec.nextCheckDate && 
+         (!recordsByEmployee.get(key)?.nextCheckDate || 
+          new Date(rec.nextCheckDate) > new Date(recordsByEmployee.get(key).nextCheckDate)))) {
+      recordsByEmployee.set(key, rec);
+    }
+  });
+
+  // Get schedule settings for threshold
+  const settings = await ScheduleCheck.findOne({ companyId });
+  const checkInterval = settings?.rtwCheckDate || 30;
+
+  const requestedStatus = query.status || "all";
+
+  // Helper to determine RTW status
+  const getRtwStatus = (record: any | null) => {
+    if (!record || !record.nextCheckDate) return "missing";
+
+    const now = moment().startOf("day");
+    const checkDate = moment(record.nextCheckDate).startOf("day");
+    const diffDays = checkDate.diff(now, "days");
+
+    if (now.isAfter(checkDate)) {
+      return "expired";
+    }
+    if (checkInterval > 0 && diffDays <= checkInterval) {
+      return "expiring-soon";
+    }
+    return "active";
+  };
+
+  const rows: any[] = [];
+
+  employees.forEach((user) => {
+    const record = recordsByEmployee.get(user._id.toString()) || null;
+    const status = getRtwStatus(record);
+
+    // Filter by requested status
+    if (requestedStatus !== "all" && status !== requestedStatus) return;
+
+    rows.push({
+      employeeId: user,
+      rtwId: record?._id || null,
+      nextCheckDate: record?.nextCheckDate || null,
+      status: status,
+      logs: record?.logs || [],
+      createdAt: record?.createdAt || null,
+      updatedAt: record?.updatedAt || null,
+    });
+  });
+
+  return rows;
+};
+
+
+
+const getVisaMatrix = async (
+  companyId: string,
+  query: { employeeId?: string; status?: string },
+) => {
+  const leaverIds = await getLeaverIds(companyId);
+
+  // Build employee filter
+  const employeeFilter: any = {
+    company: companyId,
+    role: "employee",
+    status: "active",
+    _id: { $nin: leaverIds },
+    noRtwCheck: { $ne: true }, // Exclude employees with no RTW check required (Visa is also RTW related)
+  };
+  if (query.employeeId) {
+    employeeFilter._id = query.employeeId;
+  }
+
+  const employees = await User.find(employeeFilter)
+    .select("firstName lastName email avatar designationId departmentId noRtwCheck")
+    .populate("departmentId designationId")
+    .sort({ firstName: 1, lastName: 1 });
+
+  if (employees.length === 0) {
+    return [];
+  }
+
+  const employeeIds = employees.map((e) => e._id);
+
+  // Get Visa records for these employees
+  const visaRecords = await VisaCheck.find({
+    employeeId: { $in: employeeIds },
+  }).sort({ createdAt: -1 });
+
+  const recordsByEmployee = new Map<string, any>();
+  visaRecords.forEach((rec) => {
+    const key = rec.employeeId.toString();
+    // If multiple records exist, keep the most recent one (or the one with expiryDate)
+    if (!recordsByEmployee.has(key) || 
+        (rec.expiryDate && 
+         (!recordsByEmployee.get(key)?.expiryDate || 
+          new Date(rec.expiryDate) > new Date(recordsByEmployee.get(key).expiryDate)))) {
+      recordsByEmployee.set(key, rec);
+    }
+  });
+
+  // Get schedule settings for threshold
+  const settings = await ScheduleCheck.findOne({ companyId });
+  const checkInterval = settings?.visaCheckDate || 30;
+
+  const requestedStatus = query.status || "all";
+
+  // Helper to determine Visa status
+  const getVisaStatus = (record: any | null) => {
+    if (!record || !record.expiryDate) return "missing";
+
+    const now = moment().startOf("day");
+    const expiry = moment(record.expiryDate).startOf("day");
+    const diffDays = expiry.diff(now, "days");
+
+    if (now.isAfter(expiry)) {
+      return "expired";
+    }
+    if (checkInterval > 0 && diffDays <= checkInterval) {
+      return "expiring-soon";
+    }
+    return "active";
+  };
+
+  const rows: any[] = [];
+
+  employees.forEach((user) => {
+    const record = recordsByEmployee.get(user._id.toString()) || null;
+    const status = getVisaStatus(record);
+
+    // Filter by requested status
+    if (requestedStatus !== "all" && status !== requestedStatus) return;
+
+    rows.push({
+      employeeId: user,
+      visaId: record?._id || null,
+      startDate: record?.startDate || null,
+      expiryDate: record?.expiryDate || null,
+      status: status,
+      logs: record?.logs || [],
+      createdAt: record?.createdAt || null,
+      updatedAt: record?.updatedAt || null,
+    });
+  });
+
+  return rows;
+};
+
+
+const getImmigrationMatrix = async (
+  companyId: string,
+  query: { employeeId?: string; status?: string },
+) => {
+  const leaverIds = await getLeaverIds(companyId);
+
+  // Build employee filter
+  const employeeFilter: any = {
+    company: companyId,
+    role: "employee",
+    status: "active",
+    _id: { $nin: leaverIds },
+    noRtwCheck: { $ne: true }, // Exclude employees with no RTW check required
+  };
+  if (query.employeeId) {
+    employeeFilter._id = query.employeeId;
+  }
+
+  const employees = await User.find(employeeFilter)
+    .select("firstName lastName email avatar designationId departmentId noRtwCheck")
+    .populate("departmentId designationId")
+    .sort({ firstName: 1, lastName: 1 });
+
+  if (employees.length === 0) {
+    return [];
+  }
+
+  const employeeIds = employees.map((e) => e._id);
+
+  // Get Immigration records for these employees
+  const immigrationRecords = await ImmigrationStatus.find({
+    employeeId: { $in: employeeIds },
+  }).sort({ createdAt: -1 });
+
+  const recordsByEmployee = new Map<string, any>();
+  immigrationRecords.forEach((rec) => {
+    const key = rec.employeeId.toString();
+    // If multiple records exist, keep the most recent one (or the one with nextCheckDate)
+    if (!recordsByEmployee.has(key) || 
+        (rec.nextCheckDate && 
+         (!recordsByEmployee.get(key)?.nextCheckDate || 
+          new Date(rec.nextCheckDate) > new Date(recordsByEmployee.get(key).nextCheckDate)))) {
+      recordsByEmployee.set(key, rec);
+    }
+  });
+
+  // Get schedule settings for threshold
+  const settings = await ScheduleCheck.findOne({ companyId });
+  const checkInterval = settings?.immigrationCheckDate || 30;
+
+  const requestedStatus = query.status || "all";
+
+  // Helper to determine Immigration status
+  const getImmigrationStatus = (record: any | null) => {
+    if (!record || !record.nextCheckDate) return "missing";
+
+    const now = moment().startOf("day");
+    const checkDate = moment(record.nextCheckDate).startOf("day");
+    const diffDays = checkDate.diff(now, "days");
+
+    if (now.isAfter(checkDate)) {
+      return "expired";
+    }
+    if (checkInterval > 0 && diffDays <= checkInterval) {
+      return "expiring-soon";
+    }
+    return "active";
+  };
+
+  const rows: any[] = [];
+
+  employees.forEach((user) => {
+    const record = recordsByEmployee.get(user._id.toString()) || null;
+    const status = getImmigrationStatus(record);
+
+    // Filter by requested status
+    if (requestedStatus !== "all" && status !== requestedStatus) return;
+
+    rows.push({
+      employeeId: user,
+      immigrationId: record?._id || null,
+      nextCheckDate: record?.nextCheckDate || null,
+      status: status,
+      logs: record?.logs || [],
+      createdAt: record?.createdAt || null,
+      updatedAt: record?.updatedAt || null,
+    });
+  });
+
+  return rows;
+};
+
+
+// --- Employee Matrix: Passport ---
+// Filter options: employeeId (optional), status
+// status values: all | active | expiring-soon | expired | missing
+const getPassportMatrix = async (
+  companyId: string,
+  query: { employeeId?: string; status?: string },
+) => {
+  const leaverIds = await getLeaverIds(companyId);
+
+  // Build employee filter
+  const employeeFilter: any = {
+    company: companyId,
+    role: "employee",
+    status: "active",
+    _id: { $nin: leaverIds },
+    noRtwCheck: { $ne: true }, // Exclude employees with no RTW check required
+  };
+  if (query.employeeId) {
+    employeeFilter._id = query.employeeId;
+  }
+
+  const employees = await User.find(employeeFilter)
+    .select("firstName lastName email avatar designationId departmentId noRtwCheck")
+    .populate("departmentId designationId")
+    .sort({ firstName: 1, lastName: 1 });
+
+  if (employees.length === 0) {
+    return [];
+  }
+
+  const employeeIds = employees.map((e) => e._id);
+
+  // Get Passport records for these employees
+  const passportRecords = await Passport.find({
+    userId: { $in: employeeIds },
+  }).sort({ createdAt: -1 });
+
+  const recordsByEmployee = new Map<string, any>();
+  passportRecords.forEach((rec) => {
+    const key = rec.userId.toString();
+    // If multiple records exist, keep the most recent one
+    if (!recordsByEmployee.has(key) || 
+        (rec.passportExpiryDate && 
+         (!recordsByEmployee.get(key)?.passportExpiryDate || 
+          new Date(rec.passportExpiryDate) > new Date(recordsByEmployee.get(key).passportExpiryDate)))) {
+      recordsByEmployee.set(key, rec);
+    }
+  });
+
+  // Get schedule settings for threshold
+  const settings = await ScheduleCheck.findOne({ companyId });
+  const checkInterval = settings?.passportCheckDate || 30;
+
+  const requestedStatus = query.status || "all";
+
+  // Helper to determine Passport status
+  const getPassportStatus = (record: any | null) => {
+    if (!record || !record.passportExpiryDate) return "missing";
+
+    const now = moment().startOf("day");
+    const expiry = moment(record.passportExpiryDate).startOf("day");
+    const diffDays = expiry.diff(now, "days");
+
+    if (now.isAfter(expiry)) {
+      return "expired";
+    }
+    if (checkInterval > 0 && diffDays <= checkInterval) {
+      return "expiring-soon";
+    }
+    return "active";
+  };
+
+  const rows: any[] = [];
+
+  employees.forEach((user) => {
+    const record = recordsByEmployee.get(user._id.toString()) || null;
+    const status = getPassportStatus(record);
+
+    // Filter by requested status
+    if (requestedStatus !== "all" && status !== requestedStatus) return;
+
+    rows.push({
+      employeeId: user,
+      passportId: record?._id || null,
+      passportNumber: record?.passportNumber || null,
+      passportExpiryDate: record?.passportExpiryDate || null,
+      status: status,
+      logs: record?.logs || [],
+      createdAt: record?.createdAt || null,
+      updatedAt: record?.updatedAt || null,
+    });
+  });
+
+  return rows;
+};
+
+
+// --- Employee Matrix: DBS ---
+// Filter options: employeeId (optional), status
+// status values: all | active | expiring-soon | expired | missing
+const getDbsMatrix = async (
+  companyId: string,
+  query: { employeeId?: string; status?: string },
+) => {
+  const leaverIds = await getLeaverIds(companyId);
+
+  // Build employee filter - DBS applies to all employees (no noRtwCheck filter)
+  const employeeFilter: any = {
+    company: companyId,
+    role: "employee",
+    status: "active",
+    _id: { $nin: leaverIds },
+  };
+  if (query.employeeId) {
+    employeeFilter._id = query.employeeId;
+  }
+
+  const employees = await User.find(employeeFilter)
+    .select("firstName lastName email avatar designationId departmentId noRtwCheck")
+    .populate("departmentId designationId")
+    .sort({ firstName: 1, lastName: 1 });
+
+  if (employees.length === 0) {
+    return [];
+  }
+
+  const employeeIds = employees.map((e) => e._id);
+
+  // Get DBS records for these employees
+  const dbsRecords = await DbsForm.find({
+    userId: { $in: employeeIds },
+  }).sort({ createdAt: -1 });
+
+  const recordsByEmployee = new Map<string, any>();
+  dbsRecords.forEach((rec) => {
+    const key = rec.userId.toString();
+    // If multiple records exist, keep the most recent one
+    if (!recordsByEmployee.has(key) || 
+        (rec.expiryDate && 
+         (!recordsByEmployee.get(key)?.expiryDate || 
+          new Date(rec.expiryDate) > new Date(recordsByEmployee.get(key).expiryDate)))) {
+      recordsByEmployee.set(key, rec);
+    }
+  });
+
+  // Get schedule settings for threshold
+  const settings = await ScheduleCheck.findOne({ companyId });
+  const checkInterval = settings?.dbsCheckDate || 30;
+
+  const requestedStatus = query.status || "all";
+
+  // Helper to determine DBS status
+  const getDbsStatus = (record: any | null) => {
+    if (!record || !record.expiryDate) return "missing";
+
+    const now = moment().startOf("day");
+    const expiry = moment(record.expiryDate).startOf("day");
+    const diffDays = expiry.diff(now, "days");
+
+    if (now.isAfter(expiry)) {
+      return "expired";
+    }
+    if (checkInterval > 0 && diffDays <= checkInterval) {
+      return "expiring-soon";
+    }
+    return "active";
+  };
+
+  const rows: any[] = [];
+
+  employees.forEach((user) => {
+    const record = recordsByEmployee.get(user._id.toString()) || null;
+    const status = getDbsStatus(record);
+
+    // Filter by requested status
+    if (requestedStatus !== "all" && status !== requestedStatus) return;
+
+    rows.push({
+      employeeId: user,
+      dbsId: record?._id || null,
+      disclosureNumber: record?.disclosureNumber || null,
+      dateOfIssue: record?.dateOfIssue || null,
+      expiryDate: record?.expiryDate || null,
+      dbsDocumentUrl: record?.dbsDocumentUrl || null,
+      status: status,
+      logs: record?.logs || [],
+      createdAt: record?.createdAt || null,
+      updatedAt: record?.updatedAt || null,
+    });
+  });
+
+  return rows;
+};
+
+
+
+// --- Employee Matrix: Appraisal ---
+// Filter options: employeeId (optional), status
+// status values: all | active | expiring-soon | expired | missing
+const getAppraisalMatrix = async (
+  companyId: string,
+  query: { employeeId?: string; status?: string },
+) => {
+  const leaverIds = await getLeaverIds(companyId);
+
+  // Build employee filter
+  const employeeFilter: any = {
+    company: companyId,
+    role: "employee",
+    status: "active",
+    _id: { $nin: leaverIds },
+  };
+  if (query.employeeId) {
+    employeeFilter._id = query.employeeId;
+  }
+
+  const employees = await User.find(employeeFilter)
+    .select("firstName lastName email avatar designationId departmentId noRtwCheck")
+    .populate("departmentId designationId")
+    .sort({ firstName: 1, lastName: 1 });
+
+  if (employees.length === 0) {
+    return [];
+  }
+
+  const employeeIds = employees.map((e) => e._id);
+
+  // Get Appraisal records for these employees
+  const appraisalRecords = await Appraisal.find({
+    employeeId: { $in: employeeIds },
+  }).sort({ createdAt: -1 });
+
+  const recordsByEmployee = new Map<string, any>();
+  appraisalRecords.forEach((rec) => {
+    const key = rec.employeeId.toString();
+    // If multiple records exist, keep the most recent one (or the one with nextCheckDate)
+    if (!recordsByEmployee.has(key) || 
+        (rec.nextCheckDate && 
+         (!recordsByEmployee.get(key)?.nextCheckDate || 
+          new Date(rec.nextCheckDate) > new Date(recordsByEmployee.get(key).nextCheckDate)))) {
+      recordsByEmployee.set(key, rec);
+    }
+  });
+
+  // Get schedule settings for threshold
+  const settings = await ScheduleCheck.findOne({ companyId });
+  const checkInterval = settings?.appraisalCheckDate || 30;
+
+  const requestedStatus = query.status || "all";
+
+  // Helper to determine Appraisal status
+  const getAppraisalStatus = (record: any | null) => {
+    if (!record || !record.nextCheckDate) return "missing";
+
+    const now = moment().startOf("day");
+    const checkDate = moment(record.nextCheckDate).startOf("day");
+    const diffDays = checkDate.diff(now, "days");
+
+    if (now.isAfter(checkDate)) {
+      return "expired";
+    }
+    if (checkInterval > 0 && diffDays <= checkInterval) {
+      return "expiring-soon";
+    }
+    return "active";
+  };
+
+  const rows: any[] = [];
+
+  employees.forEach((user) => {
+    const record = recordsByEmployee.get(user._id.toString()) || null;
+    const status = getAppraisalStatus(record);
+
+    // Filter by requested status
+    if (requestedStatus !== "all" && status !== requestedStatus) return;
+
+    rows.push({
+      employeeId: user,
+      appraisalId: record?._id || null,
+      nextCheckDate: record?.nextCheckDate || null,
+      status: status,
+      logs: record?.logs || [],
+      createdAt: record?.createdAt || null,
+      updatedAt: record?.updatedAt || null,
+    });
+  });
+
+  return rows;
+};
+
+
+
+// --- Employee Matrix: Spot Check ---
+// Filter options: employeeId (optional), status
+// status values: all | scheduled | due-soon | overdue | completed | missing | closed
+const getSpotCheckMatrix = async (
+  companyId: string,
+  query: { employeeId?: string; status?: string },
+) => {
+  const leaverIds = await getLeaverIds(companyId);
+
+  // Build employee filter
+  const employeeFilter: any = {
+    company: companyId,
+    role: "employee",
+    status: "active",
+    _id: { $nin: leaverIds },
+  };
+  if (query.employeeId) {
+    employeeFilter._id = query.employeeId;
+  }
+
+  const employees = await User.find(employeeFilter)
+    .select("firstName lastName email avatar designationId departmentId noRtwCheck")
+    .populate("departmentId designationId")
+    .sort({ firstName: 1, lastName: 1 });
+
+  if (employees.length === 0) {
+    return [];
+  }
+
+  const employeeIds = employees.map((e) => e._id);
+
+  // Get Spot Check records for these employees
+  const spotCheckRecords = await SpotCheck.find({
+    employeeId: { $in: employeeIds },
+  }).sort({ createdAt: -1 });
+
+  const recordsByEmployee = new Map<string, any>();
+  spotCheckRecords.forEach((rec) => {
+    const key = rec.employeeId.toString();
+    // If multiple records exist, keep the most recent one
+    if (!recordsByEmployee.has(key) || 
+        (rec.scheduledDate && 
+         (!recordsByEmployee.get(key)?.scheduledDate || 
+          new Date(rec.scheduledDate) > new Date(recordsByEmployee.get(key).scheduledDate)))) {
+      recordsByEmployee.set(key, rec);
+    }
+  });
+
+  // Get schedule settings for threshold
+  const settings = await ScheduleCheck.findOne({ companyId });
+  const checkInterval = settings?.spotCheckDate || 30;
+
+  const requestedStatus = query.status || "all";
+
+  // Helper to determine Spot Check status
+  const getSpotCheckStatus = (record: any | null) => {
+    if (!record) return "missing";
+    
+    // Check if closed
+    if (record.isClosed) return "closed";
+    
+    // Check if completed (has completionDate)
+    if (record.completionDate) {
+      // Check if completion date is after scheduled date (cycle active)
+      if (record.scheduledDate && moment(record.scheduledDate).isAfter(moment(record.completionDate))) {
+        // Cycle is active - check status based on scheduled date
+        const now = moment().startOf("day");
+        const scheduled = moment(record.scheduledDate).startOf("day");
+        const diffDays = scheduled.diff(now, "days");
+
+        if (now.isAfter(scheduled)) {
+          return "overdue";
+        }
+        if (diffDays <= 7 && diffDays >= 0) {
+          return "due-soon";
+        }
+        return "scheduled";
+      }
+      // Completion date is after scheduled date (cycle completed)
+      return "completed";
+    }
+    
+    // No completion date - check status based on scheduled date
+    if (!record.scheduledDate) return "missing";
+    
+    const now = moment().startOf("day");
+    const scheduled = moment(record.scheduledDate).startOf("day");
+    const diffDays = scheduled.diff(now, "days");
+
+    if (now.isAfter(scheduled)) {
+      return "overdue";
+    }
+    if (diffDays <= 7 && diffDays >= 0) {
+      return "due-soon";
+    }
+    return "scheduled";
+  };
+
+  const rows: any[] = [];
+
+  employees.forEach((user) => {
+    const record = recordsByEmployee.get(user._id.toString()) || null;
+    const status = getSpotCheckStatus(record);
+
+    // Filter by requested status
+    if (requestedStatus !== "all" && status !== requestedStatus) return;
+
+    rows.push({
+      employeeId: user,
+      spotCheckId: record?._id || null,
+      scheduledDate: record?.scheduledDate || null,
+      completionDate: record?.completionDate || null,
+      spotCheckNote: record?.spotCheckNote || null,
+      isClosed: record?.isClosed || false,
+      status: status,
+      logs: record?.logs || [],
+      createdAt: record?.createdAt || null,
+      updatedAt: record?.updatedAt || null,
+    });
+  });
+
+  return rows;
+};
+
+
+// --- Employee Matrix: Supervision ---
+// Filter options: employeeId (optional), status
+// status values: all | scheduled | due-soon | overdue | completed | closed | missing
+const getSupervisionMatrix = async (
+  companyId: string,
+  query: { employeeId?: string; status?: string },
+) => {
+  const leaverIds = await getLeaverIds(companyId);
+
+  // Build employee filter
+  const employeeFilter: any = {
+    company: companyId,
+    role: "employee",
+    status: "active",
+    _id: { $nin: leaverIds },
+  };
+  if (query.employeeId) {
+    employeeFilter._id = query.employeeId;
+  }
+
+  const employees = await User.find(employeeFilter)
+    .select("firstName lastName email avatar designationId departmentId noRtwCheck")
+    .populate("departmentId designationId")
+    .sort({ firstName: 1, lastName: 1 });
+
+  if (employees.length === 0) {
+    return [];
+  }
+
+  const employeeIds = employees.map((e) => e._id);
+
+  // Get Supervision records for these employees
+  const supervisionRecords = await Supervision.find({
+    employeeId: { $in: employeeIds },
+  }).sort({ createdAt: -1 });
+
+  const recordsByEmployee = new Map<string, any>();
+  supervisionRecords.forEach((rec) => {
+    const key = rec.employeeId.toString();
+    // If multiple records exist, keep the most recent one
+    if (!recordsByEmployee.has(key) || 
+        (rec.scheduledDate && 
+         (!recordsByEmployee.get(key)?.scheduledDate || 
+          new Date(rec.scheduledDate) > new Date(recordsByEmployee.get(key).scheduledDate)))) {
+      recordsByEmployee.set(key, rec);
+    }
+  });
+
+  // Get schedule settings for threshold
+  const settings = await ScheduleCheck.findOne({ companyId });
+  const checkInterval = settings?.supervisionCheckDate || 30;
+
+  const requestedStatus = query.status || "all";
+
+  // Helper to determine Supervision status
+  const getSupervisionStatus = (record: any | null) => {
+    if (!record) return "missing";
+    
+    // Check if closed
+    if (record.isClosed) return "closed";
+    
+    // Check if completed (has completionDate)
+    if (record.completionDate) {
+      // Check if completion date is after scheduled date (cycle active)
+      if (record.scheduledDate && moment(record.scheduledDate).isAfter(moment(record.completionDate))) {
+        // Cycle is active - check status based on scheduled date
+        const now = moment().startOf("day");
+        const scheduled = moment(record.scheduledDate).startOf("day");
+        const diffDays = scheduled.diff(now, "days");
+
+        if (now.isAfter(scheduled)) {
+          return "overdue";
+        }
+        if (diffDays <= 7 && diffDays >= 0) {
+          return "due-soon";
+        }
+        return "scheduled";
+      }
+      // Completion date is after scheduled date (cycle completed)
+      return "completed";
+    }
+    
+    // No completion date - check status based on scheduled date
+    if (!record.scheduledDate) return "missing";
+    
+    const now = moment().startOf("day");
+    const scheduled = moment(record.scheduledDate).startOf("day");
+    const diffDays = scheduled.diff(now, "days");
+
+    if (now.isAfter(scheduled)) {
+      return "overdue";
+    }
+    if (diffDays <= 7 && diffDays >= 0) {
+      return "due-soon";
+    }
+    return "scheduled";
+  };
+
+  const rows: any[] = [];
+
+  employees.forEach((user) => {
+    const record = recordsByEmployee.get(user._id.toString()) || null;
+    const status = getSupervisionStatus(record);
+
+    // Filter by requested status
+    if (requestedStatus !== "all" && status !== requestedStatus) return;
+
+    rows.push({
+      employeeId: user,
+      supervisionId: record?._id || null,
+      scheduledDate: record?.scheduledDate || null,
+      completionDate: record?.completionDate || null,
+      sessionNote: record?.sessionNote || null,
+      isClosed: record?.isClosed || false,
+      status: status,
+      logs: record?.logs || [],
+      createdAt: record?.createdAt || null,
+      updatedAt: record?.updatedAt || null,
+    });
+  });
+
+  return rows;
+};
+
+
+
+// --- Employee Matrix: QA Check ---
+// Filter options: employeeId (optional), status
+// status values: all | scheduled | due-soon | overdue | completed | closed | missing
+const getQaMatrix = async (
+  companyId: string,
+  query: { employeeId?: string; status?: string },
+) => {
+  const leaverIds = await getLeaverIds(companyId);
+
+  // Build employee filter
+  const employeeFilter: any = {
+    company: companyId,
+    role: "employee",
+    status: "active",
+    _id: { $nin: leaverIds },
+  };
+  if (query.employeeId) {
+    employeeFilter._id = query.employeeId;
+  }
+
+  const employees = await User.find(employeeFilter)
+    .select("firstName lastName email avatar designationId departmentId noRtwCheck")
+    .populate("departmentId designationId")
+    .sort({ firstName: 1, lastName: 1 });
+
+  if (employees.length === 0) {
+    return [];
+  }
+
+  const employeeIds = employees.map((e) => e._id);
+
+  // Get QA Check records for these employees
+  const qaRecords = await QACheck.find({
+    employeeId: { $in: employeeIds },
+  }).sort({ createdAt: -1 });
+
+  const recordsByEmployee = new Map<string, any>();
+  qaRecords.forEach((rec) => {
+    const key = rec.employeeId.toString();
+    // If multiple records exist, keep the most recent one
+    if (!recordsByEmployee.has(key) || 
+        (rec.scheduledDate && 
+         (!recordsByEmployee.get(key)?.scheduledDate || 
+          new Date(rec.scheduledDate) > new Date(recordsByEmployee.get(key).scheduledDate)))) {
+      recordsByEmployee.set(key, rec);
+    }
+  });
+
+  // Get schedule settings for threshold
+  const settings = await ScheduleCheck.findOne({ companyId });
+  const checkInterval = settings?.qaCheckDate || 30;
+
+  const requestedStatus = query.status || "all";
+
+  // Helper to determine QA Check status
+  const getQaStatus = (record: any | null) => {
+    if (!record) return "missing";
+    
+    // Check if closed
+    if (record.isClosed) return "closed";
+    
+    // Check if completed (has completionDate)
+    if (record.completionDate) {
+      // Check if completion date is after scheduled date (cycle active)
+      if (record.scheduledDate && moment(record.scheduledDate).isAfter(moment(record.completionDate))) {
+        // Cycle is active - check status based on scheduled date
+        const now = moment().startOf("day");
+        const scheduled = moment(record.scheduledDate).startOf("day");
+        const diffDays = scheduled.diff(now, "days");
+
+        if (now.isAfter(scheduled)) {
+          return "overdue";
+        }
+        if (diffDays <= 7 && diffDays >= 0) {
+          return "due-soon";
+        }
+        return "scheduled";
+      }
+      // Completion date is after scheduled date (cycle completed)
+      return "completed";
+    }
+    
+    // No completion date - check status based on scheduled date
+    if (!record.scheduledDate) return "missing";
+    
+    const now = moment().startOf("day");
+    const scheduled = moment(record.scheduledDate).startOf("day");
+    const diffDays = scheduled.diff(now, "days");
+
+    if (now.isAfter(scheduled)) {
+      return "overdue";
+    }
+    if (diffDays <= 7 && diffDays >= 0) {
+      return "due-soon";
+    }
+    return "scheduled";
+  };
+
+  const rows: any[] = [];
+
+  employees.forEach((user) => {
+    const record = recordsByEmployee.get(user._id.toString()) || null;
+    const status = getQaStatus(record);
+
+    // Filter by requested status
+    if (requestedStatus !== "all" && status !== requestedStatus) return;
+
+    rows.push({
+      employeeId: user,
+      qaId: record?._id || null,
+      scheduledDate: record?.scheduledDate || null,
+      completionDate: record?.completionDate || null,
+      qaCheckNote: record?.QACheckNote || null,
+      isClosed: record?.isClosed || false,
+      status: status,
+      logs: record?.logs || [],
+      createdAt: record?.createdAt || null,
+      updatedAt: record?.updatedAt || null,
+    });
+  });
+
+  return rows;
+};
+
+
+
+// --- Employee Matrix: Induction ---
+// Filter options: employeeId (optional), status
+// status values: all | scheduled | promoted | no-promotion | missing
+const getInductionMatrix = async (
+  companyId: string,
+  query: { employeeId?: string; status?: string },
+) => {
+  const leaverIds = await getLeaverIds(companyId);
+
+  // Build employee filter
+  const employeeFilter: any = {
+    company: companyId,
+    role: "employee",
+    status: "active",
+    _id: { $nin: leaverIds },
+  };
+  if (query.employeeId) {
+    employeeFilter._id = query.employeeId;
+  }
+
+  const employees = await User.find(employeeFilter)
+    .select("firstName lastName email avatar designationId departmentId noRtwCheck")
+    .populate("departmentId designationId")
+    .sort({ firstName: 1, lastName: 1 });
+
+  if (employees.length === 0) {
+    return [];
+  }
+
+  const employeeIds = employees.map((e) => e._id);
+
+  // Get Induction records for these employees
+  const inductionRecords = await Induction.find({
+    employeeId: { $in: employeeIds },
+  }).sort({ createdAt: -1 });
+
+  const recordsByEmployee = new Map<string, any>();
+  inductionRecords.forEach((rec) => {
+    const key = rec.employeeId.toString();
+    // If multiple records exist, keep the most recent one
+    if (!recordsByEmployee.has(key) || 
+        (rec.inductionDate && 
+         (!recordsByEmployee.get(key)?.inductionDate || 
+          new Date(rec.inductionDate) > new Date(recordsByEmployee.get(key).inductionDate)))) {
+      recordsByEmployee.set(key, rec);
+    }
+  });
+
+  const requestedStatus = query.status || "all";
+
+  // Helper to determine Induction status
+  const getInductionStatus = (record: any | null) => {
+    if (!record) return "missing";
+    
+    // Check if no promotion
+    if (record.noPromotion) return "no-promotion";
+    
+    // Check if has induction date
+    if (record.inductionDate) {
+      // Check if there's a promotion action in logs
+      const hasPromotionLog = record.logs?.some((log: any) => 
+        log.title?.toLowerCase().includes('promoted')
+      );
+      if (hasPromotionLog) return "promoted";
+      return "scheduled";
+    }
+    
+    return "missing";
+  };
+
+  const rows: any[] = [];
+
+  employees.forEach((user) => {
+    const record = recordsByEmployee.get(user._id.toString()) || null;
+    const status = getInductionStatus(record);
+
+    // Filter by requested status
+    if (requestedStatus !== "all" && status !== requestedStatus) return;
+
+    rows.push({
+      employeeId: user,
+      inductionId: record?._id || null,
+      inductionDate: record?.inductionDate || null,
+      noPromotion: record?.noPromotion || false,
+      status: status,
+      logs: record?.logs || [],
+      createdAt: record?.createdAt || null,
+      updatedAt: record?.updatedAt || null,
+    });
+  });
+
+  return rows;
+};
+
+
+// --- Employee Matrix: Disciplinary ---
+// Filter options: employeeId (optional), status
+// status values: all | active | due-soon | overdue | resolved | closed | missing
+const getDisciplinaryMatrix = async (
+  companyId: string,
+  query: { employeeId?: string; status?: string },
+) => {
+  const leaverIds = await getLeaverIds(companyId);
+
+  // Build employee filter
+  const employeeFilter: any = {
+    company: companyId,
+    role: "employee",
+    status: "active",
+    _id: { $nin: leaverIds },
+  };
+  if (query.employeeId) {
+    employeeFilter._id = query.employeeId;
+  }
+
+  const employees = await User.find(employeeFilter)
+    .select("firstName lastName email avatar designationId departmentId noRtwCheck")
+    .populate("departmentId designationId")
+    .sort({ firstName: 1, lastName: 1 });
+
+  if (employees.length === 0) {
+    return [];
+  }
+
+  const employeeIds = employees.map((e) => e._id);
+
+  // Get Disciplinary records for these employees
+  const disciplinaryRecords = await Disciplinary.find({
+    employeeId: { $in: employeeIds },
+  }).sort({ createdAt: -1 });
+
+  const recordsByEmployee = new Map<string, any>();
+  disciplinaryRecords.forEach((rec) => {
+    const key = rec.employeeId.toString();
+    // If multiple records exist, keep the most recent one
+    if (!recordsByEmployee.has(key) || 
+        (rec.createdAt && 
+         (!recordsByEmployee.get(key)?.createdAt || 
+          new Date(rec.createdAt) > new Date(recordsByEmployee.get(key).createdAt)))) {
+      recordsByEmployee.set(key, rec);
+    }
+  });
+
+  // Get schedule settings for threshold
+  const settings = await ScheduleCheck.findOne({ companyId });
+  const checkInterval = settings?.disciplinaryCheckDate || 30;
+
+  const requestedStatus = query.status || "all";
+
+  // Helper to determine Disciplinary status
+  const getDisciplinaryStatus = (record: any | null) => {
+    if (!record) return "missing";
+    
+    // Check if closed
+    if (record.isClosed) return "closed";
+    
+    // Check if has issue deadline
+    if (record.issueDeadline) {
+      const now = moment().startOf("day");
+      const deadline = moment(record.issueDeadline).startOf("day");
+      const diffDays = deadline.diff(now, "days");
+
+      if (now.isAfter(deadline)) {
+        return "overdue";
+      }
+      if (diffDays <= checkInterval) {
+        return "due-soon";
+      }
+      return "active";
+    }
+    
+    // No issue deadline - check if there are logs with resolved action
+    const hasResolvedLog = record.logs?.some((log: any) => 
+      log.title?.toLowerCase().includes('resolved')
+    );
+    if (hasResolvedLog) return "resolved";
+    
+    return "missing";
+  };
+
+  const rows: any[] = [];
+
+  employees.forEach((user) => {
+    const record = recordsByEmployee.get(user._id.toString()) || null;
+    const status = getDisciplinaryStatus(record);
+
+    // Filter by requested status
+    if (requestedStatus !== "all" && status !== requestedStatus) return;
+
+    rows.push({
+      employeeId: user,
+      disciplinaryId: record?._id || null,
+      issueDeadline: record?.issueDeadline || null,
+      extendDeadline: record?.extendDeadline || null,
+      issueNote: record?.issueNote || null,
+      isClosed: record?.isClosed || false,
+      status: status,
+      logs: record?.logs || [],
+      createdAt: record?.createdAt || null,
+      updatedAt: record?.updatedAt || null,
+    });
+  });
+
+  return rows;
+};
+
+
+
+
+// --- Employee Matrix: Required Documents ---
+// Filter options: employeeId (optional), status
+// status values: all | compliant | missing
+const getRequiredDocumentsMatrix = async (
+  companyId: string,
+  query: { employeeId?: string; status?: string },
+) => {
+  const leaverIds = await getLeaverIds(companyId);
+
+  // Build employee filter
+  const employeeFilter: any = {
+    company: companyId,
+    role: "employee",
+    status: "active",
+    _id: { $nin: leaverIds },
+  };
+  if (query.employeeId) {
+    employeeFilter._id = query.employeeId;
+  }
+
+  const employees = await User.find(employeeFilter)
+    .select("firstName lastName email avatar designationId departmentId noRtwCheck isBritish")
+    .populate("departmentId designationId")
+    .sort({ firstName: 1, lastName: 1 });
+
+  if (employees.length === 0) {
+    return [];
+  }
+
+  const employeeIds = employees.map((e) => e._id);
+
+  // Get all documents for these employees
+  const allDocs = await EmployeeDocument.find({
+    employeeId: { $in: employeeIds },
+  }).select("employeeId documentTitle documentUrl");
+
+  // Group documents by employee
+  const docsByEmployee = new Map<string, any[]>();
+  allDocs.forEach((doc) => {
+    const key = doc.employeeId.toString();
+    if (!docsByEmployee.has(key)) docsByEmployee.set(key, []);
+    docsByEmployee.get(key)!.push(doc);
+  });
+
+  const requestedStatus = query.status || "all";
+
+  // Helper to determine compliance status
+  const getComplianceStatus = (user: any, docs: any[]) => {
+    const uploadedTitles = docs.map((d) => d.documentTitle.trim().toLowerCase());
+
+    let requiredForThisUser = [...REQUIRED_DOCUMENTS_LIST];
+
+    if (user.noRtwCheck) {
+      requiredForThisUser = requiredForThisUser.filter(
+        (req) => !["Immigration Status", "Right to Work", "Passport"].includes(req)
+      );
+    }
+
+    const missing = requiredForThisUser.filter(
+      (req) => !uploadedTitles.includes(req.toLowerCase())
+    );
+
+    const refCount = uploadedTitles.filter(
+      (t) => t.includes("reference") && !t.includes("dbs")
+    ).length;
+
+    if (refCount < MIN_REFERENCE_COUNT) {
+      missing.push(
+        `Reference (Uploaded: ${refCount}, Required: ${MIN_REFERENCE_COUNT})`
+      );
+    }
+
+    return {
+      isCompliant: missing.length === 0,
+      missingDocuments: missing,
+      totalUploaded: docs.length,
+    };
+  };
+
+  const rows: any[] = [];
+
+  employees.forEach((user) => {
+    const docs = docsByEmployee.get(user._id.toString()) || [];
+    const compliance = getComplianceStatus(user, docs);
+    const status = compliance.isCompliant ? "compliant" : "missing";
+
+    // Filter by requested status
+    if (requestedStatus !== "all" && status !== requestedStatus) return;
+
+    rows.push({
+      employeeId: user,
+      totalUploaded: compliance.totalUploaded,
+      missingDocuments: compliance.missingDocuments,
+      isCompliant: compliance.isCompliant,
+      status: status,
+      documents: docs,
+    });
+  });
+
+  return rows;
+};
+
+
+
 export const ScheduleCheckStatuServices = {
   getCompanyComplianceStats,
   getPassportComplianceList,
@@ -1999,4 +3266,16 @@ export const ScheduleCheckStatuServices = {
   getQaComplianceList,
   getEmployeeDocumentComplianceList,
   getTrainingMatrix,
+  getRtwMatrix,
+  getVisaMatrix,
+  getImmigrationMatrix,
+  getPassportMatrix,
+  getDbsMatrix,
+  getAppraisalMatrix,
+  getSpotCheckMatrix,
+  getSupervisionMatrix,
+  getQaMatrix,
+  getInductionMatrix,
+  getDisciplinaryMatrix,
+  getRequiredDocumentsMatrix
 };

@@ -100,4 +100,81 @@ router.get(
   ScheduleCheckStatusControllers.getTrainingMatrixList,
 );
 
+router.get(
+  "/:companyId/employee-matrix/rtw",
+  auth("admin", "company", "companyAdmin"),
+  ScheduleCheckStatusControllers.getRtwMatrixList,
+);
+
+
+router.get(
+  "/:companyId/employee-matrix/visa",
+  auth("admin", "company", "companyAdmin"),
+  ScheduleCheckStatusControllers.getVisaMatrixList,
+);
+router.get(
+  "/:companyId/employee-matrix/immigration",
+  auth("admin", "company", "companyAdmin"),
+  ScheduleCheckStatusControllers.getImmigrationMatrixList,
+);
+
+router.get(
+  "/:companyId/employee-matrix/passport",
+  auth("admin", "company", "companyAdmin"),
+  ScheduleCheckStatusControllers.getPassportMatrixList,
+);
+
+
+router.get(
+  "/:companyId/employee-matrix/dbs",
+  auth("admin", "company", "companyAdmin"),
+  ScheduleCheckStatusControllers.getDbsMatrixList,
+);
+
+router.get(
+  "/:companyId/employee-matrix/appraisal",
+  auth("admin", "company", "companyAdmin"),
+  ScheduleCheckStatusControllers.getAppraisalMatrixList,
+);
+
+router.get(
+  "/:companyId/employee-matrix/spot-check",
+  auth("admin", "company", "companyAdmin"),
+  ScheduleCheckStatusControllers.getSpotCheckMatrixList,
+);
+
+
+router.get(
+  "/:companyId/employee-matrix/supervision",
+  auth("admin", "company", "companyAdmin"),
+  ScheduleCheckStatusControllers.getSupervisionMatrixList,
+);
+
+
+router.get(
+  "/:companyId/employee-matrix/qa",
+  auth("admin", "company", "companyAdmin"),
+  ScheduleCheckStatusControllers.getQaMatrixList,
+);
+
+router.get(
+  "/:companyId/employee-matrix/induction",
+  auth("admin", "company", "companyAdmin"),
+  ScheduleCheckStatusControllers.getInductionMatrixList,
+);
+
+router.get(
+  "/:companyId/employee-matrix/disciplinary",
+  auth("admin", "company", "companyAdmin"),
+  ScheduleCheckStatusControllers.getDisciplinaryMatrixList,
+);
+
+
+router.get(
+  "/:companyId/employee-matrix/required-documents",
+  auth("admin", "company", "companyAdmin"),
+  ScheduleCheckStatusControllers.getRequiredDocumentsMatrixList,
+);
+
+
 export const ScheduleCheckStatusRoutes = router;

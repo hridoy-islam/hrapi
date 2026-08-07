@@ -199,6 +199,220 @@ const getTrainingMatrixList: RequestHandler = catchAsync(async (req, res) => {
   });
 });
 
+const getRtwMatrixList: RequestHandler = catchAsync(async (req, res) => {
+  const { companyId } = req.params;
+  const { employeeId, status } = req.query;
+  const result = await ScheduleCheckStatuServices.getRtwMatrix(companyId, {
+    employeeId: employeeId as string | undefined,
+    status: status as string | undefined,
+  });
+
+  sendResponse(res, {
+    statusCode: httpStatus.OK,
+    success: true,
+    message: "Employee RTW matrix retrieved successfully",
+    data: result,
+  });
+});
+
+// --- Visa Matrix ---
+const getVisaMatrixList: RequestHandler = catchAsync(async (req, res) => {
+  const { companyId } = req.params;
+  const { employeeId, status } = req.query;
+  const result = await ScheduleCheckStatuServices.getVisaMatrix(companyId, {
+    employeeId: employeeId as string | undefined,
+    status: status as string | undefined,
+  });
+
+  sendResponse(res, {
+    statusCode: httpStatus.OK,
+    success: true,
+    message: "Employee Visa matrix retrieved successfully",
+    data: result,
+  });
+});
+
+
+// --- Immigration Matrix ---
+const getImmigrationMatrixList: RequestHandler = catchAsync(async (req, res) => {
+  const { companyId } = req.params;
+  const { employeeId, status } = req.query;
+  const result = await ScheduleCheckStatuServices.getImmigrationMatrix(companyId, {
+    employeeId: employeeId as string | undefined,
+    status: status as string | undefined,
+  });
+
+  sendResponse(res, {
+    statusCode: httpStatus.OK,
+    success: true,
+    message: "Employee Immigration matrix retrieved successfully",
+    data: result,
+  });
+});
+
+
+
+// --- Passport Matrix ---
+const getPassportMatrixList: RequestHandler = catchAsync(async (req, res) => {
+  const { companyId } = req.params;
+  const { employeeId, status } = req.query;
+  const result = await ScheduleCheckStatuServices.getPassportMatrix(companyId, {
+    employeeId: employeeId as string | undefined,
+    status: status as string | undefined,
+  });
+
+  sendResponse(res, {
+    statusCode: httpStatus.OK,
+    success: true,
+    message: "Employee Passport matrix retrieved successfully",
+    data: result,
+  });
+});
+
+
+// --- DBS Matrix ---
+const getDbsMatrixList: RequestHandler = catchAsync(async (req, res) => {
+  const { companyId } = req.params;
+  const { employeeId, status } = req.query;
+  const result = await ScheduleCheckStatuServices.getDbsMatrix(companyId, {
+    employeeId: employeeId as string | undefined,
+    status: status as string | undefined,
+  });
+
+  sendResponse(res, {
+    statusCode: httpStatus.OK,
+    success: true,
+    message: "Employee DBS matrix retrieved successfully",
+    data: result,
+  });
+});
+
+// --- Appraisal Matrix ---
+const getAppraisalMatrixList: RequestHandler = catchAsync(async (req, res) => {
+  const { companyId } = req.params;
+  const { employeeId, status } = req.query;
+  const result = await ScheduleCheckStatuServices.getAppraisalMatrix(companyId, {
+    employeeId: employeeId as string | undefined,
+    status: status as string | undefined,
+  });
+
+  sendResponse(res, {
+    statusCode: httpStatus.OK,
+    success: true,
+    message: "Employee Appraisal matrix retrieved successfully",
+    data: result,
+  });
+});
+
+
+// --- Spot Check Matrix ---
+const getSpotCheckMatrixList: RequestHandler = catchAsync(async (req, res) => {
+  const { companyId } = req.params;
+  const { employeeId, status } = req.query;
+  const result = await ScheduleCheckStatuServices.getSpotCheckMatrix(companyId, {
+    employeeId: employeeId as string | undefined,
+    status: status as string | undefined,
+  });
+
+  sendResponse(res, {
+    statusCode: httpStatus.OK,
+    success: true,
+    message: "Employee Spot Check matrix retrieved successfully",
+    data: result,
+  });
+});
+
+// --- Supervision Matrix ---
+const getSupervisionMatrixList: RequestHandler = catchAsync(async (req, res) => {
+  const { companyId } = req.params;
+  const { employeeId, status } = req.query;
+  const result = await ScheduleCheckStatuServices.getSupervisionMatrix(companyId, {
+    employeeId: employeeId as string | undefined,
+    status: status as string | undefined,
+  });
+
+  sendResponse(res, {
+    statusCode: httpStatus.OK,
+    success: true,
+    message: "Employee Supervision matrix retrieved successfully",
+    data: result,
+  });
+});
+
+// --- QA Matrix ---
+const getQaMatrixList: RequestHandler = catchAsync(async (req, res) => {
+  const { companyId } = req.params;
+  const { employeeId, status } = req.query;
+  const result = await ScheduleCheckStatuServices.getQaMatrix(companyId, {
+    employeeId: employeeId as string | undefined,
+    status: status as string | undefined,
+  });
+
+  sendResponse(res, {
+    statusCode: httpStatus.OK,
+    success: true,
+    message: "Employee QA matrix retrieved successfully",
+    data: result,
+  });
+});
+
+
+// --- Induction Matrix ---
+const getInductionMatrixList: RequestHandler = catchAsync(async (req, res) => {
+  const { companyId } = req.params;
+  const { employeeId, status } = req.query;
+  const result = await ScheduleCheckStatuServices.getInductionMatrix(companyId, {
+    employeeId: employeeId as string | undefined,
+    status: status as string | undefined,
+  });
+
+  sendResponse(res, {
+    statusCode: httpStatus.OK,
+    success: true,
+    message: "Employee Induction matrix retrieved successfully",
+    data: result,
+  });
+});
+
+
+
+// --- Disciplinary Matrix ---
+const getDisciplinaryMatrixList: RequestHandler = catchAsync(async (req, res) => {
+  const { companyId } = req.params;
+  const { employeeId, status } = req.query;
+  const result = await ScheduleCheckStatuServices.getDisciplinaryMatrix(companyId, {
+    employeeId: employeeId as string | undefined,
+    status: status as string | undefined,
+  });
+
+  sendResponse(res, {
+    statusCode: httpStatus.OK,
+    success: true,
+    message: "Employee Disciplinary matrix retrieved successfully",
+    data: result,
+  });
+});
+
+
+// --- Required Documents Matrix ---
+const getRequiredDocumentsMatrixList: RequestHandler = catchAsync(async (req, res) => {
+  const { companyId } = req.params;
+  const { employeeId, status } = req.query;
+  const result = await ScheduleCheckStatuServices.getRequiredDocumentsMatrix(companyId, {
+    employeeId: employeeId as string | undefined,
+    status: status as string | undefined,
+  });
+
+  sendResponse(res, {
+    statusCode: httpStatus.OK,
+    success: true,
+    message: "Employee Required Documents matrix retrieved successfully",
+    data: result,
+  });
+});
+
+
+
 export const ScheduleCheckStatusControllers = {
   getAllScheduleCheckStatus,
   getPassportStatusList,
@@ -214,5 +428,17 @@ export const ScheduleCheckStatusControllers = {
   getDisciplinaryStatusList,
   getQAStatusList,
   getRequiredDocumentStatusList,
-  getTrainingMatrixList
+  getTrainingMatrixList,
+  getRtwMatrixList,
+  getVisaMatrixList,
+  getImmigrationMatrixList,
+  getPassportMatrixList,
+  getDbsMatrixList,
+  getAppraisalMatrixList,
+  getSpotCheckMatrixList,
+  getSupervisionMatrixList,
+  getQaMatrixList,
+  getInductionMatrixList,
+  getDisciplinaryMatrixList,
+  getRequiredDocumentsMatrixList
 };
