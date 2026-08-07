@@ -940,6 +940,8 @@ const createRotaAttendanceIntoDB = async (payload: { rotaId: string }) => {
   return currentRota;
 };
 
+
+
 // const getAllMissedRotaFromDB = async (query: Record<string, unknown>) => {
 //   // 1. Destructure employeeId, userId, and companyId so we can use them in the DB query
 //   const { startDate, endDate, attendanceDate, employeeId, userId, companyId, ...restQuery } = query;
@@ -949,7 +951,7 @@ const createRotaAttendanceIntoDB = async (payload: { rotaId: string }) => {
 //   // ✅ Track current time to check against future dates
 //   const now = new Date();
 //   const todayStr = now.toISOString().split('T')[0]; // Format: YYYY-MM-DD
-  
+
 //   // Detect if query dates are strings or Date objects to apply matching formats
 //   const isStringFormat = typeof startDate === 'string' || typeof endDate === 'string' || typeof attendanceDate === 'string';
 //   const currentMaxDate = isStringFormat ? todayStr : now;
@@ -981,12 +983,14 @@ const createRotaAttendanceIntoDB = async (payload: { rotaId: string }) => {
 //   dateFilter.leaveType = { $in: [null, undefined, ""] };
 
 //   // ✅ Date range filter on rota startDate (strictly capped to exclude future dates)
+//   // rota.startDate is stored as a plain "YYYY-MM-DD" string on both sides here, so
+//   // lexicographic comparison is safe and unchanged.
 //   if (attendanceDate) {
 //     dateFilter.startDate = attendanceDate;
 //   } else if (startDate || endDate) {
 //     dateFilter.startDate = {};
 //     if (startDate) dateFilter.startDate.$gte = startDate;
-    
+
 //     if (endDate) {
 //       // Cap the endDate so it never allows querying into the future
 //       dateFilter.startDate.$lte = endDate < currentMaxDate ? endDate : currentMaxDate;
@@ -997,6 +1001,67 @@ const createRotaAttendanceIntoDB = async (payload: { rotaId: string }) => {
 //     // Default fallback: If no date parameter is passed, restrict values to past or present days
 //     dateFilter.startDate = { $lte: currentMaxDate };
 //   }
+
+//   // --- Helpers moved up: needed both for the padded attendance query below
+//   // and for the precise UK-local matching further down (Strategy 2 & 3). ---
+
+//   // Combine a "YYYY-MM-DD" date string with an "HH:mm" time string into a Date.
+//   // Uses Date.UTC explicitly (not setHours) so the result doesn't depend on
+//   // the server's local timezone setting. Returns null on bad/missing input
+//   // so callers can skip the check safely instead of producing a false match.
+//   const combineDateTime = (dateStr?: string, timeStr?: string): Date | null => {
+//     if (!dateStr || !timeStr) return null;
+
+//     const dateMatch = /^(\d{4})-(\d{2})-(\d{2})/.exec(dateStr.trim());
+//     if (!dateMatch) return null;
+
+//     const timeMatch = /^(\d{1,2}):(\d{2})/.exec(timeStr.trim());
+//     if (!timeMatch) return null;
+
+//     const [, year, month, day] = dateMatch;
+//     const hours = parseInt(timeMatch[1], 10);
+//     const minutes = parseInt(timeMatch[2], 10);
+//     if (isNaN(hours) || isNaN(minutes)) return null;
+
+//     return new Date(Date.UTC(+year, +month - 1, +day, hours, minutes, 0, 0));
+//   };
+
+//   // clockIn / clockInDate are stored as full ISO datetime strings in UTC
+//   // (e.g. "2026-07-27T13:22:41.202Z"), while rota.startTime / endTime are
+//   // UK LOCAL wall-clock times (e.g. "14:00"). To compare them on equal
+//   // footing we convert the UTC attendance timestamp into Europe/London
+//   // wall-clock date/time parts before feeding both sides through the
+//   // same combineDateTime().
+//   const getUkDateTimeParts = (iso?: string): { date: string; time: string } | null => {
+//     if (!iso) return null;
+
+//     const m = moment(iso); // parses the UTC ISO string, displays in Europe/London
+//     if (!m.isValid()) return null;
+
+//     return {
+//       date: m.format("YYYY-MM-DD"),
+//       time: m.format("HH:mm"),
+//     };
+//   };
+
+//   // ✅ FIX (bug 1): `clockIn`/`clockInDate` are stored as *full* ISO datetime
+//   // strings (String schema type), so comparing them against plain "YYYY-MM-DD"
+//   // boundaries with $gte/$lte is a lexicographic string comparison that
+//   // silently excludes same-day records (e.g. "...T08:40:30.251Z" <= "2026-07-19"
+//   // evaluates to false, even though that clock-in IS on 2026-07-19).
+//   //
+//   // Fix: build the Mongo-level range from full-length ISO strings, padded by
+//   // a day on each side to safely absorb the UTC/Europe-London (BST) offset.
+//   // This is intentionally a wide/safe net for the DB query only — the exact,
+//   // timezone-correct match happens afterwards in JS via getUkDateTimeParts().
+//   const toIsoBoundary = (dateStr: string, endOfDay: boolean, padDays: number): string => {
+//     const base = new Date(`${dateStr}T00:00:00.000Z`);
+//     base.setUTCDate(base.getUTCDate() + padDays);
+//     if (endOfDay) {
+//       base.setUTCHours(23, 59, 59, 999);
+//     }
+//     return base.toISOString();
+//   };
 
 //   // ✅ Build attendance date filter to find who already clocked in
 //   const attendanceDateFilter: Record<string, any> = {};
@@ -1010,11 +1075,15 @@ const createRotaAttendanceIntoDB = async (payload: { rotaId: string }) => {
 //   }
 
 //   if (attendanceDate) {
-//     attendanceDateFilter.clockIn = attendanceDate;
+//     const d = attendanceDate as string;
+//     attendanceDateFilter.clockIn = {
+//       $gte: toIsoBoundary(d, false, -1),
+//       $lte: toIsoBoundary(d, true, 1),
+//     };
 //   } else if (startDate || endDate) {
 //     attendanceDateFilter.clockIn = {};
-//     if (startDate) attendanceDateFilter.clockIn.$gte = startDate;
-//     if (endDate) attendanceDateFilter.clockIn.$lte = endDate;
+//     if (startDate) attendanceDateFilter.clockIn.$gte = toIsoBoundary(startDate as string, false, -1);
+//     if (endDate) attendanceDateFilter.clockIn.$lte = toIsoBoundary(endDate as string, true, 1);
 //   }
 
 //   // ✅ Strategy 1: attended via rotaId (direct link)
@@ -1027,13 +1096,22 @@ const createRotaAttendanceIntoDB = async (payload: { rotaId: string }) => {
 //   const attendanceRecords = await Attendance.find(attendanceDateFilter, {
 //     userId: 1,
 //     clockIn: 1,
+//     clockInDate: 1,
 //   }).lean();
 
-//   // Build a Set of "employeeId_date" pairs for fast lookup
+//   // ✅ FIX (bug 2): `clockInDate` is actually stored as a full ISO datetime
+//   // (same as `clockIn`), not a plain "YYYY-MM-DD" string — so keying the Set
+//   // off the raw field never matched rota.startDate ("YYYY-MM-DD"), and this
+//   // strategy was silently a no-op. Build the key from the UK-local calendar
+//   // date instead, same as Strategy 3 already does below.
 //   const attendedEmployeeDateSet = new Set(
 //     attendanceRecords
-//       .filter((a) => a.userId)
-//       .map((a:any) => `${a.userId.toString()}_${a.clockInDate}`),
+//       .filter((a: any) => a.userId)
+//       .map((a: any) => {
+//         const parts = getUkDateTimeParts(a.clockIn || a.clockInDate);
+//         const dateKey = parts ? parts.date : a.clockInDate;
+//         return `${a.userId.toString()}_${dateKey}`;
+//       }),
 //   );
 
 //   // ✅ Fetch candidate rotas (now properly filtered by employeeId and companyId!)
@@ -1042,14 +1120,86 @@ const createRotaAttendanceIntoDB = async (payload: { rotaId: string }) => {
 //     _id: { $nin: attendedByRotaId },
 //   })
 //     .populate({
-//       path:"departmentId",
-//       select:"departmentName"
+//       path: "departmentId",
+//       select: "departmentName",
 //     })
 //     .populate({
 //       path: "employeeId",
 //       select: "firstName lastName email",
 //     })
 //     .lean();
+
+//   // ✅ Strategy 3: time-window match.
+//   // Handles cases where an employee clocked in without a rotaId AND their
+//   // clockInDate doesn't line up exactly with the rota's startDate (e.g. an
+//   // overnight shift, or a clock-in logged a day off from the rota's date),
+//   // but the actual clock-in TIME falls within the rota's startTime–endTime
+//   // window. In that case the rota should NOT be treated as missed.
+//   // This is purely additive — it only ever removes rotas that Strategy 1/2
+//   // would have otherwise flagged as missed; it never adds rotas back in.
+
+//   const parseAttendanceDateTime = (a: any): Date | null => {
+//     const parts = getUkDateTimeParts(a.clockIn || a.clockInDate);
+//     if (!parts) return null;
+//     return combineDateTime(parts.date, parts.time);
+//   };
+
+//   // Pre-parse attendance records once into { empId, clockInDateTime } pairs
+//   // so we're not re-parsing dates inside the rota loop below.
+//   const parsedAttendances = attendanceRecords
+//     .filter((a: any) => a.userId)
+//     .map((a: any) => ({
+//       empId: a.userId.toString(),
+//       clockInDateTime: parseAttendanceDateTime(a),
+//     }))
+//     .filter((a) => a.clockInDateTime !== null);
+
+//   // ✅ FIX (bug 3): the stored rota.endDate is often left equal to
+//   // rota.startDate even for overnight shifts (endTime < startTime), so the
+//   // rota's displayed endDate is wrong. Derive the correct calendar endDate
+//   // from the time comparison itself, so it's consistent between the
+//   // time-window match below AND the rota details actually returned to the
+//   // client further down.
+//   const getCorrectedEndDate = (rota: any): string => {
+//     const start = rota.startDate;
+//     const storedEnd = rota.endDate || rota.startDate;
+
+//     // Only override when the stored endDate wasn't already explicitly set to
+//     // a later date (multi-day rotas keep whatever was stored) — this only
+//     // kicks in for the same-day-but-overnight case.
+//     if (storedEnd === start && rota.startTime && rota.endTime && rota.endTime <= rota.startTime) {
+//       const d = new Date(`${start}T00:00:00.000Z`);
+//       d.setUTCDate(d.getUTCDate() + 1);
+//       return d.toISOString().split("T")[0];
+//     }
+
+//     return storedEnd;
+//   };
+
+//   const isCoveredByAttendanceTimeWindow = (rota: any): boolean => {
+//     const empId = rota.employeeId?._id
+//       ? rota.employeeId._id.toString()
+//       : rota.employeeId?.toString();
+//     if (!empId) return false;
+
+//     const rotaStart = combineDateTime(rota.startDate, rota.startTime);
+//     if (!rotaStart) return false;
+
+//     const end = combineDateTime(getCorrectedEndDate(rota), rota.endTime);
+//     if (!end) return false;
+
+//     // getCorrectedEndDate already rolls the date forward for overnight
+//     // shifts, but keep this as a safety net for any edge case it doesn't
+//     // catch (e.g. missing startTime/endTime).
+//     const rotaEnd = end <= rotaStart ? new Date(end.getTime() + 24 * 60 * 60 * 1000) : end;
+
+//     return parsedAttendances.some(
+//       (a) =>
+//         a.empId === empId &&
+//         a.clockInDateTime! >= rotaStart &&
+//         a.clockInDateTime! <= rotaEnd,
+//     );
+//   };
 
 //   // ✅ Filter out rotas where employee already has attendance on that date OR if it's a future date
 //   const missedRotas = candidateRotas.filter((rota) => {
@@ -1062,15 +1212,31 @@ const createRotaAttendanceIntoDB = async (payload: { rotaId: string }) => {
 //     // Note: Because employeeId is populated, it is an object. We must extract the _id.
 //     const empId = rota.employeeId?._id ? rota.employeeId._id.toString() : rota.employeeId?.toString();
 //     const key = `${empId}_${rota.startDate}`;
-//     return !attendedEmployeeDateSet.has(key);
+//     if (attendedEmployeeDateSet.has(key)) {
+//       return false;
+//     }
+
+//     // ✅ Also exclude if attendance's clock-in time falls within this
+//     // rota's shift window, even though the date-key match above missed it.
+//     if (isCoveredByAttendanceTimeWindow(rota)) {
+//       return false;
+//     }
+
+//     return true;
 //   });
 
+//   // ✅ Return rota details with the corrected endDate so overnight shifts
+//   // (endTime < startTime) show the next calendar day, not the stored value.
+//   const missedRotasWithCorrectedEndDate = missedRotas.map((rota: any) => ({
+//     ...rota,
+//     endDate: getCorrectedEndDate(rota),
+//   }));
+
 //   return {
-//     meta: { total: missedRotas.length },
-//     result: missedRotas,
+//     meta: { total: missedRotasWithCorrectedEndDate.length },
+//     result: missedRotasWithCorrectedEndDate,
 //   };
 // };
-
 
 
 const getAllMissedRotaFromDB = async (query: Record<string, unknown>) => {
@@ -1079,18 +1245,30 @@ const getAllMissedRotaFromDB = async (query: Record<string, unknown>) => {
 
   const dateFilter: Record<string, any> = {};
 
-  // ✅ Track current time to check against future dates
+  // ✅ Track current time; "today" is excluded entirely — only strictly
+  // previous days should ever show up as missed.
   const now = new Date();
   const todayStr = now.toISOString().split('T')[0]; // Format: YYYY-MM-DD
 
+  // Start-of-today boundary (UTC midnight), used to exclude today's rotas,
+  // not just future ones.
+  const startOfToday = new Date(`${todayStr}T00:00:00.000Z`);
+
+  // Yesterday's date string — this is now the effective upper bound instead
+  // of today, so today's rotas never qualify as "missed" regardless of what
+  // time it currently is.
+  const yesterday = new Date(startOfToday);
+  yesterday.setUTCDate(yesterday.getUTCDate() - 1);
+  const yesterdayStr = yesterday.toISOString().split('T')[0];
+
   // Detect if query dates are strings or Date objects to apply matching formats
   const isStringFormat = typeof startDate === 'string' || typeof endDate === 'string' || typeof attendanceDate === 'string';
-  const currentMaxDate = isStringFormat ? todayStr : now;
+  const currentMaxDate = isStringFormat ? yesterdayStr : yesterday; // ✅ was todayStr / now
 
-  // ✅ Quick exit if a future attendance date is explicitly requested
+  // ✅ Quick exit if today or a future attendance date is explicitly requested
   if (attendanceDate) {
     const reqDate = new Date(attendanceDate as string);
-    if (reqDate > now) {
+    if (reqDate >= startOfToday) { // ✅ was `reqDate > now` — now also excludes today
       return {
         meta: { total: 0 },
         result: [],
@@ -1113,7 +1291,8 @@ const getAllMissedRotaFromDB = async (query: Record<string, unknown>) => {
   dateFilter.status = "publish";
   dateFilter.leaveType = { $in: [null, undefined, ""] };
 
-  // ✅ Date range filter on rota startDate (strictly capped to exclude future dates)
+  // ✅ Date range filter on rota startDate (strictly capped to exclude
+  // today and future dates — cap is now "yesterday", not "today").
   // rota.startDate is stored as a plain "YYYY-MM-DD" string on both sides here, so
   // lexicographic comparison is safe and unchanged.
   if (attendanceDate) {
@@ -1123,13 +1302,14 @@ const getAllMissedRotaFromDB = async (query: Record<string, unknown>) => {
     if (startDate) dateFilter.startDate.$gte = startDate;
 
     if (endDate) {
-      // Cap the endDate so it never allows querying into the future
+      // Cap the endDate so it never allows querying into today or the future
       dateFilter.startDate.$lte = endDate < currentMaxDate ? endDate : currentMaxDate;
     } else {
       dateFilter.startDate.$lte = currentMaxDate;
     }
   } else {
-    // Default fallback: If no date parameter is passed, restrict values to past or present days
+    // Default fallback: if no date parameter is passed, restrict values to
+    // strictly-before-today
     dateFilter.startDate = { $lte: currentMaxDate };
   }
 
@@ -1332,11 +1512,12 @@ const getAllMissedRotaFromDB = async (query: Record<string, unknown>) => {
     );
   };
 
-  // ✅ Filter out rotas where employee already has attendance on that date OR if it's a future date
+  // ✅ Filter out rotas where employee already has attendance on that date,
+  // OR if it's today's date or a future date
   const missedRotas = candidateRotas.filter((rota) => {
-    // ✅ Double check array items to drop any future dates completely
+    // ✅ Drop today's and any future-dated rotas completely
     const rotaDate = new Date(rota.startDate);
-    if (rotaDate > now) {
+    if (rotaDate >= startOfToday) { // ✅ was `rotaDate > now` — now also excludes today
       return false;
     }
 
@@ -1368,6 +1549,7 @@ const getAllMissedRotaFromDB = async (query: Record<string, unknown>) => {
     result: missedRotasWithCorrectedEndDate,
   };
 };
+
 
 export const RotaServices = {
   getAllRotaFromDB,
