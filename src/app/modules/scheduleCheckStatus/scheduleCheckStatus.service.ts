@@ -3147,11 +3147,12 @@ const getDisciplinaryMatrix = async (
 
 
 // --- Employee Matrix: Required Documents ---
-// Filter options: employeeId (optional), status
-// status values: all | compliant | missing
+// Filter options: employeeId (optional), status, documentType (optional)
+// status values: all | No Issue | Missing Document
+// documentType: if provided, only employees who are missing that specific document are returned
 const getRequiredDocumentsMatrix = async (
   companyId: string,
-  query: { employeeId?: string; status?: string },
+  query: { employeeId?: string; status?: string; documentType?: string },
 ) => {
   const leaverIds = await getLeaverIds(companyId);
 
@@ -3191,6 +3192,10 @@ const getRequiredDocumentsMatrix = async (
   });
 
   const requestedStatus = query.status || "all";
+  const requestedDocumentType =
+    query.documentType && query.documentType !== "all"
+      ? query.documentType.trim().toLowerCase()
+      : null;
 
   // Helper to determine compliance status
   const getComplianceStatus = (user: any, docs: any[]) => {
@@ -3231,10 +3236,34 @@ const getRequiredDocumentsMatrix = async (
   employees.forEach((user) => {
     const docs = docsByEmployee.get(user._id.toString()) || [];
     const compliance = getComplianceStatus(user, docs);
+
+    // documentType filter: only show employees who are missing this specific document
+    // and only show that document in the missingDocuments list
+    if (requestedDocumentType) {
+      const filteredMissing = compliance.missingDocuments.filter(
+        (m) => m.toLowerCase().includes(requestedDocumentType),
+      );
+      if (filteredMissing.length === 0) return;
+      compliance.missingDocuments = filteredMissing;
+    }
+
     const status = compliance.isCompliant ? "No Issue" : "Missing Document";
 
     // Filter by requested status
     if (requestedStatus !== "all" && status !== requestedStatus) return;
+
+    // Build document title -> first document url map for CSV export
+    const documentUrls: Record<string, string> = {};
+    docs.forEach((doc) => {
+      const title = doc.documentTitle.trim();
+      if (
+        !documentUrls[title] &&
+        doc.documentUrl &&
+        doc.documentUrl.length > 0
+      ) {
+        documentUrls[title] = doc.documentUrl[0];
+      }
+    });
 
     rows.push({
       employeeId: user,
@@ -3244,6 +3273,7 @@ const getRequiredDocumentsMatrix = async (
       isCompliant: compliance.isCompliant,
       status: status,
       documents: docs,
+      documentUrls,
     });
   });
 

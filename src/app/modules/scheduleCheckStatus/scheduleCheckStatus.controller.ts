@@ -397,10 +397,11 @@ const getDisciplinaryMatrixList: RequestHandler = catchAsync(async (req, res) =>
 // --- Required Documents Matrix ---
 const getRequiredDocumentsMatrixList: RequestHandler = catchAsync(async (req, res) => {
   const { companyId } = req.params;
-  const { employeeId, status } = req.query;
+  const { employeeId, status, documentType } = req.query;
   const result = await ScheduleCheckStatuServices.getRequiredDocumentsMatrix(companyId, {
     employeeId: employeeId as string | undefined,
     status: status as string | undefined,
+    documentType: documentType as string | undefined,
   });
 
   sendResponse(res, {
