@@ -3221,6 +3221,7 @@ const getRequiredDocumentsMatrix = async (
     return {
       isCompliant: missing.length === 0,
       missingDocuments: missing,
+      requiredDocuments: requiredForThisUser,
       totalUploaded: docs.length,
     };
   };
@@ -3230,7 +3231,7 @@ const getRequiredDocumentsMatrix = async (
   employees.forEach((user) => {
     const docs = docsByEmployee.get(user._id.toString()) || [];
     const compliance = getComplianceStatus(user, docs);
-    const status = compliance.isCompliant ? "compliant" : "missing";
+    const status = compliance.isCompliant ? "No Issue" : "Missing Document";
 
     // Filter by requested status
     if (requestedStatus !== "all" && status !== requestedStatus) return;
@@ -3239,6 +3240,7 @@ const getRequiredDocumentsMatrix = async (
       employeeId: user,
       totalUploaded: compliance.totalUploaded,
       missingDocuments: compliance.missingDocuments,
+      requiredDocuments: compliance.requiredDocuments,
       isCompliant: compliance.isCompliant,
       status: status,
       documents: docs,
