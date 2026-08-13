@@ -3,10 +3,9 @@ import { RequestHandler } from "express";
 import httpStatus from "http-status";
 
 
-
-import { AuditServices } from "./audit.service";
 import catchAsync from "../../utils/catchAsync";
 import sendResponse from "../../utils/sendResponse";
+import { AuditServices } from "./audit.service";
 
 
 const getAllAudit: RequestHandler = catchAsync(async (req, res) => {
@@ -28,6 +27,8 @@ const getSingleAudit = catchAsync(async (req, res) => {
     data: result,
   });
 });
+
+
 
 const updateAudit = catchAsync(async (req, res) => {
   const { id } = req.params;
@@ -62,30 +63,12 @@ const deleteAudit = catchAsync(async (req, res) => {
   });
 });
 
-const updateAuditLog = catchAsync(async (req, res) => {
-  const { id, logId } = req.params;
-
-  const result = await AuditServices.updateAuditLogIntoDB(
-    id,
-    logId,
-    req.body
-  );
-
-  sendResponse(res, {
-    statusCode: httpStatus.OK,
-    success: true,
-    message: "Audit log updated successfully",
-    data: result,
-  });
-});
-
 
 export const AuditControllers = {
-    getAllAudit,
-    getSingleAudit,
-    updateAudit,
-    createAudit,
-    deleteAudit,
-    updateAuditLog
+  getAllAudit,
+  getSingleAudit,
+  updateAudit,
+  createAudit,
+  deleteAudit,
 };
 

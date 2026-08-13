@@ -1025,6 +1025,7 @@ import { MeetingMins } from "../meetingMins/meetingMins.model";
 import { CompanyPolicy } from "../companyPolicy/companyPolicy.model";
 import { HealthAndSafety } from "../healthAndSafety/healthAndSafety.model";
 import { Leaver } from "../hr/leaver/leaver.model";
+import { Audit } from "../audit/audit.model";
 
 export const UserStatus = ["block", "active"];
 
@@ -1653,7 +1654,7 @@ const getCompanyComplianceStats = async (companyId: string) => {
     return {
       passport: 0, rtw: 0, visa: 0, dbs: 0, immigration: 0, appraisal: 0,
       spot: 0, supervision: 0, training: 0, induction: 0, disciplinary: 0, employeeDocument: 0, meeting: 0,
-      policy: 0, healthAndSafety: 0,
+      policy: 0, healthAndSafety: 0, audit: 0,
     };
   }
 
@@ -1705,6 +1706,7 @@ const getCompanyComplianceStats = async (companyId: string) => {
     meetingNonCompliantCount, 
     policyNonCompliantCount,
     healthAndSafetyNonCompliantCount,
+    dueAuditCount,
   ] = await Promise.all([
     Passport.distinct("userId", {
       userId: { $in: rtwRequiredEmployeeIds },
@@ -1782,7 +1784,12 @@ const getCompanyComplianceStats = async (companyId: string) => {
       $or: [
         { expiryDate: { $lte: getSafeThreshold(intervals.healthAndSafety) } }
       ]
-    })
+    }),
+    Audit.countDocuments({
+      companyId: companyId,
+      status: { $ne: "completed" },
+      auditDate: { $lt: moment().startOf("day").toDate() },
+    }),
   ]);
 
   let employeeDocumentNonCompliantCount = 0;
@@ -1869,6 +1876,7 @@ const getCompanyComplianceStats = async (companyId: string) => {
     meeting: meetingNonCompliantCount, 
     policy: policyNonCompliantCount, 
     healthAndSafety: healthAndSafetyNonCompliantCount, 
+    audit: dueAuditCount, 
   };
 };
 

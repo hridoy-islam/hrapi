@@ -57,12 +57,6 @@ const updateScheduleCheckIntoDB = async (id: string, payload: Partial<TScheduleC
   }
 
   // Toggle `isDeleted` status for the selected user only
-  // const newStatus = !user.isDeleted;
-
-  // // Check if the user is a company, but only update the selected user
-  // if (user.role === "company") {
-  //   payload.isDeleted = newStatus;
-  // }
 
   // Update only the selected user
   const result = await ScheduleCheck.findByIdAndUpdate(id, payload, {

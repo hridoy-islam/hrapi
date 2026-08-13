@@ -1,47 +1,111 @@
 import { Schema, model } from "mongoose";
-import { TAudit } from "./audit.interface";
+import { TAudit, TLogEntry } from "./audit.interface";
+
+const LogEntrySchema = new Schema<TLogEntry>(
+  {
+    title: {
+      type: String,
+      required: true,
+      trim: true,
+    },
+    date: {
+      type: Date,
+      required: true,
+    },
+    updatedBy: {
+      type: Schema.Types.ObjectId,
+      required: true,
+      ref: "User",
+    },
+    document: {
+      type: [String],
+      default: [],
+    },
+    note: {
+      type: String,
+      trim: true,
+    },
+    auditDate: {
+      type: Date,
+    },
+    extendDeadline: {
+      type: Date,
+    },
+    action: {
+      type: String,
+      enum: ["update", "create", "extend", "complete"],
+    },
+    previousStatus: {
+      type: Boolean,
+    },
+    newStatus: {
+      type: Boolean,
+    },
+  },
+  { _id: true }
+);
 
 const AuditSchema = new Schema<TAudit>(
   {
     companyId: {
       type: Schema.Types.ObjectId,
+      required: true,
       ref: "User",
+    },
+
+    auditTypeId: {
+      type: Schema.Types.ObjectId,
       required: true,
+      ref: "AuditType",
     },
-    documentTitle: {
-      type: String,
+
+    employeeId: {
+      type: Schema.Types.ObjectId,
       required: true,
+      ref: "User",
     },
-    title: [
-      {
-        type: String,
-        required: true,
-      },
-    ],
-    type: { type: String, enum: ["folder", "file"], required: true },
-    parentId: { 
-      type: Schema.Types.ObjectId, 
-      ref: "Audit", 
-      default: null 
+
+    serviceUserId: {
+      type: Schema.Types.ObjectId,
+      required: true,
+      ref: "ServiceUser",
     },
-    // REMOVED 'default: null' here so it properly defaults to a clean, empty array []
-    ancestors: [
-      { 
-        type: Schema.Types.ObjectId, 
-        ref: "Audit" 
-      }
-    ],
-    documentUrl: {
+
+    note: {
       type: String,
+      trim: true,
+    },
+
+    document: {
+      type: [String],
+      default: [],
+    },
+
+    auditDate: {
+      type: Date,
+    },
+
+    extendDeadline: {
+      type: Date,
+    },
+
+    logs: {
+      type: [LogEntrySchema],
+      default: [],
+    },
+
+    action: {
+      type: String,
+    },
+    status: {
+      type: String,
+      enum: ["active", "completed"],
+      default: "active",
     },
   },
   {
     timestamps: true,
-  },
+  }
 );
-
-// CRITICAL INDEXES: This speeds up searching folders drastically
-AuditSchema.index({ companyId: 1, parentId: 1 });
-AuditSchema.index({ ancestors: 1 });
 
 export const Audit = model<TAudit>("Audit", AuditSchema);

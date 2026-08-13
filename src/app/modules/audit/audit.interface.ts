@@ -1,20 +1,29 @@
 import { Types } from "mongoose";
 
+export interface TLogEntry {
+  title: string;
+  date: Date;
+  updatedBy: Types.ObjectId;
+  document?: string[];
+  note?: string;
+  auditDate?: Date;
+  extendDeadline?: Date;
+  action?: 'update' | 'create' | 'extend' | 'complete';
+  previousStatus?: boolean;
+  newStatus?: boolean;
+}
+
 export interface TAudit {
-  companyId: Types.ObjectId;
+   companyId: Types.ObjectId;
+  auditTypeId: Types.ObjectId;
+  employeeId: Types.ObjectId;
+  serviceUserId: Types.ObjectId;
+  note:string;
+    document?: string[];
 
-  documentTitle: string;
-
-  title: string[];
-
-  type: "folder" | "file";
-
-  parentId: Types.ObjectId | null;
-
-  ancestors: Types.ObjectId[];
-
-  documentUrl?: string;
-
-  createdAt?: Date;
-  updatedAt?: Date;
+  auditDate:Date;
+  extendDeadline:Date;
+  logs: TLogEntry[];
+  action?: string;
+  status: 'active' | 'completed';
 }

@@ -49,6 +49,7 @@ import { CompanyPolicyRoutes } from "../modules/companyPolicy/companyPolicy.rout
 import { HealthAndSafetyRoutes } from "../modules/healthAndSafety/healthAndSafety.route";
 import { PlannedRotaRoutes } from "../modules/plannedRota/plannedRota.router";
 import { ServiceUserDocumentRoutes } from "../modules/serviceUserDocument/serviceUserDocument.router";
+import { AuditTypeRoutes } from "../modules/auditType/auditType.router";
 import { AuditRoutes } from "../modules/audit/audit.router";
 
 const router = Router();
@@ -255,6 +256,10 @@ const moduleRoutes = [
   {
     path: "/health-and-safety",
     route: HealthAndSafetyRoutes,
+  },
+  {
+    path: "/audit-type",
+    route: AuditTypeRoutes,
   },
   {
     path: "/audit",

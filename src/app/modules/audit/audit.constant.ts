@@ -1,8 +1,4 @@
 
   
-export const AuditSearchableFields = ["documentTitle"];
-  
-
-
-
+  export const AuditSearchableFields = ["note"];
   

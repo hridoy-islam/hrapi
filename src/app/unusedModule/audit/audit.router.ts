@@ -15,6 +15,7 @@ router.get(
   auth("admin", "company","companyAdmin"),
 AuditControllers.getSingleAudit
 );
+
 router.post(
   "/",
   auth("admin", "company","companyAdmin"),
@@ -27,15 +28,9 @@ router.patch(
 AuditControllers.updateAudit
 );
 
-router.patch(
-  "/:id/logs/:logId",
-  auth("admin", "company","companyAdmin"),
-  AuditControllers.updateAuditLog
-);
-
 router.delete(
   "/:id",
-  auth("admin"),
+  auth("admin", "company","companyAdmin"),
   AuditControllers.deleteAudit
 );
 

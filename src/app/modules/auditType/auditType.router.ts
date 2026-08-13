@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import express from "express";
-import { AuditControllers } from "./audit.controller";
+import { AuditTypeControllers } from "./auditType.controller";
 import auth from "../../middlewares/auth";
 
 
@@ -8,37 +8,31 @@ const router = express.Router();
 router.get(
   "/",
   auth("admin", "company","companyAdmin"),
-  AuditControllers.getAllAudit
+  AuditTypeControllers.getAllAuditType
 );
 router.get(
   "/:id",
   auth("admin", "company","companyAdmin"),
-AuditControllers.getSingleAudit
+AuditTypeControllers.getSingleAuditType
 );
 router.post(
   "/",
   auth("admin", "company","companyAdmin"),
-AuditControllers.createAudit
+AuditTypeControllers.createAuditType
 );
 
 router.patch(
   "/:id",
   auth("admin", "company","companyAdmin"),
-AuditControllers.updateAudit
-);
-
-router.patch(
-  "/:id/logs/:logId",
-  auth("admin", "company","companyAdmin"),
-  AuditControllers.updateAuditLog
+AuditTypeControllers.updateAuditType
 );
 
 router.delete(
   "/:id",
-  auth("admin"),
-  AuditControllers.deleteAudit
+  auth("admin", "company", "companyAdmin"),
+  AuditTypeControllers.deleteAuditType
 );
 
 
 
-export const AuditRoutes = router;
+export const AuditTypeRoutes = router;
