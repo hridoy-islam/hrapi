@@ -7,7 +7,7 @@ export interface TLogEntry {
   document?: string[];
   note?: string;
   auditDate?: Date;
-    nextCheckDate:Date;
+    nextCheckDate?: Date;
 
   extendDeadline?: Date;
   action?: 'update' | 'create' | 'extend' | 'complete';
@@ -19,12 +19,12 @@ export interface TAudit {
    companyId: Types.ObjectId;
   auditTypeId: Types.ObjectId;
   employeeId: Types.ObjectId;
-  serviceUserId: Types.ObjectId;
+  serviceUserId?: Types.ObjectId;
   note:string;
     document?: string[];
 
   auditDate:Date;
-  nextCheckDate:Date;
+  nextCheckDate?: Date;
   extendDeadline:Date;
   logs: TLogEntry[];
   action?: string;

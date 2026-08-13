@@ -26,7 +26,11 @@ const getAllAuditFromDB = async (query: Record<string, unknown>) => {
     const range: Record<string, Date> = {};
     if (query.fromDate) range.$gte = new Date(query.fromDate as string);
     if (query.toDate) range.$lte = new Date(query.toDate as string);
-    filter.nextCheckDate = range;
+    filter.$or = [
+      { nextCheckDate: range },
+      { nextCheckDate: { $exists: false } },
+      { nextCheckDate: null },
+    ];
   }
 
   if (status === "active") {
@@ -88,18 +92,22 @@ const createAuditIntoDB = async (
     ? moment(coreData.nextCheckDate).format("DD MMM YYYY")
     : "No next check date set";
 
-  const logsToCreate: any[] = [
-    {
-      title: `Audit created with audit date of ${auditDateStr} and next check date of ${nextCheckDateStr}`,
-      date: new Date(),
-      updatedBy,
-      document: getDocuments(document),
-      note: note || "",
-      auditDate: coreData.auditDate || null,
-      nextCheckDate: coreData.nextCheckDate || null,
-      action: "create",
-    },
-  ];
+  const logEntry: any = {
+    title: `Audit created with audit date of ${auditDateStr}`,
+    date: new Date(),
+    updatedBy,
+    document: getDocuments(document),
+    note: note || "",
+    auditDate: coreData.auditDate || null,
+    action: "create",
+  };
+
+  if (coreData.nextCheckDate) {
+    logEntry.nextCheckDate = coreData.nextCheckDate;
+    logEntry.title = `Audit created with audit date of ${auditDateStr} and next check date of ${nextCheckDateStr}`;
+  }
+
+  const logsToCreate: any[] = [logEntry];
 
   try {
     const result = await Audit.create({
@@ -193,30 +201,6 @@ const updateAuditIntoDB = async (
     }
   }
 
-  // Handle edit note/documents action
-  else if (updateData.action === "editDetails") {
-    const todayStr = moment().format("DD MMM YYYY");
-
-    logsToAdd.push({
-      title: `Audit details updated`,
-      date: new Date(),
-      updatedBy,
-      document: getDocuments(document),
-      note: note || "",
-      auditDate: audit.auditDate || null,
-      nextCheckDate: audit.nextCheckDate || null,
-      action: "update",
-    });
-
-    if (note !== undefined) {
-      audit.note = note as string;
-    }
-    if (document !== undefined) {
-      audit.document = getDocuments(document);
-    }
-    audit.action = undefined as any;
-  }
-
   // Handle complete action
   else if (updateData.action === "complete") {
     const todayStr = moment().format("DD MMM YYYY");
@@ -236,9 +220,15 @@ const updateAuditIntoDB = async (
     audit.action = undefined as any;
   }
 
-  // Handle general updates (new audit date / next check date)
+  // Handle general updates (audit details: type/employee/service user/dates/note/documents)
   else if (
-    (updateData.auditDate || updateData.nextCheckDate) &&
+    (updateData.auditDate ||
+      updateData.nextCheckDate ||
+      updateData.auditTypeId ||
+      updateData.employeeId ||
+      updateData.serviceUserId ||
+      note !== undefined ||
+      document !== undefined) &&
     audit.status !== "completed"
   ) {
     const changes: string[] = [];
@@ -246,32 +236,52 @@ const updateAuditIntoDB = async (
       changes.push(
         `audit date set to ${moment(updateData.auditDate).format("DD MMM YYYY")}`
       );
+      audit.auditDate = updateData.auditDate as Date;
     }
     if (updateData.nextCheckDate) {
       changes.push(
-        `Audit check date set to ${moment(updateData.nextCheckDate).format(
+        `next check date set to ${moment(updateData.nextCheckDate).format(
           "DD MMM YYYY"
         )}`
       );
+      audit.nextCheckDate = updateData.nextCheckDate as Date;
+    }
+    if (updateData.auditTypeId) {
+      changes.push("audit type updated");
+      audit.auditTypeId = updateData.auditTypeId as any;
+    }
+    if (updateData.employeeId) {
+      changes.push("employee updated");
+      audit.employeeId = updateData.employeeId as any;
+    }
+    if (updateData.serviceUserId) {
+      changes.push("service user updated");
+      audit.serviceUserId = updateData.serviceUserId as any;
+    }
+    if (note !== undefined) {
+      changes.push("note updated");
+      audit.note = note as string;
+    }
+    if (document !== undefined) {
+      changes.push("documents updated");
+      audit.document = getDocuments(document);
     }
 
     logsToAdd.push({
-      title: changes.join(" and ").replace(/^./, (c) => c.toUpperCase()),
+      title:
+        updateData.action === "update"
+          ? "Audit details updated"
+          : changes.length > 0
+            ? changes.join(", ").replace(/^./, (c) => c.toUpperCase())
+            : `Audit updated on ${moment().format("DD MMM YYYY")}`,
       date: new Date(),
       updatedBy,
       document: getDocuments(document),
       note: note || "",
-      auditDate: updateData.auditDate || audit.auditDate || null,
-      nextCheckDate: updateData.nextCheckDate || audit.nextCheckDate || null,
+      auditDate: audit.auditDate || null,
+      nextCheckDate: audit.nextCheckDate || null,
       action: "update",
     });
-
-    if (updateData.auditDate) {
-      audit.auditDate = updateData.auditDate as Date;
-    }
-    if (updateData.nextCheckDate) {
-      audit.nextCheckDate = updateData.nextCheckDate as Date;
-    }
   }
 
   if (logsToAdd.length > 0) {

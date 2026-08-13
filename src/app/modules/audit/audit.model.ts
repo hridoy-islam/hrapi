@@ -71,7 +71,6 @@ const AuditSchema = new Schema<TAudit>(
 
     serviceUserId: {
       type: Schema.Types.ObjectId,
-      required: true,
       ref: "ServiceUser",
     },
 
