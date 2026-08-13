@@ -26,7 +26,7 @@ const getAllAuditFromDB = async (query: Record<string, unknown>) => {
     const range: Record<string, Date> = {};
     if (query.fromDate) range.$gte = new Date(query.fromDate as string);
     if (query.toDate) range.$lte = new Date(query.toDate as string);
-    filter.auditDate = range;
+    filter.nextCheckDate = range;
   }
 
   if (status === "active") {
@@ -35,8 +35,8 @@ const getAllAuditFromDB = async (query: Record<string, unknown>) => {
     filter.status = "completed";
   } else if (status === "due") {
     filter.status = { $ne: "completed" };
-    filter.auditDate = {
-      ...((filter.auditDate as Record<string, unknown>) || {}),
+    filter.nextCheckDate = {
+      ...((filter.nextCheckDate as Record<string, unknown>) || {}),
       $lt: moment().startOf("day").toDate(),
     };
   }
@@ -84,15 +84,19 @@ const createAuditIntoDB = async (
   const auditDateStr = coreData.auditDate
     ? moment(coreData.auditDate).format("DD MMM YYYY")
     : "No audit date set";
+  const nextCheckDateStr = coreData.nextCheckDate
+    ? moment(coreData.nextCheckDate).format("DD MMM YYYY")
+    : "No next check date set";
 
   const logsToCreate: any[] = [
     {
-      title: `New Audit created with audit date of ${auditDateStr}`,
+      title: `Audit created with audit date of ${auditDateStr} and next check date of ${nextCheckDateStr}`,
       date: new Date(),
       updatedBy,
       document: getDocuments(document),
       note: note || "",
       auditDate: coreData.auditDate || null,
+      nextCheckDate: coreData.nextCheckDate || null,
       action: "create",
     },
   ];
@@ -150,33 +154,35 @@ const updateAuditIntoDB = async (
       document: getDocuments(document),
       note: note || "",
       auditDate: audit.auditDate || null,
+      nextCheckDate: audit.nextCheckDate || null,
       action: "update",
     });
   }
 
-  // Handle extend audit date action
+  // Handle extend next check date action
   else if (updateData.action === "extendDate") {
-    const oldDate = audit.auditDate
-      ? moment(audit.auditDate).format("DD/MM/YYYY")
+    const oldDate = audit.nextCheckDate
+      ? moment(audit.nextCheckDate).format("DD/MM/YYYY")
       : "N/A";
-    const newDateRaw = updateData.auditDate;
+    const newDateRaw = updateData.nextCheckDate;
     const newDate = newDateRaw
       ? moment(newDateRaw).format("DD/MM/YYYY")
       : "N/A";
 
     logsToAdd.push({
-      title: `Audit date extended from ${oldDate} to ${newDate}`,
+      title: `Audit check date extended from ${oldDate} to ${newDate}`,
       date: new Date(),
       updatedBy,
       document: getDocuments(document),
       note: note || "",
       auditDate: audit.auditDate || null,
+      nextCheckDate: newDateRaw || null,
       extendDeadline: newDateRaw || null,
       action: "extend",
     });
 
     if (newDateRaw) {
-      audit.auditDate = newDateRaw as Date;
+      audit.nextCheckDate = newDateRaw as Date;
     }
     audit.action = undefined as any;
     if (note !== undefined) {
@@ -192,12 +198,13 @@ const updateAuditIntoDB = async (
     const todayStr = moment().format("DD MMM YYYY");
 
     logsToAdd.push({
-      title: `Audit details updated on ${todayStr}`,
+      title: `Audit details updated`,
       date: new Date(),
       updatedBy,
       document: getDocuments(document),
       note: note || "",
       auditDate: audit.auditDate || null,
+      nextCheckDate: audit.nextCheckDate || null,
       action: "update",
     });
 
@@ -221,6 +228,7 @@ const updateAuditIntoDB = async (
       document: getDocuments(document),
       note: note || "",
       auditDate: audit.auditDate || null,
+      nextCheckDate: audit.nextCheckDate || null,
       action: "complete",
     });
 
@@ -228,21 +236,42 @@ const updateAuditIntoDB = async (
     audit.action = undefined as any;
   }
 
-  // Handle general updates (new audit date)
-  else if (updateData.auditDate && audit.status !== "completed") {
-    const dateStr = moment(updateData.auditDate).format("DD MMM YYYY");
+  // Handle general updates (new audit date / next check date)
+  else if (
+    (updateData.auditDate || updateData.nextCheckDate) &&
+    audit.status !== "completed"
+  ) {
+    const changes: string[] = [];
+    if (updateData.auditDate) {
+      changes.push(
+        `audit date set to ${moment(updateData.auditDate).format("DD MMM YYYY")}`
+      );
+    }
+    if (updateData.nextCheckDate) {
+      changes.push(
+        `Audit check date set to ${moment(updateData.nextCheckDate).format(
+          "DD MMM YYYY"
+        )}`
+      );
+    }
 
     logsToAdd.push({
-      title: `Audit date set to ${dateStr}`,
+      title: changes.join(" and ").replace(/^./, (c) => c.toUpperCase()),
       date: new Date(),
       updatedBy,
       document: getDocuments(document),
       note: note || "",
-      auditDate: updateData.auditDate || null,
+      auditDate: updateData.auditDate || audit.auditDate || null,
+      nextCheckDate: updateData.nextCheckDate || audit.nextCheckDate || null,
       action: "update",
     });
 
-    audit.auditDate = updateData.auditDate as Date;
+    if (updateData.auditDate) {
+      audit.auditDate = updateData.auditDate as Date;
+    }
+    if (updateData.nextCheckDate) {
+      audit.nextCheckDate = updateData.nextCheckDate as Date;
+    }
   }
 
   if (logsToAdd.length > 0) {
@@ -259,6 +288,7 @@ const updateAuditLogIntoDB = async (
   payload: {
     document?: string[];
     auditDate?: Date;
+    nextCheckDate?: Date;
     extendDeadline?: Date;
     note?: string;
     date?: Date;
@@ -279,6 +309,9 @@ const updateAuditLogIntoDB = async (
   const oldAuditDate = log.auditDate
     ? moment(log.auditDate).format("DD MMM YYYY")
     : null;
+  const oldNextCheckDate = log.nextCheckDate
+    ? moment(log.nextCheckDate).format("DD MMM YYYY")
+    : null;
   const oldExtDeadline = log.extendDeadline
     ? moment(log.extendDeadline).format("DD MMM YYYY")
     : null;
@@ -287,6 +320,9 @@ const updateAuditLogIntoDB = async (
   const newAuditDate = payload.auditDate
     ? moment(payload.auditDate).format("DD MMM YYYY")
     : null;
+  const newNextCheckDate = payload.nextCheckDate
+    ? moment(payload.nextCheckDate).format("DD MMM YYYY")
+    : null;
   const newExtDeadline = payload.extendDeadline
     ? moment(payload.extendDeadline).format("DD MMM YYYY")
     : null;
@@ -294,6 +330,8 @@ const updateAuditLogIntoDB = async (
 
   if (payload.document !== undefined) log.document = payload.document;
   if (payload.auditDate !== undefined) log.auditDate = payload.auditDate;
+  if (payload.nextCheckDate !== undefined)
+    log.nextCheckDate = payload.nextCheckDate;
   if (payload.extendDeadline !== undefined)
     log.extendDeadline = payload.extendDeadline;
   if (payload.note !== undefined) log.note = payload.note;
@@ -301,7 +339,15 @@ const updateAuditLogIntoDB = async (
 
   const dateStr = newDate || oldDate || moment(log.date).format("DD MMM YYYY");
 
-  if (newAuditDate !== oldAuditDate) {
+  if (newNextCheckDate !== oldNextCheckDate) {
+    if (newNextCheckDate) {
+      log.title = oldNextCheckDate
+        ? `Audit check date updated from ${oldNextCheckDate} to ${newNextCheckDate}`
+        : `Audit check date set to ${newNextCheckDate}`;
+    } else {
+      log.title = `Next check date removed (was ${oldNextCheckDate || "not set"})`;
+    }
+  } else if (newAuditDate !== oldAuditDate) {
     if (newAuditDate) {
       log.title = oldAuditDate
         ? `Audit date updated from ${oldAuditDate} to ${newAuditDate}`

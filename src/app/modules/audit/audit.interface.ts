@@ -7,6 +7,8 @@ export interface TLogEntry {
   document?: string[];
   note?: string;
   auditDate?: Date;
+    nextCheckDate:Date;
+
   extendDeadline?: Date;
   action?: 'update' | 'create' | 'extend' | 'complete';
   previousStatus?: boolean;
@@ -22,6 +24,7 @@ export interface TAudit {
     document?: string[];
 
   auditDate:Date;
+  nextCheckDate:Date;
   extendDeadline:Date;
   logs: TLogEntry[];
   action?: string;

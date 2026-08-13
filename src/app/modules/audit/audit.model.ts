@@ -28,6 +28,10 @@ const LogEntrySchema = new Schema<TLogEntry>(
     auditDate: {
       type: Date,
     },
+    nextCheckDate:{
+            type: Date,
+
+    },
     extendDeadline: {
       type: Date,
     },
@@ -82,6 +86,10 @@ const AuditSchema = new Schema<TAudit>(
     },
 
     auditDate: {
+      type: Date,
+    },
+
+    nextCheckDate: {
       type: Date,
     },
 

@@ -1788,7 +1788,7 @@ const getCompanyComplianceStats = async (companyId: string) => {
     Audit.countDocuments({
       companyId: companyId,
       status: { $ne: "completed" },
-      auditDate: { $lt: moment().startOf("day").toDate() },
+      nextCheckDate: { $lt: moment().startOf("day").toDate() },
     }),
   ]);
 
