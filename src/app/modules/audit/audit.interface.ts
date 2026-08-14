@@ -10,9 +10,9 @@ export interface TLogEntry {
     nextCheckDate?: Date;
 
   extendDeadline?: Date;
-  action?: 'update' | 'create' | 'extend' | 'complete';
-  previousStatus?: boolean;
-  newStatus?: boolean;
+  action?: 'update' | 'create' | 'extend' | 'complete' | 'hold' | 'restart';
+  previousStatus?: boolean | string;
+  newStatus?: boolean | string;
 }
 
 export interface TAudit {
@@ -28,5 +28,5 @@ export interface TAudit {
   extendDeadline:Date;
   logs: TLogEntry[];
   action?: string;
-  status: 'active' | 'completed';
+  status: 'active' | 'hold' | 'completed';
 }

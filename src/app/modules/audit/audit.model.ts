@@ -37,13 +37,13 @@ const LogEntrySchema = new Schema<TLogEntry>(
     },
     action: {
       type: String,
-      enum: ["update", "create", "extend", "complete"],
+      enum: ["update", "create", "extend", "complete", "hold", "restart"],
     },
     previousStatus: {
-      type: Boolean,
+      type: String,
     },
     newStatus: {
-      type: Boolean,
+      type: String,
     },
   },
   { _id: true }
@@ -106,7 +106,7 @@ const AuditSchema = new Schema<TAudit>(
     },
     status: {
       type: String,
-      enum: ["active", "completed"],
+      enum: ["active", "hold", "completed"],
       default: "active",
     },
   },

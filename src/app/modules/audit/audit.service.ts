@@ -35,10 +35,12 @@ const getAllAuditFromDB = async (query: Record<string, unknown>) => {
 
   if (status === "active") {
     filter.status = "active";
+  } else if (status === "hold") {
+    filter.status = "hold";
   } else if (status === "completed") {
     filter.status = "completed";
   } else if (status === "due") {
-    filter.status = { $ne: "completed" };
+    filter.status = "active";
     filter.nextCheckDate = {
       ...((filter.nextCheckDate as Record<string, unknown>) || {}),
       $lt: moment().startOf("day").toDate(),
@@ -217,6 +219,48 @@ const updateAuditIntoDB = async (
     });
 
     audit.status = "completed";
+    audit.action = undefined as any;
+  }
+
+  // Handle hold action
+  else if (updateData.action === "hold") {
+    const todayStr = moment().format("DD MMM YYYY");
+
+    logsToAdd.push({
+      title: `Audit put on hold on ${todayStr}`,
+      date: new Date(),
+      updatedBy,
+      document: getDocuments(document),
+      note: note || "",
+      auditDate: audit.auditDate || null,
+      nextCheckDate: audit.nextCheckDate || null,
+      action: "hold",
+      previousStatus: audit.status,
+      newStatus: "hold",
+    });
+
+    audit.status = "hold" as any;
+    audit.action = undefined as any;
+  }
+
+  // Handle restart action
+  else if (updateData.action === "restart") {
+    const todayStr = moment().format("DD MMM YYYY");
+
+    logsToAdd.push({
+      title: `Audit restarted on ${todayStr}`,
+      date: new Date(),
+      updatedBy,
+      document: getDocuments(document),
+      note: note || "",
+      auditDate: audit.auditDate || null,
+      nextCheckDate: audit.nextCheckDate || null,
+      action: "restart",
+      previousStatus: audit.status,
+      newStatus: "active",
+    });
+
+    audit.status = "active" as any;
     audit.action = undefined as any;
   }
 
