@@ -14,7 +14,9 @@ export interface THealthAndSafety {
   startDate?: Date;
   expiryDate?: Date;
   document?: string[];
-
+remarks:string;
+    figure:string;
+    others:string;
   logs?: TLogEntry[];
 }
 

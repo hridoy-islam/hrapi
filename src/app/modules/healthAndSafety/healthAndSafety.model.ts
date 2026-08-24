@@ -16,7 +16,9 @@ const healthAndSafetySchema = new Schema<THealthAndSafety>(
     startDate: { type: Date },
     expiryDate: { type: Date },
     document: [{ type: String }],
-
+    remarks:{ type: String },
+    figure:{ type: String },
+    others:{ type: String },
     logs: [LogSchema],
   },
   { timestamps: true },
