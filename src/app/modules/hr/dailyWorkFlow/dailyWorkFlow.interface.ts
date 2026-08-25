@@ -4,6 +4,7 @@ export type TDailyWorkFlowTask = {
   taskName: string;
   startTime: string;
   endTime: string;
+  duration: string;
   note?: string;
 };
 

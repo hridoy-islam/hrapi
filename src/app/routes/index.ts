@@ -54,6 +54,7 @@ import { AuditRoutes } from "../modules/audit/audit.router";
 import { PresetTaskRoutes } from "../modules/hr/presetTask/presetTask.router";
 import { DailyWorkFlowRoutes } from "../modules/hr/dailyWorkFlow/dailyWorkFlow.router";
 import { ManageEmployeeRoutes } from "../modules/hr/manageEmployee/manageEmployee.router";
+import { PayslipDocRoutes } from "../modules/payslipDoc/payslipDoc.router";
 
 const router = Router();
 
@@ -279,6 +280,10 @@ const moduleRoutes = [
   {
     path: "/manage-employee",
     route: ManageEmployeeRoutes,
+  },
+  {
+    path: "/payslip-doc",
+    route: PayslipDocRoutes,
   },
 ];
 

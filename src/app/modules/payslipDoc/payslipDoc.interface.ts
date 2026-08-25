@@ -1,6 +1,6 @@
 import { Types } from "mongoose";
 
-export interface TAudit {
+export interface TPayslipDoc {
   companyId: Types.ObjectId;
 
   documentTitle: string;

@@ -1,7 +1,7 @@
 import { Schema, model } from "mongoose";
-import { TAudit } from "./audit.interface";
+import { TPayslipDoc } from "./payslipDoc.interface";
 
-const AuditSchema = new Schema<TAudit>(
+const PayslipDocSchema = new Schema<TPayslipDoc>(
   {
     companyId: {
       type: Schema.Types.ObjectId,
@@ -21,14 +21,14 @@ const AuditSchema = new Schema<TAudit>(
     type: { type: String, enum: ["folder", "file"], required: true },
     parentId: { 
       type: Schema.Types.ObjectId, 
-      ref: "Audit", 
+      ref: "PayslipDoc", 
       default: null 
     },
     // REMOVED 'default: null' here so it properly defaults to a clean, empty array []
     ancestors: [
       { 
         type: Schema.Types.ObjectId, 
-        ref: "Audit" 
+        ref: "PayslipDoc" 
       }
     ],
     documentUrl: {
@@ -41,7 +41,7 @@ const AuditSchema = new Schema<TAudit>(
 );
 
 // CRITICAL INDEXES: This speeds up searching folders drastically
-AuditSchema.index({ companyId: 1, parentId: 1 });
-AuditSchema.index({ ancestors: 1 });
+PayslipDocSchema.index({ companyId: 1, parentId: 1 });
+PayslipDocSchema.index({ ancestors: 1 });
 
-export const Audit = model<TAudit>("Audit", AuditSchema);
+export const PayslipDoc = model<TPayslipDoc>("PayslipDoc", PayslipDocSchema);

@@ -12,11 +12,12 @@ const dailyWorkFlowTaskSchema = new Schema(
     },
     startTime: {
       type: String,
-      required: true,
     },
     endTime: {
       type: String,
-      required: true,
+    },
+    duration: {
+      type: String,
     },
     note: {
       type: String,
