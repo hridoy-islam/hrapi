@@ -9,7 +9,15 @@ import moment from "../../utils/moment-setup"
 import mongoose from "mongoose";
 
 const getAllHealthAndSafetyFromDB = async (query: Record<string, unknown>) => {
-  const { companyId, searchTerm, page = 1, limit = 10 } = query;
+  const {
+    companyId,
+    searchTerm,
+    page = 1,
+    limit = 10,
+    status,
+    startDate,
+    expiryDate,
+  } = query;
   const pageNumber = Number(page);
   const limitNumber = Number(limit);
   const skip = (pageNumber - 1) * limitNumber;
@@ -38,6 +46,19 @@ const getAllHealthAndSafetyFromDB = async (query: Record<string, unknown>) => {
     matchStage.$or = HealthAndSafetySearchableFields.map((field) => ({
       [field]: { $regex: searchTerm, $options: "i" },
     }));
+  }
+  // Date range filters
+  if (startDate) {
+    matchStage.startDate = {
+      ...((matchStage.startDate as object) || {}),
+      $gte: moment(String(startDate)).startOf("day").toDate(),
+    };
+  }
+  if (expiryDate) {
+    matchStage.expiryDate = {
+      ...((matchStage.expiryDate as object) || {}),
+      $lte: moment(String(expiryDate)).endOf("day").toDate(),
+    };
   }
   if (Object.keys(matchStage).length > 0) {
     basePipeline.push({ $match: matchStage });
@@ -87,6 +108,23 @@ const getAllHealthAndSafetyFromDB = async (query: Record<string, unknown>) => {
       },
     },
   });
+
+  // Status filter (statusPriority: 1 = expired, 2 = expiring soon, 3 = active)
+  const normalizedStatus =
+    typeof status === "string"
+      ? status.toLowerCase().replace(/[^a-z]/g, "")
+      : "";
+  const statusToPriority: Record<string, number> = {
+    expired: 1,
+    expirysoon: 2,
+    expiringsoon: 2,
+    active: 3,
+  };
+  if (normalizedStatus && statusToPriority[normalizedStatus] !== undefined) {
+    basePipeline.push({
+      $match: { statusPriority: statusToPriority[normalizedStatus] },
+    });
+  }
 
   // Exclude logs from the result
   basePipeline.push({

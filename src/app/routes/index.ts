@@ -51,6 +51,9 @@ import { PlannedRotaRoutes } from "../modules/plannedRota/plannedRota.router";
 import { ServiceUserDocumentRoutes } from "../modules/serviceUserDocument/serviceUserDocument.router";
 import { AuditTypeRoutes } from "../modules/auditType/auditType.router";
 import { AuditRoutes } from "../modules/audit/audit.router";
+import { PresetTaskRoutes } from "../modules/hr/presetTask/presetTask.router";
+import { DailyWorkFlowRoutes } from "../modules/hr/dailyWorkFlow/dailyWorkFlow.router";
+import { ManageEmployeeRoutes } from "../modules/hr/manageEmployee/manageEmployee.router";
 
 const router = Router();
 
@@ -264,6 +267,18 @@ const moduleRoutes = [
   {
     path: "/audit",
     route: AuditRoutes,
+  },
+  {
+    path: "/preset-task",
+    route: PresetTaskRoutes,
+  },
+  {
+    path: "/daily-work-flow",
+    route: DailyWorkFlowRoutes,
+  },
+  {
+    path: "/manage-employee",
+    route: ManageEmployeeRoutes,
   },
 ];
 

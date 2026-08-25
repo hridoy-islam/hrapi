@@ -1,3 +1,3 @@
 
 
-export const HealthAndSafetySearchableFields = [];
+export const HealthAndSafetySearchableFields = ['title','startDate','expiryDate'];
