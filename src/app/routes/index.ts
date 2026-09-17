@@ -55,6 +55,8 @@ import { PresetTaskRoutes } from "../modules/hr/presetTask/presetTask.router";
 import { DailyWorkFlowRoutes } from "../modules/hr/dailyWorkFlow/dailyWorkFlow.router";
 import { ManageEmployeeRoutes } from "../modules/hr/manageEmployee/manageEmployee.router";
 import { PayslipDocRoutes } from "../modules/payslipDoc/payslipDoc.router";
+import { JobBoardRoutes } from "../modules/jobBoard/jobBoard.router";
+import { JobBoardTaskRoutes } from "../modules/jobBoardTask/jobBoardTask.router";
 
 const router = Router();
 
@@ -284,6 +286,14 @@ const moduleRoutes = [
   {
     path: "/payslip-doc",
     route: PayslipDocRoutes,
+  },
+  {
+    path: "/job-board",
+    route: JobBoardRoutes,
+  },
+  {
+    path: "/job-board-task",
+    route: JobBoardTaskRoutes,
   },
 ];
 
