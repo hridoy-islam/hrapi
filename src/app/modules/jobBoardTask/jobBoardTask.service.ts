@@ -1,12 +1,18 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import httpStatus from "http-status";
 
+import moment from "moment";
+
 import AppError from "../../errors/AppError";
 import QueryBuilder from "../../builder/QueryBuilder";
 import { JobBoardTask } from "./jobBoardTask.model";
-import { TJobBoardTask } from "./jobBoardTask.interface";
+import {
+  TJobBoardTask,
+  TJobBoardTaskLogChange,
+} from "./jobBoardTask.interface";
 import { JobBoardTaskSearchableFields } from "./jobBoardTask.constant";
 import { JobBoard } from "../jobBoard/jobBoard.model";
+import { User } from "../user/user.model";
 
 const employeeSelect = "firstName lastName initial name email image";
 
@@ -20,7 +26,53 @@ const populateTask = (query: any) =>
   query
     .populate("taskDoneBy", employeeSelect)
     .populate("completedBy", employeeSelect)
-    .populate("jobBoardId", "title");
+    .populate("jobBoardId", "title")
+    .populate("logs.updatedBy", employeeSelect)
+    .populate("logs.taskDoneBy", employeeSelect);
+
+const formatDate = (date: any) =>
+  date ? moment(date).format("DD MMM YYYY") : "-";
+
+const formatDateTime = (date: any) =>
+  date ? moment(date).format("DD MMM YYYY, h:mm A") : "-";
+
+// Ids can arrive as strings, ObjectIds or already populated documents
+const toIdList = (value: any): string[] => {
+  if (!value) return [];
+  const list = Array.isArray(value) ? value : [value];
+  return list.filter(Boolean).map((item: any) => String(item?._id || item));
+};
+
+const sameIdList = (a: string[], b: string[]) =>
+  a.length === b.length && [...a].sort().join() === [...b].sort().join();
+
+const displayName = (user: any) =>
+  [user?.initial, user?.firstName, user?.lastName]
+    .filter(Boolean)
+    .join(" ")
+    .trim() ||
+  user?.name ||
+  user?.email ||
+  "Unknown";
+
+const namesOf = async (ids: string[]): Promise<string> => {
+  if (!ids.length) return "-";
+
+  const users = await User.find({ _id: { $in: ids } }).select(employeeSelect);
+
+  return users.length ? users.map(displayName).join(", ") : "-";
+};
+
+// The person behind the change, blank when the request carried no user
+const nameOf = async (id: any): Promise<string> => {
+  if (!id) return "";
+
+  const user = await User.findById(String(id?._id || id)).select(
+    employeeSelect
+  );
+
+  return user ? displayName(user) : "";
+};
 
 const getAllJobBoardTaskFromDB = async (query: Record<string, unknown>) => {
   const filter: Record<string, unknown> = {};
@@ -82,20 +134,47 @@ const getSingleJobBoardTaskFromDB = async (id: string) => {
   return result;
 };
 
-const createJobBoardTaskIntoDB = async (payload: Partial<TJobBoardTask>) => {
+const createJobBoardTaskIntoDB = async (
+  payload: Partial<TJobBoardTask> & { updatedBy?: any },
+  actorId?: string
+) => {
   const jobBoard = await JobBoard.findById(payload.jobBoardId);
 
   if (!jobBoard) {
     throw new AppError(httpStatus.NOT_FOUND, "Job board not found");
   }
 
+  // The history is written here, never taken from the request
+  const { logs: _ignoredLogs, updatedBy, ...taskData } = payload as any;
+  const actor = actorId || updatedBy || null;
+
+  const taskDate = payload.taskDate || new Date();
+  const documents = getDocuments(payload.documents);
+
+  const createdBy = await nameOf(actor);
+  const createdAt = new Date();
+
+  const createLog = {
+    title: createdBy
+      ? `Task created by ${createdBy} on ${formatDateTime(createdAt)}.`
+      : `Task created on ${formatDateTime(createdAt)}.`,
+    date: createdAt,
+    updatedBy: actor,
+    action: "create",
+    changes: [],
+    taskDoneBy: toIdList(payload.taskDoneBy),
+    note: payload.note || "",
+    documents,
+  };
+
   try {
     const result = await JobBoardTask.create({
-      ...payload,
+      ...taskData,
       companyId: payload.companyId || jobBoard.companyId,
-      taskDate: payload.taskDate || new Date(),
-      documents: getDocuments(payload.documents),
+      taskDate,
+      documents,
       isCompleted: payload.isCompleted || false,
+      logs: [createLog],
     });
 
     return getSingleJobBoardTaskFromDB(String(result._id));
@@ -111,7 +190,8 @@ const createJobBoardTaskIntoDB = async (payload: Partial<TJobBoardTask>) => {
 
 const updateJobBoardTaskIntoDB = async (
   id: string,
-  payload: Partial<TJobBoardTask> & { completedBy?: any }
+  payload: Partial<TJobBoardTask> & { completedBy?: any; updatedBy?: any },
+  actorId?: string
 ) => {
   const task = await JobBoardTask.findById(id);
 
@@ -119,10 +199,71 @@ const updateJobBoardTaskIntoDB = async (
     throw new AppError(httpStatus.NOT_FOUND, "Task not found");
   }
 
-  const updateData: Record<string, unknown> = { ...payload };
+  // The history is written here, never taken from the request
+  const { logs: _ignoredLogs, updatedBy, ...changeable } = payload as any;
+  const updateData: Record<string, unknown> = { ...changeable };
+  const actor = actorId || updatedBy || payload.completedBy || null;
+
+  const changes: TJobBoardTaskLogChange[] = [];
+
+  if (payload.taskName !== undefined && payload.taskName !== task.taskName) {
+    changes.push({
+      field: "Task name",
+      from: task.taskName,
+      to: payload.taskName,
+    });
+  }
+
+  if (
+    payload.taskDate !== undefined &&
+    formatDate(payload.taskDate) !== formatDate(task.taskDate)
+  ) {
+    changes.push({
+      field: "Task date",
+      from: formatDate(task.taskDate),
+      to: formatDate(payload.taskDate),
+    });
+  }
+
+  if (payload.note !== undefined && (payload.note || "") !== (task.note || "")) {
+    changes.push({
+      field: "Note",
+      from: task.note || "-",
+      to: payload.note || "-",
+    });
+  }
 
   if ("documents" in payload) {
-    updateData.documents = getDocuments(payload.documents);
+    const nextDocuments = getDocuments(payload.documents);
+    const currentDocuments = getDocuments(task.documents);
+    updateData.documents = nextDocuments;
+
+    if (
+      nextDocuments.length !== currentDocuments.length ||
+      nextDocuments.some((doc, index) => doc !== currentDocuments[index])
+    ) {
+      changes.push({
+        field: "Documents",
+        from: `${currentDocuments.length} file(s)`,
+        to: `${nextDocuments.length} file(s)`,
+      });
+    }
+  }
+
+  let doneByChanged = false;
+
+  if (payload.taskDoneBy !== undefined) {
+    const nextDoneBy = toIdList(payload.taskDoneBy);
+    const currentDoneBy = toIdList(task.taskDoneBy);
+
+    if (!sameIdList(nextDoneBy, currentDoneBy)) {
+      doneByChanged = true;
+      changes.push({
+        field: "Worked by",
+        from: await namesOf(currentDoneBy),
+        to: await namesOf(nextDoneBy),
+      });
+    }
   }
 
   // Completing and re-opening keep the sign-off fields in step
@@ -145,10 +286,76 @@ const updateJobBoardTaskIntoDB = async (
     }
   }
 
-  await JobBoardTask.findByIdAndUpdate(id, updateData, {
-    new: true,
-    runValidators: true,
-  });
+  const now = new Date();
+  const doneByNow = toIdList(payload.taskDoneBy ?? task.taskDoneBy);
+  const logsToAdd: any[] = [];
+
+  const baseLog = {
+    date: now,
+    updatedBy: actor,
+    changes,
+    taskDoneBy: doneByNow,
+    note: payload.note !== undefined ? payload.note : task.note || "",
+    documents:
+      "documents" in payload
+        ? getDocuments(payload.documents)
+        : getDocuments(task.documents),
+  };
+
+  const completionChanged =
+    "isCompleted" in payload && Boolean(payload.isCompleted) !== task.isCompleted;
+
+  // Every title reads as a full sentence, so the UI prints it as it stands
+  const actorName = await nameOf(actor);
+  const by = actorName ? ` by ${actorName}` : "";
+  const on = ` on ${formatDateTime(now)}`;
+
+  if (completionChanged && payload.isCompleted) {
+    const workedBy = await namesOf(doneByNow);
+
+    logsToAdd.push({
+      ...baseLog,
+      action: "complete",
+      title:
+        workedBy === "-"
+          ? `Task completed — marked complete${by}${on}.`
+          : actorName
+            ? `Task completed — Work done by ${workedBy} and marked complete by ${actorName}${on}.`
+            : `Task completed — Work done by ${workedBy}${on}.`,
+    });
+  } else if (completionChanged) {
+    logsToAdd.push({
+      ...baseLog,
+      action: "reopen",
+      title: `Task reopened${by}${on}.`,
+    });
+  } else if (changes.length) {
+    // Nothing is logged when the request changes nothing
+    const workedBy = doneByChanged ? await namesOf(doneByNow) : "-";
+
+    logsToAdd.push({
+      ...baseLog,
+      action: "update",
+      title:
+        workedBy === "-"
+          ? `Task updated${by}${on}.`
+          : actorName
+            ? `Task updated — Work done by ${workedBy} and marked complete by ${actorName}${on}.`
+            : `Task updated — Work done by ${workedBy}${on}.`,
+    });
+  }
+
+  await JobBoardTask.findByIdAndUpdate(
+    id,
+    {
+      $set: updateData,
+      ...(logsToAdd.length ? { $push: { logs: { $each: logsToAdd } } } : {}),
+    },
+    {
+      new: true,
+      runValidators: true,
+    }
+  );
 
   return getSingleJobBoardTaskFromDB(id);
 };

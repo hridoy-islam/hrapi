@@ -27,7 +27,10 @@ const getSingleJobBoardTask = catchAsync(async (req, res) => {
 });
 
 const createJobBoardTask = catchAsync(async (req, res) => {
-  const result = await JobBoardTaskServices.createJobBoardTaskIntoDB(req.body);
+  const result = await JobBoardTaskServices.createJobBoardTaskIntoDB(
+    req.body,
+    req.user?._id
+  );
   sendResponse(res, {
     statusCode: httpStatus.OK,
     success: true,
@@ -40,7 +43,8 @@ const updateJobBoardTask = catchAsync(async (req, res) => {
   const { id } = req.params;
   const result = await JobBoardTaskServices.updateJobBoardTaskIntoDB(
     id,
-    req.body
+    req.body,
+    req.user?._id
   );
   sendResponse(res, {
     statusCode: httpStatus.OK,

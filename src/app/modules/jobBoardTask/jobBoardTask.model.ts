@@ -1,5 +1,83 @@
 import { Schema, model } from "mongoose";
-import { TJobBoardTask } from "./jobBoardTask.interface";
+import {
+  TJobBoardTask,
+  TJobBoardTaskLog,
+  TJobBoardTaskLogChange,
+} from "./jobBoardTask.interface";
+
+// A single field that moved, stored already formatted for display
+const LogChangeSchema = new Schema<TJobBoardTaskLogChange>(
+  {
+    field: {
+      type: String,
+      required: true,
+      trim: true,
+    },
+
+    from: {
+      type: String,
+      default: "",
+    },
+
+    to: {
+      type: String,
+      default: "",
+    },
+  },
+  { _id: false }
+);
+
+// One entry of the task history - written on create, update and sign-off
+const LogEntrySchema = new Schema<TJobBoardTaskLog>(
+  {
+    title: {
+      type: String,
+      required: true,
+      trim: true,
+    },
+
+    date: {
+      type: Date,
+      required: true,
+      default: Date.now,
+    },
+
+    updatedBy: {
+      type: Schema.Types.ObjectId,
+      ref: "User",
+    },
+
+    action: {
+      type: String,
+      enum: ["create", "update", "complete", "reopen"],
+      required: true,
+    },
+
+    changes: {
+      type: [LogChangeSchema],
+      default: [],
+    },
+
+    // Who the task was signed off to at the time of the entry
+    taskDoneBy: [
+      {
+        type: Schema.Types.ObjectId,
+        ref: "User",
+      },
+    ],
+
+    note: {
+      type: String,
+      trim: true,
+    },
+
+    documents: {
+      type: [String],
+      default: [],
+    },
+  },
+  { _id: true }
+);
 
 const JobBoardTaskSchema = new Schema<TJobBoardTask>(
   {
@@ -58,6 +136,12 @@ const JobBoardTaskSchema = new Schema<TJobBoardTask>(
     isCompleted: {
       type: Boolean,
       default: false,
+    },
+
+    // History of the task, newest entry pushed on every change
+    logs: {
+      type: [LogEntrySchema],
+      default: [],
     },
   },
   {
