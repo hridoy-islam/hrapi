@@ -75,6 +75,26 @@ const LogEntrySchema = new Schema<TJobBoardTaskLog>(
       type: [String],
       default: [],
     },
+
+    remarks: {
+      type: String,
+      trim: true,
+    },
+
+    figure: {
+      type: String,
+      trim: true,
+    },
+
+    concernPartyName: {
+      type: String,
+      trim: true,
+    },
+
+    others: {
+      type: String,
+      trim: true,
+    },
   },
   { _id: true }
 );
@@ -111,6 +131,28 @@ const JobBoardTaskSchema = new Schema<TJobBoardTask>(
     },
 
     note: {
+      type: String,
+      trim: true,
+    },
+
+    remarks: {
+      type: String,
+      trim: true,
+    },
+
+    // Free text on purpose - a figure is often written with a unit or a range
+    figure: {
+      type: String,
+      trim: true,
+    },
+
+    // Resident / staff / concern party the task relates to
+    concernPartyName: {
+      type: String,
+      trim: true,
+    },
+
+    others: {
       type: String,
       trim: true,
     },

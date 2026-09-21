@@ -57,7 +57,7 @@ app.use("/uploads", express.static("uploads"));
 
 app.use(
   cors({
-    origin: ["http://localhost:5173","https://opshr.netlify.app","https://hr.watneycollege.co.uk","https://hr.cyberpeers.co.uk"],
+    origin: ["http://localhost:5173","https://opshr.netlify.app","https://hr.watneycollege.co.uk","https://hr.cyberpeers.co.uk","http://192.168.0.102:5173"],
     credentials: true,
     
   })

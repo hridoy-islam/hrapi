@@ -1,1 +1,7 @@
-export const JobBoardTaskSearchableFields = ["taskName", "note"];
+export const JobBoardTaskSearchableFields = [
+  "taskName",
+  "note",
+  "remarks",
+  "concernPartyName",
+  "others",
+];

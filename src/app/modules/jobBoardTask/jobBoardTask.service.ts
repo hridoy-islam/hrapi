@@ -16,6 +16,22 @@ import { User } from "../user/user.model";
 
 const employeeSelect = "firstName lastName initial name email image";
 
+// The optional free text fields, with the label the history prints
+const TEXT_FIELDS: { key: keyof TJobBoardTask; label: string }[] = [
+  { key: "note", label: "Note" },
+  { key: "remarks", label: "Remarks" },
+  { key: "figure", label: "Figure" },
+  { key: "concernPartyName", label: "Resident/Staff/Concern Party Name" },
+  { key: "others", label: "Others" },
+];
+
+const textSnapshot = (source: any, fallback: any = {}) =>
+  TEXT_FIELDS.reduce<Record<string, string>>((acc, { key }) => {
+    acc[key] =
+      (source?.[key] !== undefined ? source[key] : fallback?.[key]) || "";
+    return acc;
+  }, {});
+
 const getDocuments = (doc: any): string[] => {
   if (Array.isArray(doc)) return doc.filter(Boolean);
   if (typeof doc === "string" && doc) return [doc];
@@ -74,7 +90,16 @@ const nameOf = async (id: any): Promise<string> => {
   return user ? displayName(user) : "";
 };
 
-const getAllJobBoardTaskFromDB = async (query: Record<string, unknown>) => {
+// The boards an employee is on - the only tasks they are allowed to read
+const assignedBoardIds = async (employeeId: string) => {
+  const boards = await JobBoard.find({ employeeId }).select("_id");
+  return boards.map((board) => String(board._id));
+};
+
+const getAllJobBoardTaskFromDB = async (
+  query: Record<string, unknown>,
+  authUser?: any
+) => {
   const filter: Record<string, unknown> = {};
 
   const { companyId, jobBoardId, taskDoneBy, isCompleted } = query;
@@ -83,6 +108,19 @@ const getAllJobBoardTaskFromDB = async (query: Record<string, unknown>) => {
   if (taskDoneBy) filter.taskDoneBy = taskDoneBy;
   if (isCompleted === "true" || isCompleted === "false") {
     filter.isCompleted = isCompleted === "true";
+  }
+
+  if (authUser?.role === "employee") {
+    const boardIds = await assignedBoardIds(authUser._id);
+
+    if (jobBoardId && !boardIds.includes(String(jobBoardId))) {
+      throw new AppError(
+        httpStatus.FORBIDDEN,
+        "You are not assigned to this job board"
+      );
+    }
+
+    if (!jobBoardId) filter.jobBoardId = { $in: boardIds };
   }
 
   // The range always targets taskDate. No range given means the current
@@ -124,11 +162,23 @@ const getAllJobBoardTaskFromDB = async (query: Record<string, unknown>) => {
   return { meta, result };
 };
 
-const getSingleJobBoardTaskFromDB = async (id: string) => {
+const getSingleJobBoardTaskFromDB = async (id: string, authUser?: any) => {
   const result = await populateTask(JobBoardTask.findById(id));
 
   if (!result) {
     throw new AppError(httpStatus.NOT_FOUND, "Task not found");
+  }
+
+  if (authUser?.role === "employee") {
+    const boardIds = await assignedBoardIds(authUser._id);
+    const boardId = String(result.jobBoardId?._id || result.jobBoardId);
+
+    if (!boardIds.includes(boardId)) {
+      throw new AppError(
+        httpStatus.FORBIDDEN,
+        "You are not assigned to this job board"
+      );
+    }
   }
 
   return result;
@@ -163,7 +213,7 @@ const createJobBoardTaskIntoDB = async (
     action: "create",
     changes: [],
     taskDoneBy: toIdList(payload.taskDoneBy),
-    note: payload.note || "",
+    ...textSnapshot(payload),
     documents,
   };
 
@@ -225,13 +275,19 @@ const updateJobBoardTaskIntoDB = async (
     });
   }
 
-  if (payload.note !== undefined && (payload.note || "") !== (task.note || "")) {
+  TEXT_FIELDS.forEach(({ key, label }) => {
+    const next = (payload as any)[key];
+    if (next === undefined) return;
+
+    const current = (task as any)[key] || "";
+    if ((next || "") === current) return;
+
     changes.push({
-      field: "Note",
-      from: task.note || "-",
-      to: payload.note || "-",
+      field: label,
+      from: current || "-",
+      to: next || "-",
     });
-  }
+  });
 
   if ("documents" in payload) {
     const nextDocuments = getDocuments(payload.documents);
@@ -295,7 +351,7 @@ const updateJobBoardTaskIntoDB = async (
     updatedBy: actor,
     changes,
     taskDoneBy: doneByNow,
-    note: payload.note !== undefined ? payload.note : task.note || "",
+    ...textSnapshot(payload, task),
     documents:
       "documents" in payload
         ? getDocuments(payload.documents)

@@ -22,6 +22,10 @@ export interface TJobBoardTaskLog {
   taskDoneBy?: Types.ObjectId[];
   note?: string;
   documents?: string[];
+  remarks?: string;
+  figure?: string;
+  concernPartyName?: string;
+  others?: string;
 }
 
 export interface TJobBoardTask {
@@ -31,6 +35,10 @@ export interface TJobBoardTask {
   taskDate: Date;
   documents?: string[];
   note?: string;
+  remarks?: string;
+  figure?: string;
+  concernPartyName?: string;
+  others?: string;
   taskDoneBy?: Types.ObjectId[];
   completedBy?: Types.ObjectId;
   completedAt?: Date;

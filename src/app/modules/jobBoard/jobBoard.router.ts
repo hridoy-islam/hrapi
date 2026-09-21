@@ -11,6 +11,13 @@ router.get(
   JobBoardControllers.getAllJobBoard
 );
 
+// Declared before "/:id", so the path is not read as a board id
+router.get(
+  "/staff-access",
+  auth("admin", "company", "companyAdmin", "employee"),
+  JobBoardControllers.getStaffJobBoardAccess
+);
+
 router.get(
   "/:id",
   auth("admin", "company", "companyAdmin", "employee"),

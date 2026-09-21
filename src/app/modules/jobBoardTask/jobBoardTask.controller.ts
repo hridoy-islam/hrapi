@@ -6,7 +6,10 @@ import sendResponse from "../../utils/sendResponse";
 import { JobBoardTaskServices } from "./jobBoardTask.service";
 
 const getAllJobBoardTask: RequestHandler = catchAsync(async (req, res) => {
-  const result = await JobBoardTaskServices.getAllJobBoardTaskFromDB(req.query);
+  const result = await JobBoardTaskServices.getAllJobBoardTaskFromDB(
+    req.query,
+    req.user
+  );
   sendResponse(res, {
     statusCode: httpStatus.OK,
     success: true,
@@ -17,7 +20,10 @@ const getAllJobBoardTask: RequestHandler = catchAsync(async (req, res) => {
 
 const getSingleJobBoardTask = catchAsync(async (req, res) => {
   const { id } = req.params;
-  const result = await JobBoardTaskServices.getSingleJobBoardTaskFromDB(id);
+  const result = await JobBoardTaskServices.getSingleJobBoardTaskFromDB(
+    id,
+    req.user
+  );
   sendResponse(res, {
     statusCode: httpStatus.OK,
     success: true,

@@ -17,13 +17,31 @@ const toIdArray = (value: unknown): string[] => {
   return [];
 };
 
-const getAllJobBoardFromDB = async (query: Record<string, unknown>) => {
+// An employee only ever reaches the boards they were assigned to, whatever
+// the request asks for
+const isEmployee = (authUser?: any) => authUser?.role === "employee";
+
+const isAssignedTo = (jobBoard: any, employeeId: string) =>
+  (jobBoard?.employeeId || []).some(
+    (assigned: any) => String(assigned?._id || assigned) === String(employeeId)
+  );
+
+const getAllJobBoardFromDB = async (
+  query: Record<string, unknown>,
+  authUser?: any
+) => {
   const filter: Record<string, unknown> = {};
 
   const { companyId, status, employeeId } = query;
   if (companyId) filter.companyId = companyId;
   if (status) filter.status = status;
   if (employeeId) filter.employeeId = employeeId;
+
+  // Set last, so an employee cannot widen the list through the query string
+  if (isEmployee(authUser)) {
+    filter.employeeId = authUser._id;
+    if (authUser.company) filter.companyId = authUser.company;
+  }
 
   const jobBoardQuery = new QueryBuilder(
     JobBoard.find(filter).populate({
@@ -71,7 +89,7 @@ const getAllJobBoardFromDB = async (query: Record<string, unknown>) => {
   return { meta, result: resultWithCounts };
 };
 
-const getSingleJobBoardFromDB = async (id: string) => {
+const getSingleJobBoardFromDB = async (id: string, authUser?: any) => {
   const result = await JobBoard.findById(id).populate({
     path: "employeeId",
     select: employeeSelect,
@@ -82,7 +100,57 @@ const getSingleJobBoardFromDB = async (id: string) => {
     throw new AppError(httpStatus.NOT_FOUND, "Job board not found");
   }
 
+  if (isEmployee(authUser) && !isAssignedTo(result, authUser._id)) {
+    throw new AppError(
+      httpStatus.FORBIDDEN,
+      "You are not assigned to this job board"
+    );
+  }
+
   return result;
+};
+
+// What the staff dashboard and the staff side nav ask for: the job board
+// entry is only shown once the employee is on at least one board
+const getStaffJobBoardAccessFromDB = async (employeeId: string) => {
+  if (!employeeId) {
+    throw new AppError(httpStatus.BAD_REQUEST, "Employee id is required");
+  }
+
+  const jobBoards = await JobBoard.find({
+    employeeId,
+    status: "active",
+  })
+    .select("title description companyId")
+    .sort("-createdAt");
+
+  const boardIds = jobBoards.map((board) => board._id);
+
+  const [stat] = boardIds.length
+    ? await JobBoardTask.aggregate([
+        { $match: { jobBoardId: { $in: boardIds } } },
+        {
+          $group: {
+            _id: null,
+            totalTask: { $sum: 1 },
+            completedTask: { $sum: { $cond: ["$isCompleted", 1, 0] } },
+          },
+        },
+      ])
+    : [];
+
+  const totalTask = stat?.totalTask || 0;
+  const completedTask = stat?.completedTask || 0;
+
+  return {
+    employeeId,
+    hasJobBoard: jobBoards.length > 0,
+    totalJobBoard: jobBoards.length,
+    totalTask,
+    completedTask,
+    pendingTask: totalTask - completedTask,
+    jobBoards,
+  };
 };
 
 const createJobBoardIntoDB = async (payload: Partial<TJobBoard>) => {
@@ -182,6 +250,7 @@ const deleteJobBoardFromDB = async (id: string) => {
 export const JobBoardServices = {
   getAllJobBoardFromDB,
   getSingleJobBoardFromDB,
+  getStaffJobBoardAccessFromDB,
   createJobBoardIntoDB,
   updateJobBoardIntoDB,
   assignEmployeesIntoDB,
