@@ -57,6 +57,10 @@ import { ManageEmployeeRoutes } from "../modules/hr/manageEmployee/manageEmploye
 import { PayslipDocRoutes } from "../modules/payslipDoc/payslipDoc.router";
 import { JobBoardRoutes } from "../modules/jobBoard/jobBoard.router";
 import { JobBoardTaskRoutes } from "../modules/jobBoardTask/jobBoardTask.router";
+import { CleaningAccessRoutes } from "../modules/cleaningAccess/cleaningAccess.router";
+import { CleaningAreaRoutes } from "../modules/cleaningArea/cleaningArea.router";
+import { CleaningElementRoutes } from "../modules/cleaningElement/cleaningElement.router";
+import { CleaningLogRoutes } from "../modules/cleaningLog/cleaningLog.router";
 
 const router = Router();
 
@@ -294,6 +298,22 @@ const moduleRoutes = [
   {
     path: "/job-board-task",
     route: JobBoardTaskRoutes,
+  },
+  {
+    path: "/cleaning-access",
+    route: CleaningAccessRoutes,
+  },
+  {
+    path: "/cleaning-area",
+    route: CleaningAreaRoutes,
+  },
+  {
+    path: "/cleaning-element",
+    route: CleaningElementRoutes,
+  },
+  {
+    path: "/cleaning-log",
+    route: CleaningLogRoutes,
   },
 ];
 
