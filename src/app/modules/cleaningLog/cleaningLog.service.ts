@@ -140,8 +140,34 @@ const getSingleCleaningLogFromDB = async (id: string, authUser?: any) => {
   return result;
 };
 
+// A 24-hour clock time, e.g. 09:00 or 17:30
+const TIME_PATTERN = /^([01]\d|2[0-3]):[0-5]\d$/;
+
+const assertTime = (value: unknown, label: string) => {
+  if (!value) {
+    throw new AppError(httpStatus.BAD_REQUEST, `${label} is required`);
+  }
+  if (typeof value !== "string" || !TIME_PATTERN.test(value)) {
+    throw new AppError(
+      httpStatus.BAD_REQUEST,
+      `${label} must be in the HH:MM format`
+    );
+  }
+};
+
+// HH:MM strings sort the same way the times do
+const assertTimeOrder = (startTime: string, endTime: string) => {
+  if (endTime < startTime) {
+    throw new AppError(
+      httpStatus.BAD_REQUEST,
+      "End time cannot be earlier than start time"
+    );
+  }
+};
+
 const createCleaningLogIntoDB = async (payload: any, authUser?: any) => {
-  const { companyId, areaId, items, signatureUrl, signedAt } = payload || {};
+  const { companyId, areaId, items, signatureUrl, signedAt, startTime, endTime } =
+    payload || {};
 
   // An employee always logs for themselves
   const employeeId = isEmployee(authUser)
@@ -160,6 +186,9 @@ const createCleaningLogIntoDB = async (payload: any, authUser?: any) => {
   if (!signatureUrl) {
     throw new AppError(httpStatus.BAD_REQUEST, "Signature is required");
   }
+  assertTime(startTime, "Start time");
+  assertTime(endTime, "End time");
+  assertTimeOrder(startTime, endTime);
 
   const assigned = await CleaningAccessServices.isEmployeeAssigned(
     companyId,
@@ -194,6 +223,8 @@ const createCleaningLogIntoDB = async (payload: any, authUser?: any) => {
     items: await buildItemsFromArea(areaId, items),
     signatureUrl,
     signedAt: signedAt ? new Date(signedAt) : new Date(),
+    startTime,
+    endTime,
     createdBy: authUser?._id,
     logs: [
       { title, action: "create", updatedBy: actorId, date: new Date() },
@@ -259,6 +290,20 @@ const updateCleaningLogIntoDB = async (
     update.signedAt = payload.signedAt
       ? new Date(payload.signedAt)
       : new Date();
+  }
+
+  if (payload?.startTime !== undefined) {
+    assertTime(payload.startTime, "Start time");
+    update.startTime = payload.startTime;
+  }
+  if (payload?.endTime !== undefined) {
+    assertTime(payload.endTime, "End time");
+    update.endTime = payload.endTime;
+  }
+  if (update.startTime !== undefined || update.endTime !== undefined) {
+    const startTime = (update.startTime as string) ?? existing.startTime;
+    const endTime = (update.endTime as string) ?? existing.endTime;
+    if (startTime && endTime) assertTimeOrder(startTime, endTime);
   }
 
   await CleaningLog.findByIdAndUpdate(

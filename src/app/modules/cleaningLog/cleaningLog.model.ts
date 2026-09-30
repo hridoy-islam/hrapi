@@ -75,6 +75,17 @@ const CleaningLogSchema = new Schema<TCleaningLog>(
       required: true,
     },
 
+    // Clock times the cleaning ran, as HH:MM
+    startTime: {
+      type: String,
+      trim: true,
+    },
+
+    endTime: {
+      type: String,
+      trim: true,
+    },
+
     createdBy: {
       type: Schema.Types.ObjectId,
       ref: "User",
