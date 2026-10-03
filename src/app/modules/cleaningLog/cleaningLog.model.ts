@@ -68,7 +68,9 @@ const CleaningLogSchema = new Schema<TCleaningLog>(
       type: String,
       required: true,
     },
-
+    note: {
+      type: String,
+    },
     // When the signature was given
     signedAt: {
       type: Date,
@@ -104,7 +106,7 @@ const CleaningLogSchema = new Schema<TCleaningLog>(
   },
   {
     timestamps: true,
-  }
+  },
 );
 
 CleaningLogSchema.index({ companyId: 1, createdAt: -1 });

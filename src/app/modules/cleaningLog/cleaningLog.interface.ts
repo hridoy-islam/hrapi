@@ -28,6 +28,7 @@ export interface TCleaningLog {
   items: TCleaningLogItem[];
   signatureUrl: string;
   signedAt: Date;
+  note?: string;
   // Clock times the cleaning ran, as HH:MM
   startTime?: string;
   endTime?: string;

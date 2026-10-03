@@ -166,7 +166,7 @@ const assertTimeOrder = (startTime: string, endTime: string) => {
 };
 
 const createCleaningLogIntoDB = async (payload: any, authUser?: any) => {
-  const { companyId, areaId, items, signatureUrl, signedAt, startTime, endTime } =
+  const { companyId, areaId, items, signatureUrl, signedAt, startTime, endTime, note } =
     payload || {};
 
   // An employee always logs for themselves
@@ -225,6 +225,7 @@ const createCleaningLogIntoDB = async (payload: any, authUser?: any) => {
     signedAt: signedAt ? new Date(signedAt) : new Date(),
     startTime,
     endTime,
+    ...(note ? { note } : {}),
     createdBy: authUser?._id,
     logs: [
       { title, action: "create", updatedBy: actorId, date: new Date() },
@@ -290,6 +291,10 @@ const updateCleaningLogIntoDB = async (
     update.signedAt = payload.signedAt
       ? new Date(payload.signedAt)
       : new Date();
+  }
+
+  if (payload?.note !== undefined) {
+    update.note = payload.note || "";
   }
 
   if (payload?.startTime !== undefined) {
