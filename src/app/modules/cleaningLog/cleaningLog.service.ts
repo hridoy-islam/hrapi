@@ -7,6 +7,7 @@ import { CleaningLog } from "./cleaningLog.model";
 import { TCleaningLog, TCleaningLogItem } from "./cleaningLog.interface";
 import { CleaningArea } from "../cleaningArea/cleaningArea.model";
 import { CleaningElement } from "../cleaningElement/cleaningElement.model";
+import { cleaningPeriod } from "../cleaningArea/cleaningArea.constant";
 import { CleaningAccessServices } from "../cleaningAccess/cleaningAccess.service";
 import { User } from "../user/user.model";
 
@@ -31,7 +32,9 @@ const displayName = (user: any) =>
 
 const nameOf = async (id: any): Promise<string> => {
   if (!id) return "Someone";
-  const user = await User.findById(String(id?._id || id)).select(employeeSelect);
+  const user = await User.findById(String(id?._id || id)).select(
+    employeeSelect,
+  );
   return displayName(user);
 };
 
@@ -43,12 +46,12 @@ const checkedIdsOf = (items: unknown): Set<string> =>
   new Set(
     (Array.isArray(items) ? (items as TItemInput[]) : [])
       .filter((item) => item?.checked && item?.elementId)
-      .map((item) => String(item.elementId))
+      .map((item) => String(item.elementId)),
   );
 
 const buildItemsFromArea = async (
   areaId: string,
-  items: unknown
+  items: unknown,
 ): Promise<TCleaningLogItem[]> => {
   const checkedIds = checkedIdsOf(items);
   const elements = await CleaningElement.find({ areaId }).sort("createdAt");
@@ -71,11 +74,34 @@ const findArea = async (areaId: string, companyId?: string) => {
   if (companyId && String(area.companyId) !== String(companyId)) {
     throw new AppError(
       httpStatus.BAD_REQUEST,
-      "This area does not belong to the company"
+      "This area does not belong to the company",
     );
   }
 
   return area;
+};
+
+// A daily area takes one log a day and a monthly area one a month, whoever
+// submits it. `date` picks the period; `excludeId` skips the log being edited.
+const assertAreaOpen = async (
+  area: any,
+  date: Date | string = new Date(),
+  excludeId?: string,
+) => {
+  const done = await CleaningLog.exists({
+    areaId: area._id,
+    createdAt: cleaningPeriod(area.type, date),
+    ...(excludeId ? { _id: { $ne: excludeId } } : {}),
+  });
+
+  if (done) {
+    throw new AppError(
+      httpStatus.CONFLICT,
+      area.type === "monthly"
+        ? `${area.areaName} has already been completed this month`
+        : `${area.areaName} has already been completed today`,
+    );
+  }
 };
 
 // No range given means the last 30 days, which is what every list opens on
@@ -93,7 +119,7 @@ const dateRange = (query: Record<string, unknown>) => {
 
 const getAllCleaningLogFromDB = async (
   query: Record<string, unknown>,
-  authUser?: any
+  authUser?: any,
 ) => {
   const filter: Record<string, unknown> = {};
 
@@ -150,7 +176,7 @@ const assertTime = (value: unknown, label: string) => {
   if (typeof value !== "string" || !TIME_PATTERN.test(value)) {
     throw new AppError(
       httpStatus.BAD_REQUEST,
-      `${label} must be in the HH:MM format`
+      `${label} must be in the HH:MM format`,
     );
   }
 };
@@ -160,19 +186,25 @@ const assertTimeOrder = (startTime: string, endTime: string) => {
   if (endTime < startTime) {
     throw new AppError(
       httpStatus.BAD_REQUEST,
-      "End time cannot be earlier than start time"
+      "End time cannot be earlier than start time",
     );
   }
 };
 
 const createCleaningLogIntoDB = async (payload: any, authUser?: any) => {
-  const { companyId, areaId, items, signatureUrl, signedAt, startTime, endTime, note } =
-    payload || {};
+  const {
+    companyId,
+    areaId,
+    items,
+    signatureUrl,
+    signedAt,
+    startTime,
+    endTime,
+    note,
+  } = payload || {};
 
   // An employee always logs for themselves
-  const employeeId = isEmployee(authUser)
-    ? authUser._id
-    : payload?.employeeId;
+  const employeeId = isEmployee(authUser) ? authUser._id : payload?.employeeId;
 
   if (!companyId) {
     throw new AppError(httpStatus.BAD_REQUEST, "Company id is required");
@@ -192,17 +224,18 @@ const createCleaningLogIntoDB = async (payload: any, authUser?: any) => {
 
   const assigned = await CleaningAccessServices.isEmployeeAssigned(
     companyId,
-    employeeId
+    employeeId,
   );
 
   if (!assigned) {
     throw new AppError(
       httpStatus.FORBIDDEN,
-      "This employee is not assigned to the cleaning module"
+      "This employee is not assigned to the cleaning module",
     );
   }
 
   const area = await findArea(areaId, companyId);
+  await assertAreaOpen(area);
 
   // History line: the employee submitting their own log, or someone
   // creating it on their behalf
@@ -227,9 +260,7 @@ const createCleaningLogIntoDB = async (payload: any, authUser?: any) => {
     endTime,
     ...(note ? { note } : {}),
     createdBy: authUser?._id,
-    logs: [
-      { title, action: "create", updatedBy: actorId, date: new Date() },
-    ],
+    logs: [{ title, action: "create", updatedBy: actorId, date: new Date() }],
   };
 
   const result = await CleaningLog.create(log);
@@ -240,7 +271,7 @@ const createCleaningLogIntoDB = async (payload: any, authUser?: any) => {
 const updateCleaningLogIntoDB = async (
   id: string,
   payload: any,
-  authUser?: any
+  authUser?: any,
 ) => {
   const existing = await CleaningLog.findById(id);
 
@@ -253,13 +284,13 @@ const updateCleaningLogIntoDB = async (
   if (payload?.employeeId) {
     const assigned = await CleaningAccessServices.isEmployeeAssigned(
       String(existing.companyId),
-      payload.employeeId
+      payload.employeeId,
     );
 
     if (!assigned) {
       throw new AppError(
         httpStatus.FORBIDDEN,
-        "This employee is not assigned to the cleaning module"
+        "This employee is not assigned to the cleaning module",
       );
     }
 
@@ -272,6 +303,8 @@ const updateCleaningLogIntoDB = async (
   if (areaChanged) {
     // A new area means a new checklist, taken fresh from that area
     const area = await findArea(payload.areaId, String(existing.companyId));
+    // Checked against the period the log was originally created in
+    await assertAreaOpen(area, (existing as any).createdAt, id);
     update.areaId = area._id;
     update.areaName = area.areaName;
     update.roomNumber = area.roomNumber;
@@ -327,7 +360,7 @@ const updateCleaningLogIntoDB = async (
     {
       new: true,
       runValidators: true,
-    }
+    },
   );
 
   return getSingleCleaningLogFromDB(id);

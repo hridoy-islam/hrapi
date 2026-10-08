@@ -5,8 +5,54 @@ import AppError from "../../errors/AppError";
 import QueryBuilder from "../../builder/QueryBuilder";
 import { CleaningArea } from "./cleaningArea.model";
 import { TCleaningArea } from "./cleaningArea.interface";
-import { CleaningAreaSearchableFields } from "./cleaningArea.constant";
+import {
+  CleaningAreaSearchableFields,
+  cleaningPeriod,
+} from "./cleaningArea.constant";
 import { CleaningElement } from "../cleaningElement/cleaningElement.model";
+import { CleaningLog } from "../cleaningLog/cleaningLog.model";
+
+// The log that already covers each area for the period `date` falls in.
+// `excludeLogId` leaves out the log being edited, so it does not block itself.
+const completionsFor = async (
+  areas: any[],
+  date: Date | string,
+  excludeLogId?: string,
+) => {
+  const completions = new Map<string, any>();
+
+  await Promise.all(
+    ["daily", "monthly"].map(async (type) => {
+      const areaIds = areas
+        .filter((area) => area.type === type)
+        .map((area) => area._id);
+      if (areaIds.length === 0) return;
+
+      const logs = await CleaningLog.find({
+        areaId: { $in: areaIds },
+        createdAt: cleaningPeriod(type, date),
+        ...(excludeLogId ? { _id: { $ne: excludeLogId } } : {}),
+      })
+        .select("areaId employeeId createdAt")
+        .populate("employeeId", "firstName lastName name email")
+        .sort("createdAt");
+
+      // The first log of the period is the one that completed it
+      logs.forEach((log: any) => {
+        const key = String(log.areaId);
+        if (!completions.has(key)) {
+          completions.set(key, {
+            logId: log._id,
+            employeeId: log.employeeId,
+            completedAt: log.createdAt,
+          });
+        }
+      });
+    }),
+  );
+
+  return completions;
+};
 
 const getAllCleaningAreaFromDB = async (query: Record<string, unknown>) => {
   const filter: Record<string, unknown> = {};
@@ -35,12 +81,26 @@ const getAllCleaningAreaFromDB = async (query: Record<string, unknown>) => {
   ]);
 
   const countMap = new Map(
-    counts.map((item: any) => [String(item._id), item.totalElement])
+    counts.map((item: any) => [String(item._id), item.totalElement]),
   );
+
+  // Asked for by the log form, so it can lock areas already done this
+  // day (daily) or month (monthly)
+  const completions =
+    String(query.withCompletion) === "true"
+      ? await completionsFor(
+          result,
+          (query.completionDate as string) || new Date(),
+          query.excludeLogId as string | undefined,
+        )
+      : null;
 
   const resultWithCounts = result.map((area: any) => ({
     ...area.toObject(),
     totalElement: countMap.get(String(area._id)) || 0,
+    ...(completions
+      ? { completion: completions.get(String(area._id)) || null }
+      : {}),
   }));
 
   return { meta, result: resultWithCounts };
@@ -66,7 +126,7 @@ const createCleaningAreaIntoDB = async (payload: Partial<TCleaningArea>) => {
 
 const updateCleaningAreaIntoDB = async (
   id: string,
-  payload: Partial<TCleaningArea>
+  payload: Partial<TCleaningArea>,
 ) => {
   // The owning company never moves
   const { companyId: _ignoredCompany, ...data } = payload as any;
