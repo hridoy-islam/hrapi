@@ -195,6 +195,8 @@ const getAllCleaningLogFromDB = async (
 
   filter.createdAt = dateRange(query);
 
+  await pauseStaleSessions();
+
   const logQuery = new QueryBuilder(populateLog(CleaningLog.find(filter)), {
     sort: "-createdAt",
     ...query,
@@ -224,10 +226,12 @@ const getActiveCleaningLogsFromDB = async (
   if (query.type) filter.type = query.type;
   if (isEmployee(authUser)) filter.employeeId = authUser._id;
 
+  await pauseStaleSessions();
   return populateLog(CleaningLog.find(filter).sort("-updatedAt"));
 };
 
 const getSingleCleaningLogFromDB = async (id: string, authUser?: any) => {
+  await pauseStaleSessions();
   const result = await populateLog(CleaningLog.findById(id));
 
   if (!result) {
@@ -273,6 +277,8 @@ const assertStatus = (
 // Only one area can be running per employee at a time; a paused one does
 // not count
 const assertNothingRunning = async (employeeId: any, excludeId?: string) => {
+  // Yesterday's forgotten timer never blocks today
+  await pauseStaleSessions();
   const running = await CleaningLog.findOne({
     employeeId,
     status: "in_progress",
@@ -305,6 +311,52 @@ const closeSessions = (sessions: any[], now: Date) => {
   );
 
   return { sessions: closed, durationSeconds };
+};
+
+// A timer left running past midnight (UK) is paused as of that midnight, so
+// it does not count the night and does not block the employee the next day.
+// The session stays open to be completed or discarded later and still
+// belongs to the day it was started. There is no scheduled job: it runs
+// whenever cleaning logs, sessions, the report or the area list are fetched,
+// and before a session is started or resumed.
+const pauseStaleSessions = async () => {
+  const todayStart = moment().tz(UK_TZ).startOf("day").toDate();
+
+  const stale: any[] = await CleaningLog.find({
+    status: "in_progress",
+    sessions: {
+      $elemMatch: {
+        endedAt: { $exists: false },
+        startedAt: { $lt: todayStart },
+      },
+    },
+  }).select("status sessions");
+
+  let paused = 0;
+  for (const log of stale) {
+    const running = log.sessions.find((session: any) => !session.endedAt);
+    if (!running) continue;
+
+    const midnight = moment(running.startedAt).tz(UK_TZ).endOf("day").toDate();
+
+    const result = await CleaningLog.updateOne(
+      { _id: log._id, status: "in_progress" },
+      {
+        ...closeSessions(log.sessions, midnight),
+        status: "paused",
+        $push: {
+          logs: {
+            title: "Paused automatically at midnight",
+            action: "pause",
+            date: new Date(),
+          },
+        },
+      },
+    );
+    paused += result.modifiedCount;
+  }
+
+  return paused;
 };
 
 // Applies a status move only if nobody else moved the log first, so a double
@@ -829,6 +881,7 @@ const deleteCleaningLogFromDB = async (id: string) => {
 // picks which areas (daily or monthly) the report covers; the columns are
 // always the days from fromDate to toDate.
 const getCleaningReportFromDB = async (query: Record<string, unknown>) => {
+  await pauseStaleSessions();
   const { companyId, employeeId } = query;
   const type = query.type === "monthly" ? "monthly" : "daily";
 
@@ -916,6 +969,7 @@ const getCleaningReportFromDB = async (query: Record<string, unknown>) => {
 };
 
 export const CleaningLogServices = {
+  pauseStaleSessions,
   getAllCleaningLogFromDB,
   getActiveCleaningLogsFromDB,
   getSingleCleaningLogFromDB,

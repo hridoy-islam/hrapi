@@ -12,6 +12,7 @@ import {
 } from "./cleaningArea.constant";
 import { CleaningElement } from "../cleaningElement/cleaningElement.model";
 import { CleaningLog } from "../cleaningLog/cleaningLog.model";
+import { CleaningLogServices } from "../cleaningLog/cleaningLog.service";
 
 // The log that holds each area for the period `date` falls in: `completion`
 // once it is done, `inProgress` while someone is still working on it.
@@ -98,8 +99,12 @@ const getAllCleaningAreaFromDB = async (query: Record<string, unknown>) => {
 
   // Asked for by the log form, so it can lock areas already done or being
   // worked on this day (daily) or month (monthly)
+  const withCompletion = String(query.withCompletion) === "true";
+  // A timer forgotten overnight shows as paused, not still in progress
+  if (withCompletion) await CleaningLogServices.pauseStaleSessions();
+
   const holds =
-    String(query.withCompletion) === "true"
+    withCompletion
       ? await completionsFor(
           result,
           (query.completionDate as string) || new Date(),
