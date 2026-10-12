@@ -8,11 +8,13 @@ import { TCleaningArea } from "./cleaningArea.interface";
 import {
   CleaningAreaSearchableFields,
   cleaningPeriod,
+  OPEN_LOG_STATUSES,
 } from "./cleaningArea.constant";
 import { CleaningElement } from "../cleaningElement/cleaningElement.model";
 import { CleaningLog } from "../cleaningLog/cleaningLog.model";
 
-// The log that already covers each area for the period `date` falls in.
+// The log that holds each area for the period `date` falls in: `completion`
+// once it is done, `inProgress` while someone is still working on it.
 // `excludeLogId` leaves out the log being edited, so it does not block itself.
 const completionsFor = async (
   areas: any[],
@@ -20,6 +22,7 @@ const completionsFor = async (
   excludeLogId?: string,
 ) => {
   const completions = new Map<string, any>();
+  const inProgress = new Map<string, any>();
 
   await Promise.all(
     ["daily", "monthly"].map(async (type) => {
@@ -33,25 +36,34 @@ const completionsFor = async (
         createdAt: cleaningPeriod(type, date),
         ...(excludeLogId ? { _id: { $ne: excludeLogId } } : {}),
       })
-        .select("areaId employeeId createdAt")
+        .select("areaId employeeId status sessions durationSeconds createdAt completedAt")
         .populate("employeeId", "firstName lastName name email")
         .sort("createdAt");
 
-      // The first log of the period is the one that completed it
+      // The first log of the period is the one that holds it
       logs.forEach((log: any) => {
         const key = String(log.areaId);
-        if (!completions.has(key)) {
+        if (completions.has(key) || inProgress.has(key)) return;
+
+        if (OPEN_LOG_STATUSES.includes(log.status)) {
+          inProgress.set(key, {
+            logId: log._id,
+            employeeId: log.employeeId,
+            status: log.status,
+            startedAt: log.createdAt,
+          });
+        } else {
           completions.set(key, {
             logId: log._id,
             employeeId: log.employeeId,
-            completedAt: log.createdAt,
+            completedAt: log.completedAt || log.createdAt,
           });
         }
       });
     }),
   );
 
-  return completions;
+  return { completions, inProgress };
 };
 
 const getAllCleaningAreaFromDB = async (query: Record<string, unknown>) => {
@@ -84,9 +96,9 @@ const getAllCleaningAreaFromDB = async (query: Record<string, unknown>) => {
     counts.map((item: any) => [String(item._id), item.totalElement]),
   );
 
-  // Asked for by the log form, so it can lock areas already done this
-  // day (daily) or month (monthly)
-  const completions =
+  // Asked for by the log form, so it can lock areas already done or being
+  // worked on this day (daily) or month (monthly)
+  const holds =
     String(query.withCompletion) === "true"
       ? await completionsFor(
           result,
@@ -98,8 +110,11 @@ const getAllCleaningAreaFromDB = async (query: Record<string, unknown>) => {
   const resultWithCounts = result.map((area: any) => ({
     ...area.toObject(),
     totalElement: countMap.get(String(area._id)) || 0,
-    ...(completions
-      ? { completion: completions.get(String(area._id)) || null }
+    ...(holds
+      ? {
+          completion: holds.completions.get(String(area._id)) || null,
+          inProgress: holds.inProgress.get(String(area._id)) || null,
+        }
       : {}),
   }));
 

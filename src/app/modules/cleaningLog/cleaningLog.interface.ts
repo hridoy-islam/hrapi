@@ -1,7 +1,7 @@
 import { Types } from "mongoose";
 import { TCleaningType } from "../cleaningArea/cleaningArea.interface";
 
-// A copy of the element as it read when the log was submitted, so later
+// A copy of the element as it read when the log was started, so later
 // edits to the area never rewrite a signed log
 export interface TCleaningLogItem {
   elementId?: Types.ObjectId;
@@ -13,10 +13,22 @@ export interface TCleaningLogItem {
 // One line of the log's history, e.g. "Mahi submitted cleaning log"
 export interface TCleaningLogHistory {
   title: string;
-  action: "create" | "update";
+  action: "create" | "update" | "start" | "pause" | "resume" | "stop";
   updatedBy?: Types.ObjectId;
   date: Date;
 }
+
+// One stretch of work, from a start or resume to a pause or stop
+export interface TCleaningLogSession {
+  startedAt: Date;
+  endedAt?: Date;
+}
+
+export type TCleaningLogStatus =
+  | "in_progress"
+  | "paused"
+  | "stopped"
+  | "completed";
 
 export interface TCleaningLog {
   companyId: Types.ObjectId;
@@ -25,13 +37,21 @@ export interface TCleaningLog {
   areaName: string;
   roomNumber?: string;
   type: TCleaningType;
+  status: TCleaningLogStatus;
+  // The day or month the log covers, see cleaningPeriodKey
+  periodKey?: string;
   items: TCleaningLogItem[];
-  signatureUrl: string;
-  signedAt: Date;
+  sessions: TCleaningLogSession[];
+  // Time worked across the closed sessions
+  durationSeconds: number;
+  signatureUrl?: string;
+  signedAt?: Date;
   note?: string;
-  // Clock times the cleaning ran, as HH:MM
+  // UK clock times (HH:MM) of the first start and of the stop. Stamped by
+  // the session actions, never taken from the request.
   startTime?: string;
   endTime?: string;
+  completedAt?: Date;
   createdBy?: Types.ObjectId;
   updatedBy?: Types.ObjectId;
   logs: TCleaningLogHistory[];
