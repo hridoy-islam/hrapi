@@ -120,7 +120,7 @@ const CleaningLogSchema = new Schema<TCleaningLog>(
     },
 
     // UK clock times of the start and the end, as HH:MM: stamped by the
-    // timer or typed in. Required on completion, checked by the service.
+    // timer or typed in. Optional; the service checks the format.
     startTime: {
       type: String,
       trim: true,

@@ -529,8 +529,10 @@ const reverseHolidayHoursForLeave = async (oldLeave: any): Promise<void> => {
   userHoliday.unpaidBookedHours -= unpaidHours;
 
   userHoliday.remainingHours =
-    userHoliday.holidayAccured -
-    (userHoliday.usedHours + userHoliday.bookedHours);
+    (userHoliday.carryForward || 0) +
+    (userHoliday.holidayEntitlement || 0) +
+    (userHoliday.holidayAccured || 0) -
+    (userHoliday.usedHours + userHoliday.bookedHours + (userHoliday.requestedHours || 0));
 
   await userHoliday.save();
 };
@@ -562,8 +564,10 @@ const applyHolidayHoursForLeave = async (newLeave: any): Promise<void> => {
   userHoliday.unpaidBookedHours += unpaidHours;
 
   userHoliday.remainingHours =
-    userHoliday.holidayAccured -
-    (userHoliday.usedHours + userHoliday.bookedHours);
+    (userHoliday.carryForward || 0) +
+    (userHoliday.holidayEntitlement || 0) +
+    (userHoliday.holidayAccured || 0) -
+    (userHoliday.usedHours + userHoliday.bookedHours + (userHoliday.requestedHours || 0));
 
   await userHoliday.save();
 };
@@ -1054,7 +1058,9 @@ const getHolidaySummaryByDateRange = async (query: Record<string, unknown>) => {
 
     const allowance = (record.carryForward || 0) + (record.holidayAccured || 0);
     const dynamicRemaining =
-      allowance - (empBucketed.usedHours + empBucketed.bookedHours);
+      allowance +
+      (record.holidayEntitlement || 0) -
+      (empBucketed.usedHours + empBucketed.bookedHours + empBucketed.requestedHours);
 
     const dynamicHolidayRecord = {
       ...record.toObject(),

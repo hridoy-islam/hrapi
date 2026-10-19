@@ -585,19 +585,22 @@ const completeCleaningLogIntoDB = async (
   }
 
   // Typed times win; otherwise the ones the timer stamped
-  const start = startTime || log.startTime;
-  const end = endTime || log.endTime;
+  const start = startTime || log.startTime || "";
+  const end = endTime || log.endTime || "";
   assertTime(start, "Start time");
   assertTime(end, "End time");
   assertTimeOrder(start, end);
 
   // Any running stretch ends now. The timer's total stands while the times
-  // are the ones it stamped; times typed in by hand set the duration.
+  // are the ones it stamped (or either is missing); times typed in by hand
+  // set the duration.
   const closed = closeSessions(log.sessions, new Date());
   const timerTimes =
-    closed.durationSeconds > 0 &&
-    start === log.startTime &&
-    end === log.endTime;
+    !start ||
+    !end ||
+    (closed.durationSeconds > 0 &&
+      start === log.startTime &&
+      end === log.endTime);
   const timing = {
     sessions: closed.sessions,
     startTime: start,
@@ -678,10 +681,9 @@ const discardCleaningLogFromDB = async (id: string, authUser?: any) => {
 // A 24-hour clock time, e.g. 09:00 or 17:30
 const TIME_PATTERN = /^([01]\d|2[0-3]):[0-5]\d$/;
 
+// Times are optional; one given must be a valid HH:MM
 const assertTime = (value: unknown, label: string) => {
-  if (!value) {
-    throw new AppError(httpStatus.BAD_REQUEST, `${label} is required`);
-  }
+  if (!value) return;
   if (typeof value !== "string" || !TIME_PATTERN.test(value)) {
     throw new AppError(
       httpStatus.BAD_REQUEST,
@@ -695,9 +697,9 @@ const minutesOf = (time: string) => {
   return hours * 60 + minutes;
 };
 
-// HH:MM strings sort the same way the times do
-const assertTimeOrder = (startTime: string, endTime: string) => {
-  if (endTime < startTime) {
+// HH:MM strings sort the same way the times do. Only checked once both exist.
+const assertTimeOrder = (startTime?: string, endTime?: string) => {
+  if (startTime && endTime && endTime < startTime) {
     throw new AppError(
       httpStatus.BAD_REQUEST,
       "End time cannot be earlier than start time",
@@ -779,12 +781,15 @@ const createCleaningLogIntoDB = async (payload: any, authUser?: any) => {
     status: "completed",
     periodKey: cleaningPeriodKey(area.type, now),
     items: await buildItemsFromArea(areaId, items),
-    durationSeconds: (minutesOf(endTime) - minutesOf(startTime)) * 60,
+    durationSeconds:
+      startTime && endTime
+        ? (minutesOf(endTime) - minutesOf(startTime)) * 60
+        : 0,
     signatureUrl,
     signedAt: signedAt ? new Date(signedAt) : now,
     completedAt: now,
-    startTime,
-    endTime,
+    startTime: startTime || "",
+    endTime: endTime || "",
     ...(note ? { note } : {}),
     // The log is always the employee's own, whoever filed it
     createdBy: employeeId,
@@ -873,11 +878,11 @@ const updateCleaningLogIntoDB = async (
 
   if (payload?.startTime !== undefined) {
     assertTime(payload.startTime, "Start time");
-    update.startTime = payload.startTime;
+    update.startTime = payload.startTime || "";
   }
   if (payload?.endTime !== undefined) {
     assertTime(payload.endTime, "End time");
-    update.endTime = payload.endTime;
+    update.endTime = payload.endTime || "";
   }
   const timesChanged =
     (update.startTime !== undefined &&

@@ -163,9 +163,13 @@ export const recalculateUserHoliday = async (
   const currentCarryForward = holidayRecord?.carryForward || 0;
   const recalculatedAllowance = Number(( calculatedAccruedHours + currentCarryForward).toFixed(2));
 
-  // ✅ 5. New Remaining Hours Formula: Allowance + Accrued - Taken - Booked
+  // ✅ 5. Remaining Hours = Carry Forward + Entitlement + Accrued - Taken - Booked - Requested
   const remainingHours = Number(
-    (recalculatedAllowance - (usedHours + bookedHours)).toFixed(2)
+    (
+      recalculatedAllowance +
+      currentEntitlement -
+      (usedHours + bookedHours + requestedHours)
+    ).toFixed(2)
   );
 
   // 6. Persist
@@ -438,8 +442,11 @@ const getAllHolidayFromDB = async (query: Record<string, unknown>) => {
 
 
 const getSingleHolidayFromDB = async (id: string) => {
-  const result = await Holiday.findById(id);
-  return result;
+  const holiday = await Holiday.findById(id);
+  if (!holiday) return holiday;
+
+  // Recalculate so remainingHours reflects the latest formula
+  return await recalculateUserHoliday(holiday.userId, holiday.year);
 };
 
 const createHolidayIntoDB = async (payload: THoliday) => {
@@ -475,8 +482,10 @@ const updateHolidayIntoDB = async (id: string, payload: Partial<THoliday>) => {
     new: true,
     runValidators: true,
   });
+  if (!result) return result;
 
-  return result;
+  // Entitlement / carry forward may have changed — recalculate balances
+  return await recalculateUserHoliday(result.userId, result.year);
 };
 
 export const HolidayServices = {
