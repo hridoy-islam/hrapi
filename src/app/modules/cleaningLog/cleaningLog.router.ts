@@ -6,6 +6,7 @@ const router = express.Router();
 
 const everyone = auth("admin", "company", "companyAdmin", "employee");
 const companySide = auth("admin", "company", "companyAdmin");
+const employeeOnly = auth("employee");
 
 router.get("/", everyone, CleaningLogControllers.getAllCleaningLog);
 
@@ -15,23 +16,30 @@ router.get("/report", companySide, CleaningLogControllers.getCleaningReport);
 
 router.get("/:id", everyone, CleaningLogControllers.getSingleCleaningLog);
 
-// The company side records a finished log in one go, times typed in
-router.post("/", companySide, CleaningLogControllers.createCleaningLog);
+// A finished log recorded in one go, times typed in. An employee files only
+// for themselves.
+router.post("/", everyone, CleaningLogControllers.createCleaningLog);
 
-// An employee's log is a session: start -> pause / resume -> stop -> complete
-router.post("/start", everyone, CleaningLogControllers.startCleaningLog);
-router.patch("/:id/pause", everyone, CleaningLogControllers.pauseCleaningLog);
-router.patch("/:id/resume", everyone, CleaningLogControllers.resumeCleaningLog);
-router.patch("/:id/stop", everyone, CleaningLogControllers.stopCleaningLog);
+// An employee's log can also be a session: start (timer optional) ->
+// pause / resume -> stop -> complete. Only the employee runs it; the company
+// side has no pause or timer and only completes or clears a session.
+router.post("/start", employeeOnly, CleaningLogControllers.startCleaningLog);
+router.patch("/:id/pause", employeeOnly, CleaningLogControllers.pauseCleaningLog);
+router.patch(
+  "/:id/resume",
+  employeeOnly,
+  CleaningLogControllers.resumeCleaningLog
+);
+router.patch("/:id/stop", employeeOnly, CleaningLogControllers.stopCleaningLog);
 router.patch(
   "/:id/complete",
   everyone,
   CleaningLogControllers.completeCleaningLog
 );
-// Ticks saved as they are made during a session
+// Ticks and times saved as they are made during a session
 router.patch(
   "/:id/items",
-  everyone,
+  employeeOnly,
   CleaningLogControllers.updateCleaningLogItems
 );
 router.delete(

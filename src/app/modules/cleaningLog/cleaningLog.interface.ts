@@ -47,8 +47,8 @@ export interface TCleaningLog {
   signatureUrl?: string;
   signedAt?: Date;
   note?: string;
-  // UK clock times (HH:MM) of the first start and of the stop. Stamped by
-  // the session actions, never taken from the request.
+  // UK clock times (HH:MM) of the start and the end: stamped by the timer
+  // or typed in by hand. Both are required on completion.
   startTime?: string;
   endTime?: string;
   completedAt?: Date;

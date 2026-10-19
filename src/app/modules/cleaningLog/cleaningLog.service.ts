@@ -68,6 +68,10 @@ const historyLine = async (
 
 const ukTime = (date: Date) => moment(date).tz(UK_TZ).format("HH:mm");
 
+// "3 of 8 checked", kept in a pause's history line to show how far it got
+const progressOf = (items: any[] = []) =>
+  `${items.filter((item) => item.checked).length} of ${items.length} checked`;
+
 // Only the checked flag is taken from the request. The element text always
 // comes from the area itself.
 type TItemInput = { elementId?: string; checked?: boolean };
@@ -367,14 +371,18 @@ const moveLog = async (
   history: TCleaningLogHistory,
   authUser?: any,
 ) => {
-  const result = await CleaningLog.findOneAndUpdate(
-    { _id: log._id, status: log.status },
-    {
-      ...update,
-      updatedBy: authUser?._id,
-      $push: { logs: history },
-    },
-    { new: true, runValidators: true },
+  // Populated in the same round trip; the owner was already checked by
+  // findSessionLog, so the log is not fetched again
+  const result = await populateLog(
+    CleaningLog.findOneAndUpdate(
+      { _id: log._id, status: log.status },
+      {
+        ...update,
+        updatedBy: authUser?._id,
+        $push: { logs: history },
+      },
+      { new: true, runValidators: true },
+    ),
   );
 
   if (!result) {
@@ -384,29 +392,29 @@ const moveLog = async (
     );
   }
 
-  return getSingleCleaningLogFromDB(String(result._id));
+  return result;
 };
 
+// Opens a log on the area, for the employee themselves (the route is
+// employee only). With `paused` the timer is never run: the ticks and
+// hand-typed times are kept for later, holding the area.
 const startCleaningLogIntoDB = async (payload: any, authUser?: any) => {
-  const { companyId, areaId } = payload || {};
-
-  // An employee always works for themselves
-  const employeeId = isEmployee(authUser) ? authUser._id : payload?.employeeId;
+  const { companyId, areaId, paused } = payload || {};
+  const employeeId = authUser?._id;
 
   if (!companyId) {
     throw new AppError(httpStatus.BAD_REQUEST, "Company id is required");
   }
-  if (!employeeId) {
-    throw new AppError(httpStatus.BAD_REQUEST, "Employee is required");
-  }
   if (!areaId) {
     throw new AppError(httpStatus.BAD_REQUEST, "Area is required");
   }
+  const times = typedTimes(payload);
 
-  const assigned = await CleaningAccessServices.isEmployeeAssigned(
-    companyId,
-    employeeId,
-  );
+  // Independent lookups go out together
+  const [assigned, area] = await Promise.all([
+    CleaningAccessServices.isEmployeeAssigned(companyId, employeeId),
+    findArea(areaId, companyId),
+  ]);
 
   if (!assigned) {
     throw new AppError(
@@ -415,11 +423,14 @@ const startCleaningLogIntoDB = async (payload: any, authUser?: any) => {
     );
   }
 
-  const area = await findArea(areaId, companyId);
-  await assertAreaOpen(area);
-  await assertNothingRunning(employeeId);
+  const [items, actorName] = await Promise.all([
+    buildItemsFromArea(areaId, payload?.items),
+    nameOf(employeeId),
+    assertAreaOpen(area),
+    // A paused log runs no timer, so it never clashes with one that does
+    paused ? undefined : assertNothingRunning(employeeId),
+  ]);
 
-  const items = await buildItemsFromArea(areaId, []);
   if (items.length === 0) {
     throw new AppError(
       httpStatus.BAD_REQUEST,
@@ -428,12 +439,10 @@ const startCleaningLogIntoDB = async (payload: any, authUser?: any) => {
   }
 
   const now = new Date();
-  const actorId = authUser?._id || employeeId;
-  const actorName = await nameOf(actorId);
-  const title =
-    String(actorId) === String(employeeId)
-      ? `${actorName} started cleaning`
-      : `${actorName} started cleaning for ${await nameOf(employeeId)}`;
+  const actorId = employeeId;
+  const title = paused
+    ? `${actorName} paused cleaning (${progressOf(items)})`
+    : `${actorName} started cleaning`;
 
   const log: Partial<TCleaningLog> = {
     companyId,
@@ -442,19 +451,29 @@ const startCleaningLogIntoDB = async (payload: any, authUser?: any) => {
     areaName: area.areaName,
     roomNumber: area.roomNumber,
     type: area.type,
-    status: "in_progress",
+    status: paused ? "paused" : "in_progress",
     periodKey: cleaningPeriodKey(area.type, now),
     items,
-    sessions: [{ startedAt: now }],
+    sessions: paused ? [] : [{ startedAt: now }],
     durationSeconds: 0,
-    startTime: ukTime(now),
+    ...times,
+    // The timer stamps the start unless one was typed in
+    ...(!paused && !times.startTime ? { startTime: ukTime(now) } : {}),
     createdBy: authUser?._id,
-    logs: [{ title, action: "start", updatedBy: actorId, date: now }],
+    logs: [
+      {
+        title,
+        action: paused ? "pause" : "start",
+        updatedBy: actorId,
+        date: now,
+      },
+    ],
   };
 
   try {
     const result = await CleaningLog.create(log);
-    return getSingleCleaningLogFromDB(String(result._id));
+    // Just created by this employee, so no owner check or stale sweep needed
+    return populateLog(CleaningLog.findById(result._id));
   } catch (error) {
     // Lost the race to someone who started the same area a moment earlier
     if (isDuplicateKey(error)) throw areaTakenError(area);
@@ -470,14 +489,17 @@ const pauseCleaningLogIntoDB = async (
   const log = await findSessionLog(id, authUser);
   assertStatus(log, ["in_progress"], "Only a running area can be paused");
 
+  const items = payload?.items ? tickItems(log.items, payload.items) : log.items;
+
   return moveLog(
     log,
     {
       ...closeSessions(log.sessions, new Date()),
       status: "paused",
-      ...(payload?.items ? { items: tickItems(log.items, payload.items) } : {}),
+      ...typedTimes(payload),
+      items,
     },
-    await historyLine("pause", "paused cleaning", authUser),
+    await historyLine("pause", `paused cleaning (${progressOf(items)})`, authUser),
     authUser,
   );
 };
@@ -492,14 +514,22 @@ const resumeCleaningLogIntoDB = async (
   assertStatus(log, ["paused"], "Only a paused area can be resumed");
   await assertNothingRunning(log.employeeId, id);
 
+  // A log paused before the timer was ever started carries on untimed: no
+  // clock, and nothing to stop. Only a timed log opens a new stretch.
+  const timed = log.sessions.length > 0;
+
   return moveLog(
     log,
     {
       status: "in_progress",
-      sessions: [
-        ...log.sessions.map((session: any) => session.toObject()),
-        { startedAt: new Date() },
-      ],
+      ...(timed
+        ? {
+            sessions: [
+              ...log.sessions.map((session: any) => session.toObject()),
+              { startedAt: new Date() },
+            ],
+          }
+        : {}),
       ...(payload?.items ? { items: tickItems(log.items, payload.items) } : {}),
     },
     await historyLine("resume", "resumed cleaning", authUser),
@@ -543,37 +573,39 @@ const completeCleaningLogIntoDB = async (
   const { items, signatureUrl, signedAt, note, startTime, endTime } =
     payload || {};
 
-  // An employee stops the timer first. The company side can finish a session
-  // in any state, typing the end time (and correcting the start if needed).
-  const finishedByCompany = !isEmployee(authUser);
-  if (finishedByCompany) {
-    assertStatus(
-      log,
-      [...OPEN_LOG_STATUSES],
-      "This area has already been completed",
-    );
-  } else {
-    assertStatus(log, ["stopped"], "Stop the area before completing it");
-  }
+  // The timer is optional, so a log can be completed in any open state
+  assertStatus(
+    log,
+    [...OPEN_LOG_STATUSES],
+    "This area has already been completed",
+  );
 
   if (!signatureUrl) {
     throw new AppError(httpStatus.BAD_REQUEST, "Signature is required");
   }
 
-  let timing: Record<string, unknown> = {};
-  if (finishedByCompany) {
-    const start = startTime || log.startTime;
-    assertTime(start, "Start time");
-    assertTime(endTime, "End time");
-    assertTimeOrder(start, endTime);
-    timing = {
-      // Any running stretch ends now, and the typed times are what count
-      sessions: closeSessions(log.sessions, new Date()).sessions,
-      startTime: start,
-      endTime,
-      durationSeconds: (minutesOf(endTime) - minutesOf(start)) * 60,
-    };
-  }
+  // Typed times win; otherwise the ones the timer stamped
+  const start = startTime || log.startTime;
+  const end = endTime || log.endTime;
+  assertTime(start, "Start time");
+  assertTime(end, "End time");
+  assertTimeOrder(start, end);
+
+  // Any running stretch ends now. The timer's total stands while the times
+  // are the ones it stamped; times typed in by hand set the duration.
+  const closed = closeSessions(log.sessions, new Date());
+  const timerTimes =
+    closed.durationSeconds > 0 &&
+    start === log.startTime &&
+    end === log.endTime;
+  const timing = {
+    sessions: closed.sessions,
+    startTime: start,
+    endTime: end,
+    durationSeconds: timerTimes
+      ? closed.durationSeconds
+      : (minutesOf(end) - minutesOf(start)) * 60,
+  };
 
   const filedForOther = String(authUser?._id) !== String(log.employeeId);
   const verb = filedForOther
@@ -596,7 +628,7 @@ const completeCleaningLogIntoDB = async (
   );
 };
 
-// Saves the ticks as they are made during a session. Not written to the
+// Saves the ticks and the typed times as they are made. Not written to the
 // history, which would fill up with one line per tick.
 const updateCleaningLogItemsIntoDB = async (
   id: string,
@@ -612,9 +644,14 @@ const updateCleaningLogItemsIntoDB = async (
 
   const result = await CleaningLog.findOneAndUpdate(
     { _id: log._id, status: { $in: [...OPEN_LOG_STATUSES] } },
-    { items: tickItems(log.items, payload?.items) },
+    {
+      ...(Array.isArray(payload?.items)
+        ? { items: tickItems(log.items, payload.items) }
+        : {}),
+      ...typedTimes(payload),
+    },
     { new: true, runValidators: true },
-  ).select("items status");
+  ).select("items status startTime endTime");
 
   if (!result) {
     throw new AppError(
@@ -668,12 +705,26 @@ const assertTimeOrder = (startTime: string, endTime: string) => {
   }
 };
 
-// The company side records a finished log in one go, typing the start and
-// end time instead of running the timer
+// Start / end times typed in while the log is still open. Either may be left
+// empty for now; both are only required on completion.
+const typedTimes = (payload: any) => {
+  const times: Partial<Record<"startTime" | "endTime", string>> = {};
+  if (payload?.startTime !== undefined) {
+    if (payload.startTime) assertTime(payload.startTime, "Start time");
+    times.startTime = payload.startTime || "";
+  }
+  if (payload?.endTime !== undefined) {
+    if (payload.endTime) assertTime(payload.endTime, "End time");
+    times.endTime = payload.endTime || "";
+  }
+  return times;
+};
+
+// A finished log recorded in one go, start and end time typed in: by the
+// company side for an employee, or by an employee for themselves
 const createCleaningLogIntoDB = async (payload: any, authUser?: any) => {
   const {
     companyId,
-    employeeId,
     areaId,
     items,
     signatureUrl,
@@ -682,6 +733,9 @@ const createCleaningLogIntoDB = async (payload: any, authUser?: any) => {
     endTime,
     note,
   } = payload || {};
+
+  // An employee always files for themselves
+  const employeeId = isEmployee(authUser) ? authUser._id : payload?.employeeId;
 
   if (!companyId) {
     throw new AppError(httpStatus.BAD_REQUEST, "Company id is required");
@@ -732,13 +786,12 @@ const createCleaningLogIntoDB = async (payload: any, authUser?: any) => {
     startTime,
     endTime,
     ...(note ? { note } : {}),
-    createdBy: authUser?._id,
+    // The log is always the employee's own, whoever filed it
+    createdBy: employeeId,
     logs: [
-      await historyLine(
-        "create",
-        `created cleaning log for ${await nameOf(employeeId)}`,
-        authUser,
-      ),
+      await historyLine("create", "submitted cleaning log", {
+        _id: employeeId,
+      }),
     ],
   };
 
