@@ -16,13 +16,12 @@ router.get("/report", companySide, CleaningLogControllers.getCleaningReport);
 
 router.get("/:id", everyone, CleaningLogControllers.getSingleCleaningLog);
 
-// A finished log recorded in one go, times typed in. An employee files only
-// for themselves.
-router.post("/", everyone, CleaningLogControllers.createCleaningLog);
+// A finished log recorded in one go, times typed in, by the company side
+router.post("/", companySide, CleaningLogControllers.createCleaningLog);
 
-// An employee's log can also be a session: start (timer optional) ->
-// pause / resume -> stop -> complete. Only the employee runs it; the company
-// side has no pause or timer and only completes or clears a session.
+// An employee's log is always a timed session: start -> pause / resume ->
+// stop -> complete. Only the employee runs it; the company side has no pause
+// or timer and only completes or clears a session.
 router.post("/start", employeeOnly, CleaningLogControllers.startCleaningLog);
 router.patch("/:id/pause", employeeOnly, CleaningLogControllers.pauseCleaningLog);
 router.patch(
