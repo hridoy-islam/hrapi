@@ -61,6 +61,8 @@ import { CleaningAccessRoutes } from "../modules/cleaningAccess/cleaningAccess.r
 import { CleaningAreaRoutes } from "../modules/cleaningArea/cleaningArea.router";
 import { CleaningElementRoutes } from "../modules/cleaningElement/cleaningElement.router";
 import { CleaningLogRoutes } from "../modules/cleaningLog/cleaningLog.router";
+import { KitchenAccessRoutes } from "../modules/kitchenAccess/kitchenAccess.router";
+import { KitchenLogRoutes } from "../modules/kitchenLog/kitchenLog.router";
 
 const router = Router();
 
@@ -314,6 +316,14 @@ const moduleRoutes = [
   {
     path: "/cleaning-log",
     route: CleaningLogRoutes,
+  },
+  {
+    path: "/kitchen-access",
+    route: KitchenAccessRoutes,
+  },
+  {
+    path: "/kitchen-log",
+    route: KitchenLogRoutes,
   },
 ];
 
