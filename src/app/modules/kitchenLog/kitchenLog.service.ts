@@ -227,7 +227,23 @@ const resolvePeriodKey = async (
   const key = target.shift || target.itemKey;
   const periodKey = key ? `${base}#${key}` : base;
 
-  if (config.perPeriod <= 1) return periodKey;
+  // Checked here as well as by the unique index, so a duplicate is refused
+  // with a clear message even where the index is missing
+  if (config.perPeriod <= 1) {
+    const existing = await KitchenLog.exists({ companyId, module, periodKey });
+    if (existing) {
+      throw await takenError(
+        companyId,
+        module,
+        periodKey,
+        module === "kitchen_deep_clean"
+          ? deepCleanAreaFor(date)
+          : targetLabel(module, target),
+        date,
+      );
+    }
+    return periodKey;
+  }
 
   const taken = await KitchenLog.find({
     companyId,
@@ -242,8 +258,25 @@ const resolvePeriodKey = async (
 
   throw new AppError(
     httpStatus.CONFLICT,
-    `${target.item || config.label} has already been done ${config.perPeriod} times this week`,
+    `${target.item || config.label} has already been done ${config.perPeriod} times ${periodText(config.frequency, date)}`,
   );
+};
+
+// The period a date falls in, as a message names it: "today" for the current
+// one, otherwise the day, week or month itself
+const periodText = (frequency: TKitchenFrequency, date: Date = new Date()) => {
+  const current =
+    periodLabelKey(frequency, date) === periodLabelKey(frequency, new Date());
+  const ref = ukMoment(date);
+  if (frequency === "monthly") {
+    return current ? "this month" : `for ${ref.format("MMMM YYYY")}`;
+  }
+  if (frequency === "daily") {
+    return current ? "today" : `on ${ref.format("dddd DD-MM-YYYY")}`;
+  }
+  return current
+    ? "this week"
+    : `in the week commencing ${ref.clone().startOf("isoWeek").format("DD-MM-YYYY")}`;
 };
 
 // Why the item is not free: someone is on it, or it is done
@@ -252,18 +285,13 @@ const takenError = async (
   module: TKitchenModule,
   periodKey: string,
   label: string,
+  date: Date = new Date(),
 ) => {
   const existing: any = await KitchenLog.findOne({ companyId, module, periodKey })
     .select("status employeeId")
     .populate("employeeId", employeeSelect);
 
-  const frequency = KITCHEN_MODULES[module].frequency;
-  const period =
-    frequency === "monthly"
-      ? "this month"
-      : frequency === "daily"
-        ? "today"
-        : "this week";
+  const period = periodText(KITCHEN_MODULES[module].frequency, date);
 
   return new AppError(
     httpStatus.CONFLICT,
@@ -509,7 +537,10 @@ const getKitchenBoardFromDB = async (
     await assertAssigned(String(companyId), authUser._id);
   }
 
-  const date = new Date();
+  // The company side may ask about a past day, e.g. what is already done for
+  // the date picked on the create form; employees always see today
+  const date =
+    !isEmployee(authUser) && query.date ? resolveLogDate(query.date) : new Date();
   const modules = modulesOf(frequency);
   const range = periodRange(frequency, date);
 
@@ -890,6 +921,17 @@ const createKitchenLogIntoDB = async (payload: any, authUser?: any) => {
   const area =
     module === "kitchen_deep_clean" ? { area: deepCleanAreaFor(logDate) } : {};
 
+  // A log the company side records itself is already signed off by management
+  const autoApprove = !employee && config.requiresApproval;
+  const approval = autoApprove
+    ? {
+        approvedBy: authUser?._id,
+        approvalSignature: payload?.approvalSignature || signatureUrl,
+        approvedAt: now,
+        approvalComment: String(payload?.approvalComment || "").trim(),
+      }
+    : {};
+
   const log = {
     companyId,
     employeeId,
@@ -907,6 +949,7 @@ const createKitchenLogIntoDB = async (payload: any, authUser?: any) => {
     signatureUrl,
     signedAt: signedAt ? new Date(signedAt) : now,
     completedAt: now,
+    ...approval,
     createdBy: authUser?._id,
     logs: [
       await historyLine(
@@ -916,6 +959,9 @@ const createKitchenLogIntoDB = async (payload: any, authUser?: any) => {
           : `created ${config.label} for ${await nameOf(employeeId)}`,
         authUser,
       ),
+      ...(autoApprove
+        ? [await historyLine("approve", `approved ${config.label}`, authUser)]
+        : []),
     ],
   };
 
@@ -929,6 +975,7 @@ const createKitchenLogIntoDB = async (payload: any, authUser?: any) => {
         module,
         periodKey,
         (area as any).area || targetLabel(module, target),
+        logDate,
       );
     }
     throw error;

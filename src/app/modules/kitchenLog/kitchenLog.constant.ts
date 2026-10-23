@@ -50,7 +50,7 @@ export const KITCHEN_MODULES: Record<TKitchenModule, TKitchenModuleConfig> = {
     perPeriod: 1,
   },
   kitchen_deep_clean: {
-    label: "Kitchen Deep Clean",
+    label: "Kitchen Deep Cleaning Schedule Kitchen Assistant 2PM-3PM",
     frequency: "daily",
     requiresApproval: true,
     timed: true,
