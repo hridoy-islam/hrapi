@@ -382,15 +382,7 @@ const detailFields = (
 // What has to be filled in before a log can be completed, on top of the
 // signature
 const assertComplete = (module: TKitchenModule, log: any) => {
-  if (module === "kitchen_cleaning") {
-    const unticked = (log.checklist || []).find((item: any) => !item.checked);
-    if (unticked) {
-      throw new AppError(
-        httpStatus.BAD_REQUEST,
-        `Tick every check before finishing: ${unticked.label}`,
-      );
-    }
-  }
+  // Kitchen cleaning checks are optional, so nothing to assert for them
 
   if (module === "equipment_temperature") {
     (log.temperatures || []).forEach((reading: any) => {
